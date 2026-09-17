@@ -179,6 +179,7 @@ const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
 const debugMode = requireElement<HTMLInputElement>("#debug-mode");
 const compareButton = requireElement<HTMLButtonElement>("#compare-button");
 const rollButton = requireElement<HTMLButtonElement>("#roll-button");
+const mobileRollButton = requireElement<HTMLButtonElement>("#mobile-roll-button");
 const resetButton = requireElement<HTMLButtonElement>("#reset-button");
 const stage = requireElement<HTMLElement>("#stage");
 const stagePlaceholder = requireElement<HTMLElement>("#stage-placeholder");
@@ -513,9 +514,12 @@ function updateDebugPanel(): void {
 function setRollingState(isRolling: boolean, comparison = false): void {
   rolling = isRolling;
   rollButton.disabled = isRolling;
+  mobileRollButton.disabled = isRolling;
   compareButton.disabled = isRolling;
   resetButton.disabled = isRolling;
-  rollButton.textContent = isRolling && !comparison ? "Rolling…" : "Roll dice";
+  const rollLabel = isRolling && !comparison ? "Rolling…" : "Roll dice";
+  rollButton.textContent = rollLabel;
+  mobileRollButton.textContent = rollLabel;
   compareButton.textContent = isRolling && comparison
     ? "Aligning D4 + D6 + D8…"
     : "Roll D4 + D6 + D8 together";

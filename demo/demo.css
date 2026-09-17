@@ -437,6 +437,10 @@ h1 {
 .placeholder-die i:nth-child(4) { left: 15px; bottom: 15px; }
 .placeholder-die i:nth-child(5) { right: 15px; bottom: 15px; }
 
+.mobile-roll-actions {
+  display: none;
+}
+
 .result-grid {
   display: grid;
   grid-template-columns: minmax(180px, 0.48fr) minmax(0, 1.52fr);
@@ -562,6 +566,15 @@ h1 {
 
   .actions {
     grid-template-columns: 1fr;
+  }
+
+  #roll-button {
+    display: none;
+  }
+
+  .mobile-roll-actions {
+    display: grid;
+    margin-top: 12px;
   }
 
   .button {
