@@ -7,6 +7,7 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   PlaneGeometry,
+  PointLight,
   Scene,
   SRGBColorSpace,
   Texture,
@@ -40,6 +41,44 @@ export interface DiceCameraOptions {
   readonly z?: number;
 }
 
+export interface DiceLightPosition {
+  readonly x?: number;
+  readonly y?: number;
+  readonly z?: number;
+}
+
+export interface DiceAmbientLightOptions {
+  readonly color?: string | number;
+  readonly intensity?: number;
+}
+
+export interface DiceDirectionalLightOptions {
+  readonly type: "directional";
+  readonly color?: string | number;
+  readonly intensity?: number;
+  readonly position?: DiceLightPosition;
+  readonly castShadow?: boolean;
+}
+
+export interface DicePointLightOptions {
+  readonly type: "point";
+  readonly color?: string | number;
+  readonly intensity?: number;
+  readonly position?: DiceLightPosition;
+  readonly distance?: number;
+  readonly decay?: number;
+  readonly castShadow?: boolean;
+}
+
+export type DiceSceneLightOptions =
+  | DiceDirectionalLightOptions
+  | DicePointLightOptions;
+
+export interface DiceLightingOptions {
+  readonly ambient?: DiceAmbientLightOptions;
+  readonly lights?: readonly DiceSceneLightOptions[];
+}
+
 export interface DiceSceneOptions {
   readonly background?: ColorRepresentation | null;
 
@@ -51,11 +90,21 @@ export interface DiceSceneOptions {
 
   /** Orbital camera controls. */
   readonly camera?: DiceCameraOptions;
+
+  /** Declarative lighting configuration. Missing values preserve the neutral defaults. */
+  readonly lighting?: DiceLightingOptions;
   readonly showFloor?: boolean;
 }
 
 const DEFAULT_BACKGROUND = 0x111318;
 const DEFAULT_FLOOR = 0x292d33;
+const DEFAULT_AMBIENT_COLOR = 0xffffff;
+const DEFAULT_AMBIENT_INTENSITY = 1.4;
+const DEFAULT_KEY_LIGHT_COLOR = 0xffffff;
+const DEFAULT_KEY_LIGHT_INTENSITY = 2.2;
+const DEFAULT_KEY_LIGHT_POSITION = { x: 4, y: 8, z: 5 } as const;
+const DEFAULT_POINT_LIGHT_POSITION = { x: 0, y: 5, z: 0 } as const;
+const DEFAULT_POINT_LIGHT_DECAY = 2;
 const DEFAULT_CAMERA_X = 0;
 const DEFAULT_CAMERA_Y = Math.atan2(7.5, 5.5) * (180 / Math.PI);
 const DEFAULT_CAMERA_Z = Math.hypot(5.5, 7.5);
@@ -79,12 +128,29 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function nonNegativeOr(value: number | undefined, fallback: number): number {
+  return Math.max(0, finiteOr(value, fallback));
+}
+
+function resolveLightPosition(
+  position: DiceLightPosition | undefined,
+  fallback: Readonly<{ x: number; y: number; z: number }>
+): { x: number; y: number; z: number } {
+  return {
+    x: finiteOr(position?.x, fallback.x),
+    y: finiteOr(position?.y, fallback.y),
+    z: finiteOr(position?.z, fallback.z)
+  };
+}
+
 /** Owns the Three.js scene graph used by DiceKit, without any physics logic. */
 export class DiceScene {
   readonly scene: Scene;
   readonly camera: PerspectiveCamera;
   readonly content: Group;
 
+  private readonly lighting = new Group();
+  private shadowCastingLights = false;
   private readonly floorGeometry?: PlaneGeometry;
   private readonly floorMaterial?: MeshStandardMaterial;
   private readonly floorTextureLoader = new TextureLoader();
@@ -111,10 +177,9 @@ export class DiceScene {
     this.content.name = "PartyBeam.DiceKit content";
     this.scene.add(this.content);
 
-    const ambientLight = new AmbientLight(0xffffff, 1.4);
-    const keyLight = new DirectionalLight(0xffffff, 2.2);
-    keyLight.position.set(4, 8, 5);
-    this.scene.add(ambientLight, keyLight);
+    this.lighting.name = "PartyBeam.DiceKit lighting";
+    this.scene.add(this.lighting);
+    this.setLighting(options.lighting);
 
     if (options.showFloor !== false) {
       const initialTableColor = options.table?.color ?? options.floorColor ?? DEFAULT_FLOOR;
@@ -140,6 +205,71 @@ export class DiceScene {
         });
       }
     }
+  }
+
+  get hasShadowCastingLights(): boolean {
+    return this.shadowCastingLights;
+  }
+
+  /**
+   * Replaces scene lighting without touching dice meshes, camera state or physics.
+   * An omitted configuration restores the neutral DiceKit lighting defaults.
+   */
+  setLighting(options: DiceLightingOptions = {}): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.lighting.clear();
+
+    const ambient = new AmbientLight(
+      options.ambient?.color ?? DEFAULT_AMBIENT_COLOR,
+      nonNegativeOr(options.ambient?.intensity, DEFAULT_AMBIENT_INTENSITY)
+    );
+    ambient.name = "PartyBeam.DiceKit ambient light";
+    this.lighting.add(ambient);
+
+    const configuredLights = options.lights ?? [{
+      type: "directional" as const,
+      color: DEFAULT_KEY_LIGHT_COLOR,
+      intensity: DEFAULT_KEY_LIGHT_INTENSITY,
+      position: DEFAULT_KEY_LIGHT_POSITION
+    }];
+
+    let hasShadowCastingLights = false;
+
+    for (let index = 0; index < configuredLights.length; index += 1) {
+      const config = configuredLights[index]!;
+
+      if (config.type === "directional") {
+        const position = resolveLightPosition(config.position, DEFAULT_KEY_LIGHT_POSITION);
+        const light = new DirectionalLight(
+          config.color ?? DEFAULT_KEY_LIGHT_COLOR,
+          nonNegativeOr(config.intensity, DEFAULT_KEY_LIGHT_INTENSITY)
+        );
+        light.name = `PartyBeam.DiceKit directional light ${index + 1}`;
+        light.position.set(position.x, position.y, position.z);
+        light.castShadow = config.castShadow ?? false;
+        this.lighting.add(light);
+        hasShadowCastingLights ||= light.castShadow;
+        continue;
+      }
+
+      const position = resolveLightPosition(config.position, DEFAULT_POINT_LIGHT_POSITION);
+      const light = new PointLight(
+        config.color ?? DEFAULT_KEY_LIGHT_COLOR,
+        nonNegativeOr(config.intensity, DEFAULT_KEY_LIGHT_INTENSITY),
+        nonNegativeOr(config.distance, 0),
+        nonNegativeOr(config.decay, DEFAULT_POINT_LIGHT_DECAY)
+      );
+      light.name = `PartyBeam.DiceKit point light ${index + 1}`;
+      light.position.set(position.x, position.y, position.z);
+      light.castShadow = config.castShadow ?? false;
+      this.lighting.add(light);
+      hasShadowCastingLights ||= light.castShadow;
+    }
+
+    this.shadowCastingLights = hasShadowCastingLights;
   }
 
   setSize(width: number, height: number): void {
@@ -281,6 +411,8 @@ export class DiceScene {
     this.floorTextureRequest += 1;
     this.releaseFloorTexture();
     this.content.clear();
+    this.lighting.clear();
+    this.shadowCastingLights = false;
     this.scene.clear();
     this.floorGeometry?.dispose();
     this.floorMaterial?.dispose();
