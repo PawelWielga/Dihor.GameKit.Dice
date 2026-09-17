@@ -12,10 +12,12 @@ import {
   DiceOverlay,
   DiceRenderer,
   DiceRoller,
+  DirectRollPlanner,
   RollPlanner,
   SUPPORTED_DICE_SIDES,
   getDiceFace,
   getDiceTopology,
+  getDiceTotalRange,
   type DiceAppearance,
   type DiceCameraOptions,
   type DiceFaceLabelMode,
@@ -156,6 +158,11 @@ const diceType = requireElement<HTMLSelectElement>("#dice-type");
 const diceCount = requireElement<HTMLSelectElement>("#dice-count");
 const modifier = requireElement<HTMLInputElement>("#modifier");
 const reason = requireElement<HTMLInputElement>("#reason");
+const rollMode = requireElement<HTMLSelectElement>("#roll-mode");
+const expectedTotalField = requireElement<HTMLElement>("#expected-total-field");
+const expectedTotal = requireElement<HTMLInputElement>("#expected-total");
+const expectedTotalRange = requireElement<HTMLOutputElement>("#expected-total-range");
+const rollModeHint = requireElement<HTMLElement>("#roll-mode-hint");
 const throwForce = requireElement<HTMLInputElement>("#throw-force");
 const throwForceValue = requireElement<HTMLOutputElement>("#throw-force-value");
 const resetThrowForceButton = requireElement<HTMLButtonElement>("#reset-throw-force-button");
@@ -227,6 +234,7 @@ const debugJson = requireElement<HTMLElement>("#debug-json");
 const roller = new DiceRoller();
 const planner = new RollPlanner();
 const backgroundPlanner = new BackgroundRollPlanner({ fallbackPlanner: planner });
+const directPlanner = new DirectRollPlanner();
 const comparisonPlanner = new RollPlanner({
   initialStateProvider: createComparisonInitialState,
   slotSpacing: COMPARISON_SLOT_SPACING,
@@ -295,6 +303,13 @@ const overlay = new DiceOverlay({
     roll(request) {
       debugLogicalResult = roller.roll(request);
       return debugLogicalResult;
+    },
+    createRollId() {
+      return roller.createRollId();
+    },
+    rollToDiceTotal(request, expectedDiceTotal) {
+      debugLogicalResult = roller.rollToDiceTotal(request, expectedDiceTotal);
+      return debugLogicalResult;
     }
   },
   planner: {
@@ -309,6 +324,12 @@ const overlay = new DiceOverlay({
     },
     dispose() {
       backgroundPlanner.dispose();
+    }
+  },
+  directPlanner: {
+    plan(request, rollId, options) {
+      debugPlan = directPlanner.plan(request, rollId, options);
+      return debugPlan;
     }
   },
   renderer: {
@@ -341,6 +362,50 @@ function setStatus(message: string, state?: "busy" | "error"): void {
   } else {
     delete status.dataset.state;
   }
+}
+
+function isPreSimulatedMode(): boolean {
+  return rollMode.value === "presimulated";
+}
+
+function currentDiceDefinitions(): DiceRollRequest["dice"] {
+  const sides = Number.parseInt(diceType.value, 10) as DiceSides;
+  const count = Number.parseInt(diceCount.value, 10);
+  return Array.from({ length: count }, () => ({ sides }));
+}
+
+function updateRollModeControls(): void {
+  const preSimulation = isPreSimulatedMode();
+  const { min, max } = getDiceTotalRange(currentDiceDefinitions());
+
+  expectedTotalField.hidden = !preSimulation;
+  expectedTotal.disabled = !preSimulation;
+  expectedTotal.min = "0";
+  expectedTotal.max = String(max);
+  expectedTotalRange.value = `0 = Auto · ${min}..${max}`;
+  rollModeHint.textContent = preSimulation
+    ? `Presimulated mode: 0 = Auto, or force a dice total from ${min} to ${max}.`
+    : "Direct physical mode: visible physics starts immediately and decides the result after settling.";
+
+  const value = Number(expectedTotal.value);
+  expectedTotal.setCustomValidity(
+    value === 0 || (Number.isInteger(value) && value >= min && value <= max)
+      ? ""
+      : `Enter 0 (Auto) or a value from ${min} to ${max}.`
+  );
+}
+
+function readExpectedDiceTotal(): number {
+  if (!isPreSimulatedMode()) {
+    return 0;
+  }
+
+  updateRollModeControls();
+  if (!expectedTotal.checkValidity()) {
+    throw new Error(expectedTotal.validationMessage);
+  }
+
+  return Number(expectedTotal.value);
 }
 
 function readThrowForce(): number {
@@ -757,13 +822,25 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
   debugFinalResult = undefined;
   updateDebugPanel();
   setRollingState(true, comparison);
-  setStatus(comparison ? `Rolling aligned ${COMPARISON_LABEL}…` : "Planning and rolling…", "busy");
+  const preSimulation = comparison || isPreSimulatedMode();
+  setStatus(
+    comparison
+      ? `Rolling aligned ${COMPARISON_LABEL}…`
+      : preSimulation
+        ? "Planning in background, then rolling…"
+        : "Rolling immediately; result comes from physics…",
+    "busy"
+  );
   stagePlaceholder.hidden = true;
 
   try {
     await nextPaint();
     renderedFontSize = readFontSize();
-    const result = await overlay.roll(request, { throwForce: readThrowForce() });
+    const result = await overlay.roll(request, {
+      throwForce: readThrowForce(),
+      preSimulation,
+      expectedDiceTotal: comparison ? 0 : readExpectedDiceTotal()
+    });
     debugFinalResult = result;
     showResult(result);
     updateDebugPanel();
@@ -796,6 +873,10 @@ function resetOutput(): void {
   setStatus("Ready to roll");
 }
 
+rollMode.addEventListener("change", updateRollModeControls);
+expectedTotal.addEventListener("input", updateRollModeControls);
+diceType.addEventListener("change", updateRollModeControls);
+diceCount.addEventListener("change", updateRollModeControls);
 throwForce.addEventListener("input", updateThrowForceOutput);
 resetThrowForceButton.addEventListener("click", () => {
   throwForce.value = String(DEFAULT_THROW_FORCE);
@@ -893,6 +974,7 @@ updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();
 updateLightingOutputs();
+updateRollModeControls();
 updateFontSizeOutput();
 updateEngravingDepthOutput();
 syncFontControls();

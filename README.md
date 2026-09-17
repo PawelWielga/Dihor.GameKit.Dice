@@ -4,7 +4,7 @@ Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Thr
 
 ## Status
 
-The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12 and D20 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
+The reusable MVP pipeline is implemented: direct physical rolls and worker-backed predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12 and D20 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
 
 ## Goals
 
@@ -15,7 +15,8 @@ The library supports:
 - reusable dice rolls across multiple games,
 - Three.js rendering,
 - cannon-es physics,
-- predetermined physical outcomes,
+- direct physical outcomes decided after visible settling,
+- optional predetermined physical outcomes with background presimulation,
 - D4, D6, D8, D10, D12 and D20 dice,
 - mixed dice types in one roll,
 - per-die colors and materials,
@@ -114,25 +115,20 @@ src/
 └── index.ts     # Public package entry point
 ```
 
-The roll pipeline is:
+DiceOverlay supports two roll pipelines:
 
 ```text
-DiceRoller
-    ↓
-logical result
-    ↓
-RollPlanner
-    ↓
-pre-simulation with cannon-es
-    ↓
-RollPlan
-    ↓
-visible cannon-es simulation + Three.js rendering
-    ↓
-DiceRollResult
+presimulated (default)             direct physical
+DiceRoller                         DirectRollPlanner
+    ↓                                  ↓
+authoritative result               visible physics starts
+    ↓                                  ↓
+background RollPlanner             dice settle
+    ↓                                  ↓
+visible replay verifies result     top faces become the result
 ```
 
-The physical face itself must land on the expected value. The implementation must not fake the final result by rotating the die after the simulation or remapping face labels/textures after the roll.
+Presimulated mode keeps the logical result authoritative and never snaps/remaps a physical face after simulation. Direct mode has no hidden full simulation: the rendered cannon-es run itself decides the returned values.
 
 ## Public API example
 
@@ -160,14 +156,18 @@ const result = await dice.roll({
   ],
   reason: "Attack"
 }, {
-  throwForce: 1.2
+  throwForce: 1.2,
+  preSimulation: true,
+  expectedDiceTotal: 0 // Auto; use e.g. 17 to force the dice sum when valid
 });
 
 console.log(result.dice);
 console.log(result.total);
 ```
 
-The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. It changes initial linear and angular velocity only; the logical result is still decided first and remains authoritative.
+The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In the default `preSimulation: true` mode the logical result remains authoritative and hidden planning runs in a Web Worker when available. Set `preSimulation: false` to skip hidden planning and return the values read from the visible dice after they settle.
+
+For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`.
 
 The standard RPG set uses **D6 = 16 mm** as its physical reference baseline. D4, D8, D10, D12 and D20 keep deliberately different relative extents matching the approved physical-set comparison instead of being normalized to the same bounding box. D100/D% is intentionally not part of the supported set.
 
@@ -238,7 +238,7 @@ The Pages workflow builds the demo with `npm run build:demo`, uploads `dist-demo
 
 - Keep `core` independent from Three.js, cannon-es and the DOM.
 - Keep rendering and physics as separate concerns.
-- The game or host is authoritative for the logical result.
+- Presimulated mode keeps the game or host authoritative for the logical result; direct mode explicitly delegates the outcome to visible local physics.
 - Physics presents a result; it does not decide game logic.
 - Keep multiplayer contracts transport-neutral and versioned.
 - Do not assume bit-for-bit deterministic physics across browsers or devices.

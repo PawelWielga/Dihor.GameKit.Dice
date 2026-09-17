@@ -82,6 +82,37 @@
                 </label>
               </div>
 
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Roll mode</span>
+                  <select id="roll-mode" name="roll-mode">
+                    <option value="presimulated" selected>Presimulated / controlled</option>
+                    <option value="direct">Direct physical / instant</option>
+                  </select>
+                </label>
+
+                <label id="expected-total-field" class="field">
+                  <span>
+                    Expected dice total
+                    <output id="expected-total-range">0 = Auto · 2..12</output>
+                  </span>
+                  <input
+                    id="expected-total"
+                    name="expected-total"
+                    type="number"
+                    min="0"
+                    max="12"
+                    step="1"
+                    value="0"
+                  />
+                </label>
+              </div>
+              <p id="roll-mode-hint" class="hint">
+                Presimulated mode decides the result first. Set 0 for Auto or choose a valid dice
+                total. Direct mode starts visible physics immediately and reads the result after
+                the dice settle.
+              </p>
+
               <label class="field">
                 <span>Throw force <output id="throw-force-value">1.00×</output></span>
                 <input
