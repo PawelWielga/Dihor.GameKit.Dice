@@ -1,6 +1,7 @@
 import {
   CanvasTexture,
   LinearFilter,
+  LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -61,9 +62,9 @@ interface LabelMeasurement {
   readonly descent: number;
 }
 
-const LABEL_CANVAS_SIZE = 512;
-const LABEL_MAXIMUM_WIDTH_RATIO = 0.88;
-const LABEL_MAXIMUM_HEIGHT_RATIO = 0.7;
+const LABEL_CANVAS_SIZE = 1024;
+const LABEL_MAXIMUM_WIDTH_RATIO = 0.92;
+const LABEL_MAXIMUM_HEIGHT_RATIO = 0.78;
 const LABEL_GAP_RATIO = 0.02;
 const ORIENTATION_MARKER_GAP_RATIO = 0.075;
 const ORIENTATION_MARKER_RADIUS_RATIO = 0.026;
@@ -106,31 +107,32 @@ function faceBasis(
   };
 }
 
-/**
- * Controls how much of each physical face is available to the transparent numeral plane.
- * The values intentionally leave a visible margin around the glyphs, while being larger than
- * the first font-backed implementation so labels read naturally at TV distance.
- */
+/** Controls how much of each physical face is available to the transparent numeral plane. */
 export function getDiceFaceLabelPlaneScale(sides: DiceSides): number {
   switch (sides) {
     case 4:
-      return 0.46;
+      return 0.54;
     case 6:
-      return 0.72;
+      return 0.8;
     case 8:
-      return 0.53;
+      return 0.61;
     case 10:
-      return 0.48;
+      return 0.56;
     case 12:
-      return 0.57;
+      return 0.66;
     case 20:
-      return 0.53;
+      return 0.61;
   }
 }
 
 /** Base canvas font size before fitting unusually wide/tall custom fonts to the face. */
 export function getDiceFaceLabelBaseFontSize(label: string): number {
-  return label.length > 1 ? 310 : 384;
+  return label.length > 1 ? 660 : 820;
+}
+
+/** Exposed for deterministic rendering-quality tests. */
+export function getDiceFaceLabelCanvasSize(): number {
+  return LABEL_CANVAS_SIZE;
 }
 
 /**
@@ -172,6 +174,18 @@ export function usesNumericFaceLabels(
 
 function metricOrFallback(value: number, fallback: number): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function configureLabelContext(
+  context: CanvasRenderingContext2D,
+  font: ResolvedDiceFontAppearance,
+  fontSize: number
+): void {
+  context.font = `${font.weight} ${fontSize}px ${quoteFontFamily(font.family)}, serif`;
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
 }
 
 function measureLabel(
@@ -240,12 +254,8 @@ function drawLabel(
   const maximumHeight = LABEL_CANVAS_SIZE * LABEL_MAXIMUM_HEIGHT_RATIO;
   let fontSize = getDiceFaceLabelBaseFontSize(label);
 
-  const configureFont = () => {
-    context.font = `${font.weight} ${fontSize}px ${quoteFontFamily(font.family)}, serif`;
-  };
-
   const measure = () => {
-    configureFont();
+    configureLabelContext(context, font, fontSize);
     return measureLabel(context, label, fontSize);
   };
 
@@ -264,9 +274,7 @@ function drawLabel(
 
   context.clearRect(0, 0, LABEL_CANVAS_SIZE, LABEL_CANVAS_SIZE);
   context.fillStyle = color;
-  context.textAlign = "left";
-  context.textBaseline = "alphabetic";
-  configureFont();
+  configureLabelContext(context, font, fontSize);
 
   const baseline = getDiceFaceLabelBaseline(
     LABEL_CANVAS_SIZE,
@@ -282,7 +290,7 @@ function drawLabel(
     context.fillText(glyph.character, glyphOriginX, baseline);
 
     if (markerIndices.has(index)) {
-      const radius = Math.max(5, fontSize * ORIENTATION_MARKER_RADIUS_RATIO);
+      const radius = Math.max(10, fontSize * ORIENTATION_MARKER_RADIUS_RATIO);
       const markerX = glyphOriginX + (glyph.right - glyph.left) / 2;
       const markerY =
         baseline + glyph.descent + fontSize * ORIENTATION_MARKER_GAP_RATIO;
@@ -378,8 +386,9 @@ function createLabelSurface(
   const geometry = new PlaneGeometry(planeSize, planeSize);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
-  texture.minFilter = LinearFilter;
+  texture.minFilter = LinearMipmapLinearFilter;
   texture.magFilter = LinearFilter;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
 
   const material = new MeshBasicMaterial({

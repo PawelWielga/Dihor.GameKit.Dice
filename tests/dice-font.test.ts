@@ -12,6 +12,7 @@ import {
 import {
   getDiceFaceLabelBaseFontSize,
   getDiceFaceLabelBaseline,
+  getDiceFaceLabelCanvasSize,
   getDiceFaceLabelPlaneScale,
   getDiceOrientationMarkerIndices,
   usesNumericFaceLabels
@@ -128,17 +129,19 @@ describe("numeric face label rules", () => {
     expect(getDiceOrientationMarkerIndices("20")).toEqual([]);
   });
 
-  it("uses visibly larger default numeral sizing than the initial font implementation", () => {
-    expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(300);
-    expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(238);
-    expect(getDiceFaceLabelPlaneScale(6)).toBeGreaterThan(0.62);
-    expect(getDiceFaceLabelPlaneScale(20)).toBeGreaterThan(0.48);
+  it("uses larger high-resolution face labels", () => {
+    expect(getDiceFaceLabelCanvasSize()).toBe(1024);
+    expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(384);
+    expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(310);
+    expect(getDiceFaceLabelPlaneScale(4)).toBeGreaterThan(0.46);
+    expect(getDiceFaceLabelPlaneScale(6)).toBeGreaterThan(0.72);
+    expect(getDiceFaceLabelPlaneScale(20)).toBeGreaterThan(0.53);
   });
 
   it("centers the numeral bounds without reserving space for an orientation dot", () => {
-    const canvasSize = 512;
-    const ascent = 250;
-    const descent = 18;
+    const canvasSize = getDiceFaceLabelCanvasSize();
+    const ascent = 500;
+    const descent = 36;
     const baseline = getDiceFaceLabelBaseline(canvasSize, ascent, descent);
     const top = baseline - ascent;
     const bottom = baseline + descent;
