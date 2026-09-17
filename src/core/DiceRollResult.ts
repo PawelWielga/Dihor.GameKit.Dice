@@ -1,4 +1,4 @@
-import type { DieResult } from "./DieResult";
+import type { DieResult } from "./DieResult.js";
 
 /** Authoritative logical result returned by a completed dice roll. */
 export interface DiceRollResult {
