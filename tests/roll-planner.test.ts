@@ -167,6 +167,29 @@ describe("RollPlanner", () => {
     expect(plan.dice.map((die) => die.initialState.position.x)).toEqual([-2.5, 0, 2.5]);
   });
 
+  it("plans the complete supported RPG set in one roll", () => {
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      slotSpacing: 2.6,
+      physics: { arenaHalfExtent: 9 },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: {
+        consecutiveSteps: 4,
+        maxSteps: 120
+      }
+    });
+    const dice = SUPPORTED_DICE_SIDES.map((sides) => ({ sides, value: 1 }));
+    const plan = planner.plan(result(dice, "full-rpg-set"));
+
+    expect(plan.dice).toHaveLength(SUPPORTED_DICE_SIDES.length);
+    expect(plan.dice.map((die) => die.sides)).toEqual([...SUPPORTED_DICE_SIDES]);
+    expect(plan.dice.map((die) => die.expectedValue)).toEqual(
+      SUPPORTED_DICE_SIDES.map(() => 1)
+    );
+  });
+
   it("applies per-roll throw force without changing authoritative values, including multiple dice", () => {
     const planner = new RollPlanner({
       initialStateProvider: (context) => {
