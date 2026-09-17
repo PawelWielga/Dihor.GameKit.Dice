@@ -26,10 +26,10 @@ The library is designed to support:
 
 ## Requirements
 
-- Node.js 20.19+ (or a newer supported Node.js release)
+- Node.js 22.12+ (or a newer supported Node.js release)
 - npm
 
-Vite 8 requires Node.js 20.19+ / 22.12+.
+The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
 
 ## Development
 
