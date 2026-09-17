@@ -1,9 +1,12 @@
 import {
   DEFAULT_DICE_FONT_APPEARANCE,
+  DEFAULT_ENGRAVING_DEPTH,
   DEFAULT_THROW_FORCE,
   MAX_DICE_FONT_SIZE,
+  MAX_ENGRAVING_DEPTH,
   MAX_THROW_FORCE,
   MIN_DICE_FONT_SIZE,
+  MIN_ENGRAVING_DEPTH,
   MIN_THROW_FORCE,
   DiceOverlay,
   DiceRenderer,
@@ -25,6 +28,7 @@ import {
   type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
+import { getDiceFaceLabelBumpScale } from "../src/three/dice/DiceFaceLabels.js";
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
 const SAMPLE_TABLE_TEXTURE_URL = SAMPLE_TEXTURE_URL;
@@ -193,6 +197,11 @@ const fontUrl = requireElement<HTMLInputElement>("#font-url");
 const fontSize = requireElement<HTMLInputElement>("#font-size");
 const fontSizeValue = requireElement<HTMLOutputElement>("#font-size-value");
 const resetFontSizeButton = requireElement<HTMLButtonElement>("#reset-font-size-button");
+const engravingDepth = requireElement<HTMLInputElement>("#engraving-depth");
+const engravingDepthValue = requireElement<HTMLOutputElement>("#engraving-depth-value");
+const resetEngravingDepthButton = requireElement<HTMLButtonElement>(
+  "#reset-engraving-depth-button"
+);
 const resetFontButton = requireElement<HTMLButtonElement>("#reset-font-button");
 const d6LabelMode = requireElement<HTMLSelectElement>("#d6-label-mode");
 const globalTexture = requireElement<HTMLInputElement>("#global-texture");
@@ -509,6 +518,55 @@ function applyFontSizePreview(): void {
   renderer.render();
 }
 
+function readEngravingDepth(): number {
+  const depth = Number(engravingDepth.value);
+
+  if (
+    !Number.isFinite(depth) ||
+    depth < MIN_ENGRAVING_DEPTH ||
+    depth > MAX_ENGRAVING_DEPTH
+  ) {
+    throw new Error(
+      `Engraving depth must be between ${MIN_ENGRAVING_DEPTH} and ${MAX_ENGRAVING_DEPTH}; received ${engravingDepth.value}.`
+    );
+  }
+
+  return depth;
+}
+
+function updateEngravingDepthOutput(): void {
+  engravingDepthValue.value = `${readEngravingDepth().toFixed(2)}×`;
+}
+
+function applyEngravingDepthPreview(): void {
+  updateEngravingDepthOutput();
+  const renderer = demoRenderer;
+
+  if (!renderer) {
+    return;
+  }
+
+  const bumpScale = getDiceFaceLabelBumpScale(readEngravingDepth());
+
+  renderer.diceScene.content.traverse((object) => {
+    if (!object.name.includes(" font label ")) {
+      return;
+    }
+
+    const material = (object as unknown as { material?: unknown }).material;
+
+    if (
+      material &&
+      !Array.isArray(material) &&
+      typeof material === "object" &&
+      "bumpScale" in material
+    ) {
+      (material as { bumpScale: number }).bumpScale = bumpScale;
+    }
+  });
+  renderer.render();
+}
+
 function createFontAppearance(): DiceFontAppearance | undefined {
   const size = readFontSize();
 
@@ -569,6 +627,7 @@ function createAppearance(sides: DiceSides): DiceAppearance {
   return {
     color: bodyColor.value,
     markingsColor: markingsColor.value,
+    engravingDepth: readEngravingDepth(),
     ...(font ? { font } : {}),
     ...(sides === 6 ? { faceLabelMode: selectedD6LabelMode() } : {}),
     ...(texture ? { texture } : {}),
@@ -777,9 +836,14 @@ moodyLightingButton.addEventListener("click", () => setLightingPreset("moody"));
 resetLightingButton.addEventListener("click", () => setLightingPreset("neutral"));
 fontPreset.addEventListener("change", syncFontControls);
 fontSize.addEventListener("input", applyFontSizePreview);
+engravingDepth.addEventListener("input", applyEngravingDepthPreview);
 resetFontSizeButton.addEventListener("click", () => {
   fontSize.value = String(DEFAULT_DICE_FONT_APPEARANCE.size);
   applyFontSizePreview();
+});
+resetEngravingDepthButton.addEventListener("click", () => {
+  engravingDepth.value = String(DEFAULT_ENGRAVING_DEPTH);
+  applyEngravingDepthPreview();
 });
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
@@ -820,5 +884,6 @@ updateTableColorOutput();
 updateCameraOutputs();
 updateLightingOutputs();
 updateFontSizeOutput();
+updateEngravingDepthOutput();
 syncFontControls();
 updateDebugPanel();

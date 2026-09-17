@@ -172,9 +172,11 @@ describe("numeric face label rules", () => {
     expect(getDiceFaceLabelPlaneScale(20)).toBeCloseTo(0.65);
   });
 
-  it("uses a negative bump scale so numeric markings read as recessed", () => {
+  it("scales the recessed bump effect by semantic engraving depth", () => {
     expect(getDiceFaceLabelBumpScale()).toBeLessThan(0);
     expect(getDiceFaceLabelBumpScale()).toBeGreaterThan(-0.2);
+    expect(getDiceFaceLabelBumpScale(0)).toBe(0);
+    expect(getDiceFaceLabelBumpScale(2)).toBeCloseTo(getDiceFaceLabelBumpScale() * 2);
   });
 
   it("centers numeral bounds independently of orientation dots", () => {

@@ -150,8 +150,8 @@ export function getDiceFaceLabelBaseline(
   return canvasSize / 2 + (ascent - descent) / 2;
 }
 
-export function getDiceFaceLabelBumpScale(): number {
-  return ENGRAVED_BUMP_SCALE;
+export function getDiceFaceLabelBumpScale(engravingDepth = 1): number {
+  return ENGRAVED_BUMP_SCALE * engravingDepth;
 }
 
 function quoteFontFamily(family: string): string {
@@ -417,7 +417,8 @@ function createLabelSurface(
   size: number,
   overlayScale: number,
   color: string,
-  font: ResolvedDiceFontAppearance
+  font: ResolvedDiceFontAppearance,
+  engravingDepth: number
 ): LabelSurface | undefined {
   const canvas = createCanvas();
   const bumpCanvas = createCanvas(BUMP_CANVAS_SIZE);
@@ -453,7 +454,7 @@ function createLabelSurface(
     color,
     map: texture,
     bumpMap: bumpTexture,
-    bumpScale: ENGRAVED_BUMP_SCALE,
+    bumpScale: getDiceFaceLabelBumpScale(engravingDepth),
     metalness: 0,
     roughness: ENGRAVED_ROUGHNESS,
     transparent: true,
@@ -520,7 +521,8 @@ export function applyDiceFaceLabels(
       size,
       overlayScale,
       resolved.markingsColor,
-      resolvedFont
+      resolvedFont,
+      resolved.engravingDepth
     );
 
     if (surface) {

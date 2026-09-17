@@ -19,6 +19,7 @@ describe("DiceAppearance", () => {
     ).toEqual({
       color: "#7b1e1e",
       markingsColor: DEFAULT_DICE_APPEARANCE.markingsColor,
+      engravingDepth: DEFAULT_DICE_APPEARANCE.engravingDepth,
       roughness: 0.65,
       metalness: DEFAULT_DICE_APPEARANCE.metalness
     });
@@ -31,6 +32,13 @@ describe("DiceAppearance", () => {
     expect(hasDiceTextureSources({ normalMap: "/normal.png" })).toBe(true);
     expect(hasDiceTextureSources({ faces: { 6: "/critical.png" } })).toBe(true);
     expect(hasDiceTextureSources({ texture: "   ", faces: { 1: "" } })).toBe(false);
+  });
+
+  it("supports configurable engraving depth including a flat zero value", () => {
+    expect(resolveDiceAppearance({ engravingDepth: 0 }).engravingDepth).toBe(0);
+    expect(resolveDiceAppearance({ engravingDepth: 1.6 }).engravingDepth).toBe(1.6);
+    expect(() => resolveDiceAppearance({ engravingDepth: -0.01 })).toThrowError(RangeError);
+    expect(() => resolveDiceAppearance({ engravingDepth: 2.01 })).toThrowError(RangeError);
   });
 
   it("rejects invalid material factors and empty colors", () => {

@@ -28,6 +28,12 @@ export interface DiceAppearance {
   /** Color used by generated pips or numeric markings. */
   readonly markingsColor?: string;
 
+  /**
+   * Relative visual depth of generated numeric engraving.
+   * 0 disables the recessed effect, 1 keeps the DiceKit default.
+   */
+  readonly engravingDepth?: number;
+
   /** Optional texture applied to the die body. */
   readonly texture?: string;
 
@@ -63,9 +69,14 @@ export interface DiceAppearance {
 export interface ResolvedDiceAppearance {
   readonly color: string;
   readonly markingsColor: string;
+  readonly engravingDepth: number;
   readonly roughness: number;
   readonly metalness: number;
 }
+
+export const MIN_ENGRAVING_DEPTH = 0;
+export const MAX_ENGRAVING_DEPTH = 2;
+export const DEFAULT_ENGRAVING_DEPTH = 1;
 
 export const MIN_DICE_FONT_SIZE = 0.5;
 export const MAX_DICE_FONT_SIZE = 1.5;
@@ -81,6 +92,7 @@ export const DEFAULT_DICE_FACE_LABEL_MODE: DiceFaceLabelMode = "dots";
 export const DEFAULT_DICE_APPEARANCE: ResolvedDiceAppearance = Object.freeze({
   color: "#f2f0e6",
   markingsColor: "#191919",
+  engravingDepth: DEFAULT_ENGRAVING_DEPTH,
   roughness: 0.72,
   metalness: 0
 });
@@ -124,6 +136,24 @@ function resolveMaterialFactor(name: string, value: number | undefined, fallback
 
   if (!Number.isFinite(value) || value < 0 || value > 1) {
     throw new RangeError(`${name} must be a finite number in the 0..1 range; received ${String(value)}.`);
+  }
+
+  return value;
+}
+
+function resolveEngravingDepth(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_ENGRAVING_DEPTH;
+  }
+
+  if (
+    !Number.isFinite(value) ||
+    value < MIN_ENGRAVING_DEPTH ||
+    value > MAX_ENGRAVING_DEPTH
+  ) {
+    throw new RangeError(
+      `engravingDepth must be a finite number in the ${MIN_ENGRAVING_DEPTH}..${MAX_ENGRAVING_DEPTH} range; received ${String(value)}.`
+    );
   }
 
   return value;
@@ -239,6 +269,7 @@ export function resolveDiceAppearance(appearance: DiceAppearance = {}): Resolved
       appearance.markingsColor,
       DEFAULT_DICE_APPEARANCE.markingsColor
     ),
+    engravingDepth: resolveEngravingDepth(appearance.engravingDepth),
     roughness: resolveMaterialFactor(
       "roughness",
       appearance.roughness,
