@@ -3,6 +3,7 @@ export {
   DiceOverlayError
 } from "./DiceOverlay.js";
 export type {
+  DiceOverlayDirectPlanner,
   DiceOverlayErrorPhase,
   DiceOverlayOptions,
   DiceOverlayPlanner,

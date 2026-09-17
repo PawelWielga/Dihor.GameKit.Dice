@@ -5,6 +5,7 @@ import {
 } from "../core/index.js";
 import {
   BackgroundRollPlanner,
+  DirectRollPlanner,
   type RollPlan,
   type RollPlanningOptions
 } from "../physics/index.js";
@@ -33,6 +34,8 @@ export class DiceOverlayError extends Error {
 
 export interface DiceOverlayRoller {
   roll(request: DiceRollRequest): DiceRollResult;
+  createRollId?(): string;
+  rollToDiceTotal?(request: DiceRollRequest, expectedDiceTotal: number): DiceRollResult;
 }
 
 export interface DiceOverlayPlanner {
@@ -44,7 +47,16 @@ export interface DiceOverlayPlanner {
   dispose?(): void;
 }
 
-export interface DiceOverlayRollOptions extends RollPlanningOptions {}
+export interface DiceOverlayDirectPlanner {
+  plan(request: DiceRollRequest, rollId: string, options?: RollPlanningOptions): RollPlan;
+}
+
+export interface DiceOverlayRollOptions extends RollPlanningOptions {
+  /** Defaults to true. False starts visible physics without hidden presimulation. */
+  readonly preSimulation?: boolean;
+  /** Presimulated dice sum to force. Zero or undefined means Auto. Ignored in direct mode. */
+  readonly expectedDiceTotal?: number;
+}
 
 export interface DiceOverlayRenderer extends DiceRenderTarget {
   dispose(): void;
@@ -80,6 +92,7 @@ export interface DiceOverlayOptions {
   /** Advanced dependency hooks for deterministic tests or custom host integrations. */
   readonly roller?: DiceOverlayRoller;
   readonly planner?: DiceOverlayPlanner;
+  readonly directPlanner?: DiceOverlayDirectPlanner;
   readonly rendererFactory?: DiceOverlayRendererFactory;
   readonly playerFactory?: DiceOverlayPlayerFactory;
   readonly document?: Document;
@@ -140,6 +153,7 @@ export class DiceOverlay {
   private readonly options: DiceOverlayOptions;
   private readonly roller: DiceOverlayRoller;
   private readonly planner: DiceOverlayPlanner;
+  private readonly directPlanner: DiceOverlayDirectPlanner;
   private readonly rendererFactory: DiceOverlayRendererFactory;
   private readonly playerFactory: DiceOverlayPlayerFactory;
 
@@ -151,6 +165,7 @@ export class DiceOverlay {
     this.options = options;
     this.roller = options.roller ?? new DiceRoller();
     this.planner = options.planner ?? new BackgroundRollPlanner();
+    this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.rendererFactory = options.rendererFactory ?? createDefaultRenderer;
     this.playerFactory = options.playerFactory ?? createDefaultPlayer;
   }
@@ -172,59 +187,134 @@ export class DiceOverlay {
     this.activeRoll = true;
 
     try {
-      let logicalResult: DiceRollResult;
-
-      try {
-        logicalResult = this.roller.roll(request);
-      } catch (error) {
-        throw this.wrapError("roll", error);
+      if (options.preSimulation === false) {
+        return await this.rollDirect(request, options);
       }
 
-      let surface: OverlaySurface;
-
-      try {
-        surface = this.ensureSurface();
-      } catch (error) {
-        throw this.wrapError("rendering", error);
-      }
-
-      let plan: RollPlan;
-
-      try {
-        this.presentRolling(surface, request.reason ?? logicalResult.reason);
-        plan = await this.planner.plan(logicalResult, {
-          ...options,
-          arenaBoundary: surface.renderer.diceScene.getTableBoundary()
-        });
-      } catch (error) {
-        if (this.surface === surface) {
-          this.close();
-        }
-        throw this.wrapError("planning", error);
-      }
-
-      try {
-        const playback = await surface.player.play(plan, {
-          appearances: request.dice.map((die) => die.appearance)
-        });
-        this.assertPlaybackMatches(logicalResult, playback);
-      } catch (error) {
-        if (this.surface === surface) {
-          surface.resultElement && (surface.resultElement.textContent = "Roll failed");
-          surface.player.clear();
-        }
-
-        throw this.wrapError("playback", error);
-      }
-
-      if (this.surface === surface) {
-        this.presentResult(surface, logicalResult);
-      }
-
-      return logicalResult;
+      return await this.rollPreSimulated(request, options);
     } finally {
       this.activeRoll = false;
     }
+  }
+
+  private async rollPreSimulated(
+    request: DiceRollRequest,
+    options: DiceOverlayRollOptions
+  ): Promise<DiceRollResult> {
+    let logicalResult: DiceRollResult;
+
+    try {
+      const expectedDiceTotal = options.expectedDiceTotal ?? 0;
+      if (expectedDiceTotal === 0) {
+        logicalResult = this.roller.roll(request);
+      } else if (this.roller.rollToDiceTotal) {
+        logicalResult = this.roller.rollToDiceTotal(request, expectedDiceTotal);
+      } else {
+        throw new Error("The configured DiceOverlayRoller does not support expectedDiceTotal.");
+      }
+    } catch (error) {
+      throw this.wrapError("roll", error);
+    }
+
+    let surface: OverlaySurface;
+    try {
+      surface = this.ensureSurface();
+    } catch (error) {
+      throw this.wrapError("rendering", error);
+    }
+
+    let plan: RollPlan;
+    try {
+      this.presentRolling(surface, request.reason ?? logicalResult.reason);
+      plan = await this.planner.plan(logicalResult, {
+        ...options,
+        arenaBoundary: surface.renderer.diceScene.getTableBoundary()
+      });
+    } catch (error) {
+      if (this.surface === surface) {
+        this.close();
+      }
+      throw this.wrapError("planning", error);
+    }
+
+    try {
+      const playback = await surface.player.play(plan, {
+        appearances: request.dice.map((die) => die.appearance)
+      });
+      this.assertPlaybackMatches(logicalResult, playback);
+    } catch (error) {
+      if (this.surface === surface) {
+        surface.resultElement && (surface.resultElement.textContent = "Roll failed");
+        surface.player.clear();
+      }
+      throw this.wrapError("playback", error);
+    }
+
+    if (this.surface === surface) {
+      this.presentResult(surface, logicalResult);
+    }
+    return logicalResult;
+  }
+
+  private async rollDirect(
+    request: DiceRollRequest,
+    options: DiceOverlayRollOptions
+  ): Promise<DiceRollResult> {
+    let surface: OverlaySurface;
+    try {
+      surface = this.ensureSurface();
+    } catch (error) {
+      throw this.wrapError("rendering", error);
+    }
+
+    let plan: RollPlan;
+    try {
+      const rollId = this.roller.createRollId?.() ?? new DiceRoller().createRollId();
+      plan = this.directPlanner.plan(request, rollId, {
+        ...options,
+        arenaBoundary: surface.renderer.diceScene.getTableBoundary()
+      });
+      this.presentRolling(surface, request.reason);
+    } catch (error) {
+      if (this.surface === surface) {
+        this.close();
+      }
+      throw this.wrapError("planning", error);
+    }
+
+    let playback: DiceRollPlaybackResult;
+    try {
+      playback = await surface.player.play(plan, {
+        appearances: request.dice.map((die) => die.appearance)
+      });
+    } catch (error) {
+      if (this.surface === surface) {
+        surface.resultElement && (surface.resultElement.textContent = "Roll failed");
+        surface.player.clear();
+      }
+      throw this.wrapError("playback", error);
+    }
+
+    const modifier = request.modifier ?? 0;
+    if (!Number.isFinite(modifier)) {
+      throw this.wrapError(
+        "roll",
+        new RangeError(`Dice roll modifier must be finite; received ${String(modifier)}.`)
+      );
+    }
+
+    const logicalResult: DiceRollResult = {
+      rollId: playback.rollId,
+      dice: playback.dice,
+      modifier,
+      total: playback.dice.reduce((sum, die) => sum + die.value, 0) + modifier,
+      ...(request.reason === undefined ? {} : { reason: request.reason })
+    };
+
+    if (this.surface === surface) {
+      this.presentResult(surface, logicalResult);
+    }
+    return logicalResult;
   }
 
   /** Removes current overlay/canvas and cancels an active visible roll. The instance remains reusable. */

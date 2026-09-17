@@ -75,6 +75,7 @@ class FakePlayer implements DiceOverlayPlayer {
   readonly dispose = vi.fn();
   readonly calls: Array<{ plan: RollPlan; options?: DiceRollPlaybackOptions }> = [];
   mismatch = false;
+  directValues: number[] = [];
 
   async play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult> {
     this.calls.push({ plan, options });
@@ -83,7 +84,11 @@ class FakePlayer implements DiceOverlayPlayer {
       rollId: plan.rollId,
       dice: plan.dice.map((die, index) => ({
         sides: 6 as const,
-        value: this.mismatch && index === 0 ? (die.expectedValue === 1 ? 2 : 1) : die.expectedValue
+        value: plan.preSimulated === false
+          ? (this.directValues[index] ?? 1)
+          : this.mismatch && index === 0
+            ? (die.expectedValue === 1 ? 2 : 1)
+            : die.expectedValue
       })),
       simulationSteps: 12
     };
@@ -260,6 +265,94 @@ describe("DiceOverlay", () => {
     expect(planningOptions).toHaveLength(1);
     expect(planningOptions[0]).toMatchObject({ throwForce: 1.35 });
     expect((planningOptions[0] as { arenaBoundary?: unknown[] }).arenaBoundary).toHaveLength(4);
+    overlay.dispose();
+  });
+
+  it("supports direct physical mode without creating an authoritative result first", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    player.directValues = [2, 5];
+    const roll = vi.fn(() => {
+      throw new Error("logical roller must not run in direct mode");
+    });
+    const plannerPlan = vi.fn();
+    const directPlans: RollPlan[] = [];
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: { roll, createRollId: () => "direct-roll" },
+      planner: { plan: plannerPlan },
+      directPlanner: {
+        plan(request, rollId) {
+          const zero = { x: 0, y: 0, z: 0 } as const;
+          const plan: RollPlan = {
+            rollId,
+            dice: request.dice.map((die, index) => ({
+              sides: die.sides,
+              expectedValue: 0,
+              initialState: {
+                position: { x: index * 2, y: 1, z: 0 },
+                quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                velocity: zero,
+                angularVelocity: zero
+              }
+            })),
+            physics: DEFAULT_DICE_PHYSICS_CONFIG,
+            stability: DEFAULT_STABILITY_CONFIG,
+            simulationSteps: 0,
+            preSimulated: false
+          };
+          directPlans.push(plan);
+          return plan;
+        }
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const result = await overlay.roll(
+      { dice: [{ sides: 6 }, { sides: 6 }], modifier: 2 },
+      { preSimulation: false, expectedDiceTotal: 12 }
+    );
+
+    expect(roll).not.toHaveBeenCalled();
+    expect(plannerPlan).not.toHaveBeenCalled();
+    expect(directPlans[0]?.simulationSteps).toBe(0);
+    expect(result).toEqual({
+      rollId: "direct-roll",
+      dice: [{ sides: 6, value: 2 }, { sides: 6, value: 5 }],
+      modifier: 2,
+      total: 9
+    });
+    overlay.dispose();
+  });
+
+  it("uses a requested dice total only in presimulated mode", async () => {
+    const documentRef = new FakeDocument();
+    const roller = new DiceRoller({
+      randomProvider: { next: () => 0 },
+      rollIdProvider: () => "forced-overlay"
+    });
+    const plannedResults: number[] = [];
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller,
+      planner: {
+        plan(result) {
+          plannedResults.push(result.dice.reduce((sum, die) => sum + die.value, 0));
+          return createPlan(result);
+        }
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => new FakePlayer()
+    });
+
+    const result = await overlay.roll(
+      { dice: [{ sides: 6 }, { sides: 6 }] },
+      { preSimulation: true, expectedDiceTotal: 12 }
+    );
+
+    expect(plannedResults).toEqual([12]);
+    expect(result.total).toBe(12);
     overlay.dispose();
   });
 

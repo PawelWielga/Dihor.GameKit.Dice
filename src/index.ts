@@ -63,6 +63,7 @@ export {
 export {
   DiceOverlay,
   DiceOverlayError,
+  type DiceOverlayDirectPlanner,
   type DiceOverlayErrorPhase,
   type DiceOverlayOptions,
   type DiceOverlayPlanner,
