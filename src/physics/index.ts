@@ -9,6 +9,13 @@ export type {
   StabilityOptions,
   StabilityResult
 } from "./DicePhysicsWorld.js";
+export { BackgroundRollPlanner } from "./BackgroundRollPlanner.js";
+export type {
+  BackgroundRollPlannerOptions,
+  BackgroundRollPlanningTiming,
+  RollPlanningWorkerFactory,
+  RollPlanningWorkerLike
+} from "./BackgroundRollPlanner.js";
 export {
   DEFAULT_THROW_FORCE,
   MAX_DICE_PER_ROLL,
