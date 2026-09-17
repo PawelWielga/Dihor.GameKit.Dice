@@ -115,6 +115,7 @@ function toPlaybackError(error: unknown): DiceRollPlaybackError {
 export class DiceRollPlayer {
   private readonly target: DiceRenderTarget;
   private readonly meshFactory: DiceMeshFactory;
+  private readonly ownsMeshFactory: boolean;
   private readonly scheduler?: DiceAnimationScheduler;
   private readonly maxSubStepsPerFrame: number;
 
@@ -125,6 +126,7 @@ export class DiceRollPlayer {
 
   constructor(target: DiceRenderTarget, options: DiceRollPlayerOptions = {}) {
     this.target = target;
+    this.ownsMeshFactory = options.meshFactory === undefined;
     this.meshFactory = options.meshFactory ?? new DiceMeshFactory();
     this.scheduler = options.scheduler;
     this.maxSubStepsPerFrame = requirePositiveInteger(
@@ -220,6 +222,11 @@ export class DiceRollPlayer {
       world?.dispose();
       this.removeAndDisposeMeshes(meshes);
       this.visibleMeshes = [];
+
+      if (preparation.cancelled || this.disposed) {
+        throw new DiceRollPlaybackError("Dice roll playback was cancelled.", { cause: error });
+      }
+
       throw error;
     }
   }
@@ -248,6 +255,11 @@ export class DiceRollPlayer {
     }
 
     this.clear();
+
+    if (this.ownsMeshFactory) {
+      this.meshFactory.dispose();
+    }
+
     this.disposed = true;
   }
 
