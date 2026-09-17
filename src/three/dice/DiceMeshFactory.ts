@@ -205,17 +205,17 @@ function roundedPolyhedronProfile(sides: Exclude<DiceSides, 6>): {
 } {
   switch (sides) {
     case 4:
-      return { bevelRatio: 0.15, segments: 4 };
+      return { bevelRatio: 0.22, segments: 6 };
     case 8:
-      return { bevelRatio: 0.16, segments: 4 };
+      return { bevelRatio: 0.24, segments: 6 };
     case 10:
-      return { bevelRatio: 0.12, segments: 4 };
+      return { bevelRatio: 0.2, segments: 6 };
     case 12:
-      return { bevelRatio: 0.11, segments: 4 };
+      return { bevelRatio: 0.18, segments: 6 };
     case 20:
-      return { bevelRatio: 0.1, segments: 4 };
+      return { bevelRatio: 0.16, segments: 6 };
     case 100:
-      return { bevelRatio: 0.045, segments: 3 };
+      return { bevelRatio: 0.075, segments: 4 };
   }
 }
 
@@ -548,7 +548,7 @@ function createNumericMarkingsGeometry(
       width / Math.max(digits.length * 1.28, 1),
       height / 1.9
     );
-    const unit = availableUnit * (topology.sides >= 100 ? 0.58 : 0.68);
+    const unit = availableUnit * (topology.sides >= 100 ? 0.46 : 0.52);
 
     if (!Number.isFinite(unit) || unit <= Number.EPSILON) {
       continue;
@@ -619,7 +619,7 @@ export class DiceMeshFactory {
         ? this.buildD6(size, appearance, options.appearance, textures)
         : this.buildPolyhedral(sides, size, appearance, options.appearance, textures);
     } catch (error) {
-      for (const lease of textures.leases) {
+      for (const lease of textures.leases ?? []) {
         lease.release();
       }
 
