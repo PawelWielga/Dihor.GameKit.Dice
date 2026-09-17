@@ -240,7 +240,11 @@ describe("RollPlanner", () => {
     expect(strongerPlan.dice.map((die) => die.expectedValue)).toEqual([4, 7]);
     expect(defaultPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.01);
     expect(strongerPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.015);
-    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeCloseTo(0.015);
+    expect(strongerPlan.dice[0]?.initialState.angularVelocity.y).toBeCloseTo(0.01375);
+    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeCloseTo(0.01175);
+    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeLessThan(
+      strongerPlan.dice[1]!.initialState.velocity.z
+    );
   });
 
   it("rejects throw force values outside the supported safe range", () => {

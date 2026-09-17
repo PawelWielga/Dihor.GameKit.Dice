@@ -392,6 +392,10 @@ export class RollPlanner {
       return state;
     }
 
+    const forceDelta = throwForce - DEFAULT_THROW_FORCE;
+    const tumbleScale = DEFAULT_THROW_FORCE + forceDelta * 0.35;
+    const yawScale = DEFAULT_THROW_FORCE + forceDelta * 0.75;
+
     return {
       ...state,
       velocity: {
@@ -400,9 +404,11 @@ export class RollPlanner {
         z: state.velocity.z * throwForce
       },
       angularVelocity: {
-        x: state.angularVelocity.x * throwForce,
-        y: state.angularVelocity.y * throwForce,
-        z: state.angularVelocity.z * throwForce
+        // Strong throws keep their extra translational energy without destroying the
+        // target-face bias through equally aggressive uncontrolled X/Z tumble.
+        x: state.angularVelocity.x * tumbleScale,
+        y: state.angularVelocity.y * yawScale,
+        z: state.angularVelocity.z * tumbleScale
       }
     };
   }
