@@ -154,7 +154,16 @@ describe("DiceMeshFactory", () => {
       }
     });
 
-    expect(mesh.object.getObjectByName("D20 face texture 13")).toBeDefined();
+    const faceTexture = mesh.object.getObjectByName("D20 face texture 13") as Mesh;
+    expect(faceTexture).toBeDefined();
+    expect((faceTexture.material as MeshStandardMaterial).flatShading).toBe(false);
+
+    const normals = faceTexture.geometry.getAttribute("normal");
+    const normalDelta =
+      Math.abs(normals.getX(0) - normals.getX(1)) +
+      Math.abs(normals.getY(0) - normals.getY(1)) +
+      Math.abs(normals.getZ(0) - normals.getZ(1));
+    expect(normalDelta).toBeGreaterThan(1e-5);
     expect(loader.calls).toContain("/d20-face-13.png");
 
     mesh.dispose();
