@@ -2,7 +2,13 @@ export { DiceRenderer } from "./DiceRenderer.js";
 export type { DiceRendererOptions, DiceWebGLRendererFactory } from "./DiceRenderer.js";
 export { DiceScene } from "./DiceScene.js";
 export type {
+  DiceAmbientLightOptions,
   DiceCameraOptions,
+  DiceDirectionalLightOptions,
+  DiceLightingOptions,
+  DiceLightPosition,
+  DicePointLightOptions,
+  DiceSceneLightOptions,
   DiceSceneOptions,
   DiceTableMaterialOptions
 } from "./DiceScene.js";
