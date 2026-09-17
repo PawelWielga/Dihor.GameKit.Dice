@@ -577,7 +577,7 @@ export class DiceMeshFactory {
     const texturedValues = new Set(textures?.faces.keys() ?? []);
 
     for (const [value, lease] of textures?.faces ?? []) {
-      const geometry = createTopologyGeometry(topology, size, new Set([value]), size * 0.008);
+      const geometry = createTopologyGeometry(topology, size, new Set([value]), size * 0.008, 0.72);
       const material = new MeshStandardMaterial({
         color: "#ffffff",
         map: lease.texture,
@@ -585,7 +585,7 @@ export class DiceMeshFactory {
         roughness: appearance.roughness,
         transparent: true,
         alphaTest: 0.01,
-        flatShading: true
+        flatShading: false
       });
       const faceMesh = new Mesh(geometry, material);
       faceMesh.name = `D${sides} face texture ${value}`;
