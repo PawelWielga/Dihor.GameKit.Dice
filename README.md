@@ -45,6 +45,10 @@ Run the local demo:
 npm run dev:demo
 ```
 
+The demo is served under the same project path used by GitHub Pages:
+
+`http://localhost:5173/PartyBeam.DiceKit/`
+
 Build the library:
 
 ```bash
@@ -63,13 +67,19 @@ Run TypeScript checks:
 npm run typecheck
 ```
 
-Build the static demo bundle:
+Build the static demo bundle locally:
 
 ```bash
 npm run build:demo
 ```
 
-The bootstrap demo output is written to `dist-demo/`. A later issue will publish that build to GitHub Pages.
+The deployable static demo is written to `dist-demo/`. You can preview that build locally with:
+
+```bash
+npm run preview:demo
+```
+
+The generated `dist-demo/` output is not committed to the repository.
 
 ## Continuous integration
 
@@ -142,11 +152,13 @@ console.log(result.total);
 
 ## Demo
 
-The interactive development application lives in `demo/`. A later issue will publish its production build to GitHub Pages.
+The interactive development application lives in `demo/` and is published automatically from `main` through GitHub Pages.
 
-Planned URL:
+Live demo:
 
-`https://pawelwielga.github.io/PartyBeam.DiceKit/`
+https://pawelwielga.github.io/PartyBeam.DiceKit/
+
+The Pages workflow builds the demo with `npm run build:demo`, uploads `dist-demo/` as the Pages artifact and deploys it without committing generated files to `/docs`.
 
 ## Development principles
 
