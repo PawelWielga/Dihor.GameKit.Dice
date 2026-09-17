@@ -8,14 +8,30 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  SRGBColorSpace,
+  Texture,
+  TextureLoader,
   type ColorRepresentation,
   type Object3D
 } from "three";
 import type { DiceTransform } from "./DiceTransform.js";
 
+export interface DiceTableMaterialOptions {
+  /** Base color used by the table material. When a texture is provided it acts as a tint. */
+  readonly color?: ColorRepresentation;
+
+  /** Optional color texture URL for the visible table surface. */
+  readonly texture?: string;
+}
+
 export interface DiceSceneOptions {
   readonly background?: ColorRepresentation | null;
+
+  /** Legacy color shortcut retained for compatibility. Prefer table.color for new code. */
   readonly floorColor?: ColorRepresentation;
+
+  /** Visible table material configuration. */
+  readonly table?: DiceTableMaterialOptions;
   readonly showFloor?: boolean;
 }
 
@@ -26,6 +42,11 @@ function normalizeDimension(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
+function normalizeTextureUrl(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
 /** Owns the Three.js scene graph used by DiceKit, without any physics logic. */
 export class DiceScene {
   readonly scene: Scene;
@@ -34,6 +55,11 @@ export class DiceScene {
 
   private readonly floorGeometry?: PlaneGeometry;
   private readonly floorMaterial?: MeshStandardMaterial;
+  private readonly floorTextureLoader = new TextureLoader();
+  private floorTexture?: Texture;
+  private floorTextureUrl?: string;
+  private floorTextureRequest = 0;
+  private floorTextureLoad?: Promise<void>;
   private disposed = false;
 
   constructor(options: DiceSceneOptions = {}) {
@@ -56,9 +82,11 @@ export class DiceScene {
     this.scene.add(ambientLight, keyLight);
 
     if (options.showFloor !== false) {
+      const initialTableColor = options.table?.color ?? options.floorColor ?? DEFAULT_FLOOR;
+
       this.floorGeometry = new PlaneGeometry(20, 20);
       this.floorMaterial = new MeshStandardMaterial({
-        color: options.floorColor ?? DEFAULT_FLOOR,
+        color: initialTableColor,
         metalness: 0,
         roughness: 0.9
       });
@@ -69,6 +97,13 @@ export class DiceScene {
       floor.position.y = 0;
       floor.receiveShadow = true;
       this.scene.add(floor);
+
+      if (normalizeTextureUrl(options.table?.texture)) {
+        void this.setTableMaterial({
+          color: initialTableColor,
+          texture: options.table?.texture
+        });
+      }
     }
   }
 
@@ -78,6 +113,75 @@ export class DiceScene {
 
     this.camera.aspect = safeWidth / safeHeight;
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Updates the visible table material without rebuilding the renderer.
+   * Failed texture loads fall back to the configured base color.
+   */
+  setTableMaterial(options: DiceTableMaterialOptions = {}): Promise<void> {
+    if (this.disposed || !this.floorMaterial) {
+      return Promise.resolve();
+    }
+
+    const textureUrl = normalizeTextureUrl(options.texture);
+    const fallbackColor = textureUrl ? 0xffffff : DEFAULT_FLOOR;
+    this.floorMaterial.color.set(options.color ?? fallbackColor);
+
+    if (textureUrl === this.floorTextureUrl) {
+      return this.floorTextureLoad ?? Promise.resolve();
+    }
+
+    this.floorTextureUrl = textureUrl;
+    const request = ++this.floorTextureRequest;
+    this.releaseFloorTexture();
+    this.floorMaterial.map = null;
+    this.floorMaterial.needsUpdate = true;
+
+    if (!textureUrl) {
+      this.floorTextureLoad = undefined;
+      return Promise.resolve();
+    }
+
+    const load = this.floorTextureLoader
+      .loadAsync(textureUrl)
+      .then((texture) => {
+        texture.colorSpace = SRGBColorSpace;
+
+        if (
+          this.disposed ||
+          request !== this.floorTextureRequest ||
+          this.floorTextureUrl !== textureUrl ||
+          !this.floorMaterial
+        ) {
+          texture.dispose();
+          return;
+        }
+
+        this.floorTexture = texture;
+        this.floorMaterial.map = texture;
+        this.floorMaterial.needsUpdate = true;
+      })
+      .catch(() => {
+        if (
+          !this.disposed &&
+          request === this.floorTextureRequest &&
+          this.floorTextureUrl === textureUrl &&
+          this.floorMaterial
+        ) {
+          this.floorTextureUrl = undefined;
+          this.floorMaterial.map = null;
+          this.floorMaterial.needsUpdate = true;
+        }
+      })
+      .finally(() => {
+        if (request === this.floorTextureRequest) {
+          this.floorTextureLoad = undefined;
+        }
+      });
+
+    this.floorTextureLoad = load;
+    return load;
   }
 
   add(object: Object3D): void {
@@ -104,9 +208,16 @@ export class DiceScene {
     }
 
     this.disposed = true;
+    this.floorTextureRequest += 1;
+    this.releaseFloorTexture();
     this.content.clear();
     this.scene.clear();
     this.floorGeometry?.dispose();
     this.floorMaterial?.dispose();
+  }
+
+  private releaseFloorTexture(): void {
+    this.floorTexture?.dispose();
+    this.floorTexture = undefined;
   }
 }

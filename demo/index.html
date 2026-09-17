@@ -209,6 +209,48 @@
               </details>
             </section>
 
+            <section class="control-section">
+              <div class="section-heading">
+                <span class="section-index">03</span>
+                <div>
+                  <h2>Table</h2>
+                  <p>Configure the visible table material without changing dice physics.</p>
+                </div>
+              </div>
+
+              <label class="field field--color">
+                <span>Table color</span>
+                <span class="color-control">
+                  <input id="table-color" name="table-color" type="color" value="#292d33" />
+                  <output id="table-color-value">#292D33</output>
+                </span>
+              </label>
+
+              <div class="field">
+                <span>Table texture URL <small>optional</small></span>
+                <input
+                  id="table-texture"
+                  name="table-texture"
+                  type="url"
+                  inputmode="url"
+                  placeholder="https://example.com/table-texture.jpg"
+                  aria-label="Table texture URL"
+                />
+                <div class="actions">
+                  <button id="sample-table-texture-button" class="button button--ghost" type="button">
+                    Use test texture
+                  </button>
+                  <button id="reset-table-button" class="button button--ghost" type="button">
+                    Reset table
+                  </button>
+                </div>
+                <p class="hint">
+                  The texture affects only the rendered table. The cannon-es collision plane and
+                  logical dice result stay unchanged.
+                </p>
+              </div>
+            </section>
+
             <section class="control-section control-section--actions">
               <label class="toggle">
                 <input id="debug-mode" type="checkbox" />

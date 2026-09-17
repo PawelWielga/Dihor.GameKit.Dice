@@ -1,4 +1,4 @@
-import { Object3D } from "three";
+import { Object3D, type Mesh, type MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
 import { DiceScene } from "../src/index.js";
 
@@ -8,6 +8,36 @@ describe("DiceScene", () => {
     const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor");
 
     expect(floor?.position.y).toBe(0);
+    scene.dispose();
+  });
+
+  it("preserves the default table color and accepts table color configuration", async () => {
+    const defaultScene = new DiceScene();
+    const defaultFloor = defaultScene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const defaultMaterial = defaultFloor.material as MeshStandardMaterial;
+
+    expect(defaultMaterial.color.getHex()).toBe(0x292d33);
+    defaultScene.dispose();
+
+    const scene = new DiceScene({ table: { color: "#315a43" } });
+    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const material = floor.material as MeshStandardMaterial;
+
+    expect(material.color.getHexString()).toBe("315a43");
+
+    await scene.setTableMaterial({ color: "#74512f", texture: "   " });
+
+    expect(material.color.getHexString()).toBe("74512f");
+    expect(material.map).toBeNull();
+    scene.dispose();
+  });
+
+  it("keeps the legacy floorColor shortcut working", () => {
+    const scene = new DiceScene({ floorColor: "#123456" });
+    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const material = floor.material as MeshStandardMaterial;
+
+    expect(material.color.getHexString()).toBe("123456");
     scene.dispose();
   });
 

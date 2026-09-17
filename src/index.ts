@@ -110,6 +110,7 @@ export {
   type DiceQuaternion,
   type DiceRendererOptions,
   type DiceSceneOptions,
+  type DiceTableMaterialOptions,
   type DiceTextureLoader,
   type DiceTransform,
   type DiceVector3,

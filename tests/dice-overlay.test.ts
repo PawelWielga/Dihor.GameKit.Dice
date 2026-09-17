@@ -237,6 +237,37 @@ describe("DiceOverlay", () => {
     overlay.close();
   });
 
+  it("forwards table material configuration to the renderer", async () => {
+    const documentRef = new FakeDocument();
+    let receivedTable: unknown;
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      renderer: {
+        scene: {
+          table: {
+            color: "#315a43",
+            texture: "/textures/felt.jpg"
+          }
+        }
+      },
+      roller: new DiceRoller({ randomProvider: { next: () => 0 }, rollIdProvider: () => "table" }),
+      planner: { plan: createPlan },
+      rendererFactory: (_container, options) => {
+        receivedTable = options.scene?.table;
+        return new FakeRenderer();
+      },
+      playerFactory: () => new FakePlayer()
+    });
+
+    await overlay.roll({ dice: [{ sides: 6 }] });
+
+    expect(receivedTable).toEqual({
+      color: "#315a43",
+      texture: "/textures/felt.jpg"
+    });
+    overlay.dispose();
+  });
+
   it("propagates planning failures without mounting a renderer", async () => {
     const documentRef = new FakeDocument();
     const rendererFactory = vi.fn(() => new FakeRenderer());

@@ -12,12 +12,14 @@ import {
   type DiceRollRequest,
   type DiceRollResult,
   type DiceSides,
+  type DiceTableMaterialOptions,
   type PhysicsQuaternion,
   type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
+const SAMPLE_TABLE_TEXTURE_URL = SAMPLE_TEXTURE_URL;
 const COMPARISON_SIDES = [4, 6, 8] as const satisfies readonly DiceSides[];
 const COMPARISON_SLOT_SPACING = 2.6;
 
@@ -144,6 +146,11 @@ const bodyColor = requireElement<HTMLInputElement>("#body-color");
 const markingsColor = requireElement<HTMLInputElement>("#markings-color");
 const bodyColorValue = requireElement<HTMLOutputElement>("#body-color-value");
 const markingsColorValue = requireElement<HTMLOutputElement>("#markings-color-value");
+const tableColor = requireElement<HTMLInputElement>("#table-color");
+const tableColorValue = requireElement<HTMLOutputElement>("#table-color-value");
+const tableTexture = requireElement<HTMLInputElement>("#table-texture");
+const sampleTableTextureButton = requireElement<HTMLButtonElement>("#sample-table-texture-button");
+const resetTableButton = requireElement<HTMLButtonElement>("#reset-table-button");
 const fontPreset = requireElement<HTMLSelectElement>("#font-preset");
 const fontFamily = requireElement<HTMLInputElement>("#font-family");
 const fontWeight = requireElement<HTMLInputElement>("#font-weight");
@@ -234,7 +241,13 @@ const overlay = new DiceOverlay({
     }
   },
   rendererFactory(container, options) {
-    const renderer = new DiceRenderer(container, options);
+    const renderer = new DiceRenderer(container, {
+      ...options,
+      scene: {
+        ...options.scene,
+        table: createTableMaterial()
+      }
+    });
     demoRenderer = renderer;
     configureCamera(comparisonMode);
     return renderer;
@@ -254,6 +267,35 @@ function setStatus(message: string, state?: "busy" | "error"): void {
 function updateColorOutputs(): void {
   bodyColorValue.value = bodyColor.value.toUpperCase();
   markingsColorValue.value = markingsColor.value.toUpperCase();
+}
+
+function updateTableColorOutput(): void {
+  tableColorValue.value = tableColor.value.toUpperCase();
+}
+
+function createTableMaterial(): DiceTableMaterialOptions {
+  const texture = optionalValue(tableTexture);
+
+  return {
+    color: tableColor.value,
+    ...(texture ? { texture } : {})
+  };
+}
+
+function applyTableMaterial(): void {
+  const renderer = demoRenderer;
+
+  if (!renderer) {
+    return;
+  }
+
+  const update = renderer.diceScene.setTableMaterial(createTableMaterial());
+  renderer.render();
+  void update.then(() => {
+    if (demoRenderer === renderer) {
+      renderer.render();
+    }
+  });
 }
 
 function syncFontControls(): void {
@@ -476,6 +518,21 @@ function resetOutput(): void {
 
 bodyColor.addEventListener("input", updateColorOutputs);
 markingsColor.addEventListener("input", updateColorOutputs);
+tableColor.addEventListener("input", () => {
+  updateTableColorOutput();
+  applyTableMaterial();
+});
+tableTexture.addEventListener("change", applyTableMaterial);
+sampleTableTextureButton.addEventListener("click", () => {
+  tableTexture.value = SAMPLE_TABLE_TEXTURE_URL;
+  applyTableMaterial();
+});
+resetTableButton.addEventListener("click", () => {
+  tableColor.value = "#292d33";
+  tableTexture.value = "";
+  updateTableColorOutput();
+  applyTableMaterial();
+});
 fontPreset.addEventListener("change", syncFontControls);
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
@@ -509,5 +566,6 @@ window.addEventListener(
 );
 
 updateColorOutputs();
+updateTableColorOutput();
 syncFontControls();
 updateDebugPanel();
