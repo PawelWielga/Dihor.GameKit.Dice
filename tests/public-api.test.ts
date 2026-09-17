@@ -8,7 +8,7 @@ import {
 
 describe("public domain API", () => {
   it("exposes the planned standard dice sides", () => {
-    expect(SUPPORTED_DICE_SIDES).toEqual([4, 6, 8, 10, 12, 20, 100]);
+    expect(SUPPORTED_DICE_SIDES).toEqual([4, 6, 8, 10, 12, 20]);
   });
 
   it("allows every die in one request to define its own appearance", () => {

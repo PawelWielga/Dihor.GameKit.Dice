@@ -1,16 +1,23 @@
 import {
   DiceOverlay,
+  DiceRenderer,
   DiceRoller,
   RollPlanner,
   SUPPORTED_DICE_SIDES,
+  getDiceFace,
+  getDiceTopology,
   type DiceAppearance,
   type DiceRollRequest,
   type DiceRollResult,
   type DiceSides,
+  type PhysicsQuaternion,
+  type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
+const COMPARISON_SIDES = [4, 6, 8] as const satisfies readonly DiceSides[];
+const COMPARISON_SLOT_SPACING = 2.6;
 
 function requireElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -31,6 +38,101 @@ function nextPaint(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+function normalizeQuaternion(quaternion: PhysicsQuaternion): PhysicsQuaternion {
+  const length = Math.hypot(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+
+  return {
+    x: quaternion.x / length,
+    y: quaternion.y / length,
+    z: quaternion.z / length,
+    w: quaternion.w / length
+  };
+}
+
+function multiplyQuaternions(left: PhysicsQuaternion, right: PhysicsQuaternion): PhysicsQuaternion {
+  return normalizeQuaternion({
+    x: left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y,
+    y: left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x,
+    z: left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w,
+    w: left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z
+  });
+}
+
+function quaternionFromDirections(
+  from: { readonly x: number; readonly y: number; readonly z: number },
+  to: { readonly x: number; readonly y: number; readonly z: number }
+): PhysicsQuaternion {
+  const fromLength = Math.hypot(from.x, from.y, from.z);
+  const toLength = Math.hypot(to.x, to.y, to.z);
+  const a = { x: from.x / fromLength, y: from.y / fromLength, z: from.z / fromLength };
+  const b = { x: to.x / toLength, y: to.y / toLength, z: to.z / toLength };
+  const dot = a.x * b.x + a.y * b.y + a.z * b.z;
+
+  if (dot < -0.999999) {
+    const reference = Math.abs(a.x) < 0.8 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 0, z: 1 };
+    const axis = {
+      x: a.y * reference.z - a.z * reference.y,
+      y: a.z * reference.x - a.x * reference.z,
+      z: a.x * reference.y - a.y * reference.x
+    };
+    const axisLength = Math.hypot(axis.x, axis.y, axis.z);
+    return { x: axis.x / axisLength, y: axis.y / axisLength, z: axis.z / axisLength, w: 0 };
+  }
+
+  return normalizeQuaternion({
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+    w: 1 + dot
+  });
+}
+
+function rotatedY(
+  vector: { readonly x: number; readonly y: number; readonly z: number },
+  quaternion: PhysicsQuaternion
+): number {
+  const tx = 2 * (quaternion.y * vector.z - quaternion.z * vector.y);
+  const ty = 2 * (quaternion.z * vector.x - quaternion.x * vector.z);
+  const tz = 2 * (quaternion.x * vector.y - quaternion.y * vector.x);
+  return vector.y + quaternion.w * ty + (quaternion.z * tx - quaternion.x * tz);
+}
+
+function createComparisonInitialState(context: RollInitialStateContext) {
+  const topology = getDiceTopology(context.sides);
+  const resultFace = getDiceFace(context.sides, context.expectedValue);
+  const targetY = topology.resultDirection === "up" ? 1 : -1;
+  const aligned = quaternionFromDirections(resultFace.normal, { x: 0, y: targetY, z: 0 });
+  const yaw = (context.dieIndex - (context.diceCount - 1) / 2) * 0.35 + (context.attempt - 1) * 0.05;
+  const yawQuaternion: PhysicsQuaternion = {
+    x: 0,
+    y: Math.sin(yaw / 2),
+    z: 0,
+    w: Math.cos(yaw / 2)
+  };
+  const quaternion = multiplyQuaternions(yawQuaternion, aligned);
+  const supportY = -Math.min(...topology.vertices.map((vertex) => rotatedY(vertex, quaternion))) * context.diceSize;
+  const spinDirection = context.dieIndex % 2 === 0 ? 1 : -1;
+
+  return {
+    position: {
+      x: context.slotX,
+      y: supportY + context.diceSize * 1.6,
+      z: 0
+    },
+    quaternion,
+    velocity: {
+      x: 0,
+      y: context.diceSize * 0.12,
+      z: 0
+    },
+    angularVelocity: {
+      x: 0,
+      y: spinDirection * 2.8,
+      z: 0
+    }
+  };
+}
+
 const form = requireElement<HTMLFormElement>("#dice-form");
 const diceType = requireElement<HTMLSelectElement>("#dice-type");
 const diceCount = requireElement<HTMLSelectElement>("#dice-count");
@@ -46,6 +148,7 @@ const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
   requireElement<HTMLInputElement>(`#face-${face}`)
 );
 const debugMode = requireElement<HTMLInputElement>("#debug-mode");
+const compareButton = requireElement<HTMLButtonElement>("#compare-button");
 const rollButton = requireElement<HTMLButtonElement>("#roll-button");
 const resetButton = requireElement<HTMLButtonElement>("#reset-button");
 const stage = requireElement<HTMLElement>("#stage");
@@ -59,9 +162,47 @@ const debugJson = requireElement<HTMLElement>("#debug-json");
 
 const roller = new DiceRoller();
 const planner = new RollPlanner();
+const comparisonPlanner = new RollPlanner({
+  initialStateProvider: createComparisonInitialState,
+  slotSpacing: COMPARISON_SLOT_SPACING,
+  maxAttemptsPerDie: 6,
+  physics: {
+    friction: 0.6,
+    restitution: 0.06,
+    linearDamping: 0.25,
+    angularDamping: 0.28
+  }
+});
 let debugLogicalResult: DiceRollResult | undefined;
 let debugPlan: RollPlan | undefined;
 let debugFinalResult: DiceRollResult | undefined;
+let rolling = false;
+let comparisonMode = false;
+let demoRenderer: DiceRenderer | undefined;
+
+function configureCamera(comparison: boolean): void {
+  const camera = demoRenderer?.diceScene.camera;
+
+  if (!camera) {
+    return;
+  }
+
+  if (comparison) {
+    // Keep roughly the same framing while moving the camera ~10x farther away.
+    // The narrow FOV makes perspective scaling differences between the three slots negligible.
+    camera.position.set(0, 55, 75);
+    camera.fov = 4.8;
+    camera.far = 200;
+    camera.lookAt(0, 0.55, 0);
+  } else {
+    camera.position.set(0, 5.5, 7.5);
+    camera.fov = 45;
+    camera.far = 100;
+    camera.lookAt(0, 0, 0);
+  }
+
+  camera.updateProjectionMatrix();
+}
 
 const overlay = new DiceOverlay({
   container: stage,
@@ -74,7 +215,7 @@ const overlay = new DiceOverlay({
   },
   planner: {
     plan(result) {
-      debugPlan = planner.plan(result);
+      debugPlan = (comparisonMode ? comparisonPlanner : planner).plan(result);
       return debugPlan;
     }
   },
@@ -83,6 +224,12 @@ const overlay = new DiceOverlay({
     scene: {
       showFloor: true
     }
+  },
+  rendererFactory(container, options) {
+    const renderer = new DiceRenderer(container, options);
+    demoRenderer = renderer;
+    configureCamera(comparisonMode);
+    return renderer;
   }
 });
 
@@ -155,22 +302,33 @@ function createRequest(): DiceRollRequest {
   };
 }
 
+function createComparisonRequest(): DiceRollRequest {
+  return {
+    dice: COMPARISON_SIDES.map((sides) => ({
+      sides,
+      appearance: createAppearance(sides)
+    })),
+    modifier: 0,
+    reason: "D4 / D6 / D8 aligned size comparison"
+  };
+}
+
 function formatDiceExpression(result: DiceRollResult): string {
-  const values = result.dice.map((die) => String(die.value));
-  let expression = values.join(" + ");
+  const diceLabels = result.dice.map((die) => `D${die.sides} → ${die.value}`);
+
+  if (diceLabels.length === 1 && result.modifier === 0) {
+    return diceLabels[0] ?? `Result → ${result.total}`;
+  }
+
+  let expression = diceLabels.join(" · ");
 
   if (result.modifier > 0) {
-    expression += ` + ${result.modifier}`;
+    expression += ` · +${result.modifier}`;
   } else if (result.modifier < 0) {
-    expression += ` - ${Math.abs(result.modifier)}`;
+    expression += ` · -${Math.abs(result.modifier)}`;
   }
 
-  if (values.length > 1 || result.modifier !== 0) {
-    return `${expression} = ${result.total}`;
-  }
-
-  const singleDie = result.dice[0];
-  return singleDie ? `D${singleDie.sides} → ${result.total}` : `Result → ${result.total}`;
+  return `${expression} · total ${result.total}`;
 }
 
 function showResult(result: DiceRollResult): void {
@@ -197,8 +355,56 @@ function updateDebugPanel(): void {
   );
 }
 
+function setRollingState(isRolling: boolean, comparison = false): void {
+  rolling = isRolling;
+  rollButton.disabled = isRolling;
+  compareButton.disabled = isRolling;
+  resetButton.disabled = isRolling;
+  rollButton.textContent = isRolling && !comparison ? "Rolling…" : "Roll dice";
+  compareButton.textContent = isRolling && comparison
+    ? "Aligning D4 + D6 + D8…"
+    : "Roll D4 + D6 + D8 together";
+}
+
+async function runRequest(request: DiceRollRequest, comparison = false): Promise<void> {
+  if (rolling) {
+    return;
+  }
+
+  comparisonMode = comparison;
+  configureCamera(comparisonMode);
+  debugLogicalResult = undefined;
+  debugPlan = undefined;
+  debugFinalResult = undefined;
+  updateDebugPanel();
+  setRollingState(true, comparison);
+  setStatus(comparison ? "Rolling aligned D4, D6 and D8…" : "Planning and rolling…", "busy");
+  stagePlaceholder.hidden = true;
+
+  try {
+    await nextPaint();
+    const result = await overlay.roll(request);
+    debugFinalResult = result;
+    showResult(result);
+    updateDebugPanel();
+    setStatus(comparison ? "Aligned size comparison complete" : "Roll complete");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resultValue.textContent = "!";
+    resultDice.textContent = "Roll failed";
+    resultJson.textContent = JSON.stringify({ error: message }, null, 2);
+    updateDebugPanel();
+    setStatus("Roll failed", "error");
+    console.error("PartyBeam.DiceKit demo roll failed", error);
+  } finally {
+    setRollingState(false);
+  }
+}
+
 function resetOutput(): void {
   overlay.close();
+  demoRenderer = undefined;
+  comparisonMode = false;
   stagePlaceholder.hidden = false;
   resultValue.textContent = "–";
   resultDice.textContent = "No roll yet";
@@ -218,52 +424,20 @@ sampleTextureButton.addEventListener("click", () => {
 });
 debugMode.addEventListener("change", updateDebugPanel);
 resetButton.addEventListener("click", resetOutput);
+compareButton.addEventListener("click", () => {
+  void runRequest(createComparisonRequest(), true);
+});
 
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-
-  if (rollButton.disabled) {
-    return;
-  }
-
-  debugLogicalResult = undefined;
-  debugPlan = undefined;
-  debugFinalResult = undefined;
-  updateDebugPanel();
-
-  rollButton.disabled = true;
-  resetButton.disabled = true;
-  rollButton.textContent = "Rolling…";
-  setStatus("Planning and rolling…", "busy");
-  stagePlaceholder.hidden = true;
-
-  try {
-    const request = createRequest();
-    await nextPaint();
-    const result = await overlay.roll(request);
-    debugFinalResult = result;
-    showResult(result);
-    updateDebugPanel();
-    setStatus("Roll complete");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    resultValue.textContent = "!";
-    resultDice.textContent = "Roll failed";
-    resultJson.textContent = JSON.stringify({ error: message }, null, 2);
-    updateDebugPanel();
-    setStatus("Roll failed", "error");
-    console.error("PartyBeam.DiceKit demo roll failed", error);
-  } finally {
-    rollButton.disabled = false;
-    resetButton.disabled = false;
-    rollButton.textContent = "Roll dice";
-  }
+  void runRequest(createRequest());
 });
 
 window.addEventListener(
   "pagehide",
   () => {
     overlay.dispose();
+    demoRenderer = undefined;
   },
   { once: true }
 );

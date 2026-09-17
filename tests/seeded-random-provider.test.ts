@@ -43,7 +43,7 @@ describe("SeededRandomProvider", () => {
 describe("seeded dice pipeline", () => {
   it("generates the same logical values for the same seed and request", () => {
     const request: DiceRollRequest = {
-      dice: [{ sides: 4 }, { sides: 6 }, { sides: 8 }, { sides: 20 }, { sides: 100 }],
+      dice: [{ sides: 4 }, { sides: 6 }, { sides: 8 }, { sides: 20 }],
       modifier: 3,
       reason: "seeded-test"
     };

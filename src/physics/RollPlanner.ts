@@ -382,28 +382,33 @@ export class RollPlanner {
     };
     const quaternion = multiplyQuaternions(yawQuaternion, aligned);
     const supportY = -Math.min(...topology.vertices.map((vertex) => rotatedY(vertex, quaternion))) * size;
-    const dropHeight = size * (
-      context.sides === 100
-        ? this.randomRange(0.02, 0.06)
-        : this.randomRange(0.18, 0.4)
-    );
+
+    // Keep the requested face as a useful planning bias, but launch the die high enough and
+    // with cross-axis spin so the visible replay behaves like a throw instead of a tiny final drop.
+    // Later attempts progressively reduce tumble energy, giving high-sided dice a reliable path
+    // to the authoritative result without snapping or changing face identities after simulation.
+    const attemptEnergy = Math.max(0.04, 1 - (context.attempt - 1) * 0.08);
+    const tumbleLimit = (context.sides >= 20 ? 4.0 : 5.8) * attemptEnergy;
+    const yawLimit = 5.5;
+    const lateralLimit = size * 0.58 * attemptEnergy;
+    const dropHeight = size * this.randomRange(1.65, 2.75);
 
     return {
       position: {
         x: context.slotX,
         y: supportY + dropHeight,
-        z: 0
+        z: size * this.randomRange(-0.3, 0.3)
       },
       quaternion,
       velocity: {
-        x: 0,
-        y: 0,
-        z: 0
+        x: this.randomRange(-lateralLimit, lateralLimit),
+        y: size * this.randomRange(0.15, 0.85),
+        z: this.randomRange(-lateralLimit, lateralLimit)
       },
       angularVelocity: {
-        x: 0,
-        y: this.randomRange(-2.5, 2.5),
-        z: 0
+        x: this.randomRange(-tumbleLimit, tumbleLimit),
+        y: this.randomRange(-yawLimit, yawLimit),
+        z: this.randomRange(-tumbleLimit, tumbleLimit)
       }
     };
   }

@@ -67,6 +67,17 @@ interface FaceBasis {
   readonly center: Vector3;
 }
 
+interface RoundedEdge {
+  readonly vertexA: number;
+  readonly vertexB: number;
+  readonly faces: DiceTopologyFace[];
+}
+
+interface RoundedSample {
+  readonly position: Vector3;
+  readonly normal: Vector3;
+}
+
 const PIP_LAYOUTS: Readonly<Record<D6FaceValue, readonly (readonly [number, number])[]>> = {
   1: [[0, 0]],
   2: [[-1, 1], [1, -1]],
@@ -106,15 +117,33 @@ function faceBasis(face: DiceTopologyFace, size: number): FaceBasis {
   return { normal, horizontal, vertical, center };
 }
 
+function createSoftenedVertexNormals(topology: DiceTopology): readonly Vector3[] {
+  const normals = topology.vertices.map(() => new Vector3());
+
+  for (const face of topology.faces) {
+    const faceNormal = new Vector3(face.normal.x, face.normal.y, face.normal.z).normalize();
+
+    for (const vertexIndex of face.vertexIndices) {
+      normals[vertexIndex]?.add(faceNormal);
+    }
+  }
+
+  return normals.map((normal) => normal.normalize());
+}
+
 function createTopologyGeometry(
   topology: DiceTopology,
   size: number,
   values?: ReadonlySet<number>,
-  surfaceOffset = 0
+  surfaceOffset = 0,
+  edgeSoftness = 0
 ): BufferGeometry {
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
+  const softenedVertexNormals = edgeSoftness > 0
+    ? createSoftenedVertexNormals(topology)
+    : undefined;
 
   for (const face of topology.faces) {
     if (values && !values.has(face.value)) {
@@ -150,10 +179,335 @@ function createTopologyGeometry(
       for (const localIndex of [0, triangle, triangle + 1]) {
         const vertex = vertices[localIndex]!;
         const point = projected[localIndex]!;
+        const topologyVertexIndex = face.vertexIndices[localIndex]!;
+        const softenedNormal = softenedVertexNormals?.[topologyVertexIndex];
+        const renderNormal = softenedNormal
+          ? basis.normal.clone().lerp(softenedNormal, edgeSoftness).normalize()
+          : basis.normal;
+        positions.push(vertex.x, vertex.y, vertex.z);
+        normals.push(renderNormal.x, renderNormal.y, renderNormal.z);
+        uvs.push((point.x - minX) / width, (point.y - minY) / height);
+      }
+    }
+  }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function roundedPolyhedronProfile(sides: Exclude<DiceSides, 6>): {
+  readonly bevelRatio: number;
+  readonly segments: number;
+} {
+  switch (sides) {
+    case 4:
+      return { bevelRatio: 0.34, segments: 8 };
+    case 8:
+      return { bevelRatio: 0.3, segments: 8 };
+    case 10:
+      return { bevelRatio: 0.2, segments: 6 };
+    case 12:
+      return { bevelRatio: 0.18, segments: 6 };
+    case 20:
+      return { bevelRatio: 0.16, segments: 6 };
+  }
+}
+
+function quadraticBezier(start: Vector3, control: Vector3, end: Vector3, t: number): Vector3 {
+  const inverse = 1 - t;
+  return start.clone()
+    .multiplyScalar(inverse * inverse)
+    .addScaledVector(control, 2 * inverse * t)
+    .addScaledVector(end, t * t);
+}
+
+function appendOrientedTriangle(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  points: readonly [Vector3, Vector3, Vector3],
+  vertexNormals: readonly [Vector3, Vector3, Vector3],
+  vertexUvs: readonly [readonly [number, number], readonly [number, number], readonly [number, number]],
+  expectedNormal: Vector3
+): void {
+  const firstEdge = points[1].clone().sub(points[0]);
+  const secondEdge = points[2].clone().sub(points[0]);
+  const windingNormal = new Vector3().crossVectors(firstEdge, secondEdge);
+  const order = windingNormal.dot(expectedNormal) >= 0
+    ? [0, 1, 2] as const
+    : [0, 2, 1] as const;
+
+  for (const index of order) {
+    const point = points[index];
+    const normal = vertexNormals[index];
+    const uv = vertexUvs[index];
+    positions.push(point.x, point.y, point.z);
+    normals.push(normal.x, normal.y, normal.z);
+    uvs.push(uv[0], uv[1]);
+  }
+}
+
+function samplesMeet(left: RoundedSample, right: RoundedSample): boolean {
+  return left.position.distanceToSquared(right.position) <= 1e-12;
+}
+
+function createOrderedCapRing(sections: readonly RoundedSample[][]): RoundedSample[] {
+  if (sections.length === 0) {
+    return [];
+  }
+
+  const remaining = sections.map((section) => [...section]);
+  const firstSection = remaining.shift();
+
+  if (!firstSection || firstSection.length < 2) {
+    return [];
+  }
+
+  const ring = [...firstSection];
+
+  while (remaining.length > 0) {
+    const tail = ring[ring.length - 1];
+
+    if (!tail) {
+      return [];
+    }
+
+    let matchIndex = -1;
+    let reverse = false;
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      const section = remaining[index];
+      const start = section?.[0];
+      const end = section?.[section.length - 1];
+
+      if (start && samplesMeet(tail, start)) {
+        matchIndex = index;
+        break;
+      }
+
+      if (end && samplesMeet(tail, end)) {
+        matchIndex = index;
+        reverse = true;
+        break;
+      }
+    }
+
+    if (matchIndex < 0) {
+      return [];
+    }
+
+    const matched = remaining.splice(matchIndex, 1)[0]!;
+    const ordered = reverse ? [...matched].reverse() : matched;
+    ring.push(...ordered.slice(1));
+  }
+
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+
+  if (first && last && ring.length > 2 && samplesMeet(first, last)) {
+    ring.pop();
+  }
+
+  return ring;
+}
+
+function createRoundedPolyhedralBodyGeometry(
+  topology: DiceTopology,
+  sides: Exclude<DiceSides, 6>,
+  size: number
+): BufferGeometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const { bevelRatio, segments } = roundedPolyhedronProfile(sides);
+  const softenedVertexNormals = createSoftenedVertexNormals(topology);
+  const insetByFace = new Map<number, Map<number, Vector3>>();
+  const edges = new Map<string, RoundedEdge>();
+
+  for (const face of topology.faces) {
+    const basis = faceBasis(face, size);
+    const faceInsets = new Map<number, Vector3>();
+    const originalVertices = face.vertexIndices.map((index) => {
+      const vertex = topology.vertices[index];
+
+      if (!vertex) {
+        throw new RangeError(`D${topology.sides} face ${face.value} references missing vertex ${index}.`);
+      }
+
+      return new Vector3(vertex.x * size, vertex.y * size, vertex.z * size);
+    });
+    const insetVertices = originalVertices.map((vertex, localIndex) => {
+      const inset = vertex.clone().lerp(basis.center, bevelRatio);
+      faceInsets.set(face.vertexIndices[localIndex]!, inset);
+      return inset;
+    });
+    insetByFace.set(face.value, faceInsets);
+
+    const projected = insetVertices.map((vertex) => {
+      const relative = vertex.clone().sub(basis.center);
+      return {
+        x: relative.dot(basis.horizontal),
+        y: relative.dot(basis.vertical)
+      };
+    });
+    const minX = Math.min(...projected.map((point) => point.x));
+    const maxX = Math.max(...projected.map((point) => point.x));
+    const minY = Math.min(...projected.map((point) => point.y));
+    const maxY = Math.max(...projected.map((point) => point.y));
+    const width = Math.max(maxX - minX, Number.EPSILON);
+    const height = Math.max(maxY - minY, Number.EPSILON);
+
+    for (let triangle = 1; triangle < insetVertices.length - 1; triangle += 1) {
+      for (const localIndex of [0, triangle, triangle + 1]) {
+        const vertex = insetVertices[localIndex]!;
+        const point = projected[localIndex]!;
         positions.push(vertex.x, vertex.y, vertex.z);
         normals.push(basis.normal.x, basis.normal.y, basis.normal.z);
         uvs.push((point.x - minX) / width, (point.y - minY) / height);
       }
+    }
+
+    for (let index = 0; index < face.vertexIndices.length; index += 1) {
+      const first = face.vertexIndices[index]!;
+      const second = face.vertexIndices[(index + 1) % face.vertexIndices.length]!;
+      const vertexA = Math.min(first, second);
+      const vertexB = Math.max(first, second);
+      const key = `${vertexA}:${vertexB}`;
+      const existing = edges.get(key);
+
+      if (existing) {
+        existing.faces.push(face);
+      } else {
+        edges.set(key, { vertexA, vertexB, faces: [face] });
+      }
+    }
+  }
+
+  const capSections = new Map<number, RoundedSample[][]>();
+
+  for (const edge of edges.values()) {
+    if (edge.faces.length !== 2) {
+      continue;
+    }
+
+    const [faceA, faceB] = edge.faces;
+    if (!faceA || !faceB) {
+      continue;
+    }
+
+    const faceAInsets = insetByFace.get(faceA.value);
+    const faceBInsets = insetByFace.get(faceB.value);
+    const insetA0 = faceAInsets?.get(edge.vertexA);
+    const insetA1 = faceAInsets?.get(edge.vertexB);
+    const insetB0 = faceBInsets?.get(edge.vertexA);
+    const insetB1 = faceBInsets?.get(edge.vertexB);
+    const topologyVertexA = topology.vertices[edge.vertexA];
+    const topologyVertexB = topology.vertices[edge.vertexB];
+
+    if (!insetA0 || !insetA1 || !insetB0 || !insetB1 || !topologyVertexA || !topologyVertexB) {
+      continue;
+    }
+
+    const originalA = new Vector3(topologyVertexA.x * size, topologyVertexA.y * size, topologyVertexA.z * size);
+    const originalB = new Vector3(topologyVertexB.x * size, topologyVertexB.y * size, topologyVertexB.z * size);
+    const normalA = new Vector3(faceA.normal.x, faceA.normal.y, faceA.normal.z).normalize();
+    const normalB = new Vector3(faceB.normal.x, faceB.normal.y, faceB.normal.z).normalize();
+    const samplesA: RoundedSample[] = [];
+    const samplesB: RoundedSample[] = [];
+
+    for (let step = 0; step <= segments; step += 1) {
+      const t = step / segments;
+      const normal = normalA.clone().lerp(normalB, t).normalize();
+      samplesA.push({
+        position: quadraticBezier(insetA0, originalA, insetB0, t),
+        normal
+      });
+      samplesB.push({
+        position: quadraticBezier(insetA1, originalB, insetB1, t),
+        normal: normal.clone()
+      });
+    }
+
+    for (let step = 0; step < segments; step += 1) {
+      const a0 = samplesA[step]!;
+      const b0 = samplesB[step]!;
+      const a1 = samplesA[step + 1]!;
+      const b1 = samplesB[step + 1]!;
+      const expectedNormal = a0.normal.clone().add(a1.normal).add(b0.normal).add(b1.normal).normalize();
+      const v0 = step / segments;
+      const v1 = (step + 1) / segments;
+
+      appendOrientedTriangle(
+        positions,
+        normals,
+        uvs,
+        [a0.position, b0.position, b1.position],
+        [a0.normal, b0.normal, b1.normal],
+        [[0, v0], [1, v0], [1, v1]],
+        expectedNormal
+      );
+      appendOrientedTriangle(
+        positions,
+        normals,
+        uvs,
+        [a0.position, b1.position, a1.position],
+        [a0.normal, b1.normal, a1.normal],
+        [[0, v0], [1, v1], [0, v1]],
+        expectedNormal
+      );
+    }
+
+    const capA = capSections.get(edge.vertexA) ?? [];
+    capA.push(samplesA);
+    capSections.set(edge.vertexA, capA);
+    const capB = capSections.get(edge.vertexB) ?? [];
+    capB.push(samplesB);
+    capSections.set(edge.vertexB, capB);
+  }
+
+  for (const [vertexIndex, sections] of capSections) {
+    const topologyVertex = topology.vertices[vertexIndex];
+    const vertexNormal = softenedVertexNormals[vertexIndex];
+
+    if (!topologyVertex || !vertexNormal) {
+      continue;
+    }
+
+    const ring = createOrderedCapRing(sections);
+
+    if (ring.length < 3) {
+      continue;
+    }
+
+    const original = new Vector3(topologyVertex.x * size, topologyVertex.y * size, topologyVertex.z * size);
+    const originalProjection = original.dot(vertexNormal);
+    const ringPeakProjection = Math.max(...ring.map((sample) => sample.position.dot(vertexNormal)));
+    const centerProjection = ringPeakProjection + (originalProjection - ringPeakProjection) * 0.55;
+    const centerScale = Math.abs(originalProjection) > Number.EPSILON
+      ? centerProjection / originalProjection
+      : 1;
+    const center = original.clone().multiplyScalar(centerScale);
+
+    for (let index = 0; index < ring.length; index += 1) {
+      const first = ring[index]!;
+      const second = ring[(index + 1) % ring.length]!;
+      const expectedNormal = vertexNormal.clone().add(first.normal).add(second.normal).normalize();
+      const u0 = index / ring.length;
+      const u1 = (index + 1) / ring.length;
+
+      appendOrientedTriangle(
+        positions,
+        normals,
+        uvs,
+        [center, first.position, second.position],
+        [vertexNormal, first.normal, second.normal],
+        [[0.5, 0.5], [u0, 0], [u1, 1]],
+        expectedNormal
+      );
     }
   }
 
@@ -207,33 +561,34 @@ function addDigitSegments(
 ): void {
   const segments = DIGIT_SEGMENTS[digit] ?? [];
   const digitWidth = unit;
-  const digitHeight = unit * 1.65;
-  const thickness = unit * 0.13;
-  const horizontalWidth = digitWidth * 0.72;
-  const verticalHeight = digitHeight * 0.42;
+  const digitHeight = unit * 1.58;
+  const thickness = unit * 0.2;
+  const horizontalWidth = digitWidth * 0.78;
+  const verticalHeight = digitHeight * 0.43;
+  const glyphCenterX = digit === "1" ? centerX - digitWidth * 0.38 : centerX;
 
   for (const segment of segments) {
     switch (segment) {
       case "a":
-        pushQuad(positions, normals, basis, centerX, digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
         break;
       case "g":
-        pushQuad(positions, normals, basis, centerX, 0, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, 0, horizontalWidth, thickness, surfaceOffset);
         break;
       case "d":
-        pushQuad(positions, normals, basis, centerX, -digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, -digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
         break;
       case "f":
-        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX - digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "b":
-        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX + digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "e":
-        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX - digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "c":
-        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX + digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
     }
   }
@@ -268,13 +623,13 @@ function createNumericMarkingsGeometry(
       width / Math.max(digits.length * 1.28, 1),
       height / 1.9
     );
-    const unit = availableUnit * (topology.sides >= 100 ? 0.54 : 0.62);
+    const unit = availableUnit * 0.52;
 
     if (!Number.isFinite(unit) || unit <= Number.EPSILON) {
       continue;
     }
 
-    const gap = unit * 0.18;
+    const gap = unit * 0.12;
     const totalWidth = digits.length * unit + Math.max(0, digits.length - 1) * gap;
     const startX = -totalWidth / 2 + unit / 2;
 
@@ -286,7 +641,7 @@ function createNumericMarkingsGeometry(
         digits[index]!,
         startX + index * (unit + gap),
         unit,
-        size * 0.006
+        size * 0.007
       );
     }
   }
@@ -339,7 +694,7 @@ export class DiceMeshFactory {
         ? this.buildD6(size, appearance, options.appearance, textures)
         : this.buildPolyhedral(sides, size, appearance, options.appearance, textures);
     } catch (error) {
-      for (const lease of textures.leases) {
+      for (const lease of textures.leases ?? []) {
         lease.release();
       }
 
@@ -528,7 +883,7 @@ export class DiceMeshFactory {
     textures?: DiceTextureResources
   ): DiceMesh {
     const topology = getDiceTopology(sides);
-    const bodyGeometry = createTopologyGeometry(topology, size);
+    const bodyGeometry = createRoundedPolyhedralBodyGeometry(topology, sides, size);
     const bodyMaterial = new MeshStandardMaterial({
       color:
         textures?.body && requestedAppearance?.color === undefined
@@ -539,7 +894,7 @@ export class DiceMeshFactory {
       roughnessMap: textures?.roughness?.texture,
       metalness: appearance.metalness,
       roughness: appearance.roughness,
-      flatShading: true
+      flatShading: false
     });
     const object = new Group();
     object.name = `PartyBeam.DiceKit D${sides}`;
@@ -554,7 +909,7 @@ export class DiceMeshFactory {
     const texturedValues = new Set(textures?.faces.keys() ?? []);
 
     for (const [value, lease] of textures?.faces ?? []) {
-      const geometry = createTopologyGeometry(topology, size, new Set([value]), size * 0.008);
+      const geometry = createTopologyGeometry(topology, size, new Set([value]), size * 0.008, 0.72);
       const material = new MeshStandardMaterial({
         color: "#ffffff",
         map: lease.texture,
@@ -562,7 +917,7 @@ export class DiceMeshFactory {
         roughness: appearance.roughness,
         transparent: true,
         alphaTest: 0.01,
-        flatShading: true
+        flatShading: false
       });
       const faceMesh = new Mesh(geometry, material);
       faceMesh.name = `D${sides} face texture ${value}`;

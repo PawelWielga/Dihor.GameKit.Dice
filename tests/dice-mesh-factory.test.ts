@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
   SUPPORTED_DICE_SIDES,
+  getDiceTopology,
   type DiceTextureLoader
 } from "../src/index.js";
 
@@ -59,6 +60,13 @@ describe("DiceMeshFactory", () => {
 
       if (sides !== 6) {
         expect(mesh.object.getObjectByName(`D${sides} numeric markings`)).toBeDefined();
+        expect((mesh.body.material as MeshStandardMaterial).flatShading).toBe(false);
+
+        const topology = getDiceTopology(sides);
+        const positions = mesh.body.geometry.getAttribute("position");
+        const normals = mesh.body.geometry.getAttribute("normal");
+        expect(positions.count).toBeGreaterThan(topology.vertices.length);
+        expect(normals.count).toBe(positions.count);
       }
 
       mesh.dispose();
@@ -137,7 +145,16 @@ describe("DiceMeshFactory", () => {
       }
     });
 
-    expect(mesh.object.getObjectByName("D20 face texture 13")).toBeDefined();
+    const faceTexture = mesh.object.getObjectByName("D20 face texture 13") as Mesh;
+    expect(faceTexture).toBeDefined();
+    expect((faceTexture.material as MeshStandardMaterial).flatShading).toBe(false);
+
+    const normals = faceTexture.geometry.getAttribute("normal");
+    const normalDelta =
+      Math.abs(normals.getX(0) - normals.getX(1)) +
+      Math.abs(normals.getY(0) - normals.getY(1)) +
+      Math.abs(normals.getZ(0) - normals.getZ(1));
+    expect(normalDelta).toBeGreaterThan(1e-5);
     expect(loader.calls).toContain("/d20-face-13.png");
 
     mesh.dispose();
