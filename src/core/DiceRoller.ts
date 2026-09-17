@@ -2,6 +2,7 @@ import type { DiceRollRequest } from "./DiceRollRequest.js";
 import type { DiceRollResult } from "./DiceRollResult.js";
 import type { DiceSides } from "./DiceSides.js";
 import type { RandomProvider } from "./RandomProvider.js";
+import { getDiceTotalRange } from "./DiceTotalRange.js";
 
 /** Generates a unique identifier for one logical roll. */
 export type RollIdProvider = () => string;
@@ -75,8 +76,7 @@ export class DiceRoller {
   rollToDiceTotal(request: DiceRollRequest, expectedDiceTotal: number): DiceRollResult {
     this.validateDice(request.dice);
     const modifier = this.resolveModifier(request.modifier);
-    const minTotal = request.dice.length;
-    const maxTotal = request.dice.reduce((sum, die) => sum + die.sides, 0);
+    const { min: minTotal, max: maxTotal } = getDiceTotalRange(request.dice);
 
     if (
       !Number.isInteger(expectedDiceTotal) ||

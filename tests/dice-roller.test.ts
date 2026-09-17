@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DiceRoller,
+  getDiceTotalRange,
   type DiceDefinition,
   type DiceRollRequest,
   type RandomProvider
@@ -108,6 +109,13 @@ describe("DiceRoller", () => {
       });
 
     expect(createRoller().roll(request)).toEqual(createRoller().roll(request));
+  });
+
+  it("calculates the dynamic valid dice-total range for mixed dice", () => {
+    expect(getDiceTotalRange([{ sides: 6 }, { sides: 8 }, { sides: 20 }])).toEqual({
+      min: 3,
+      max: 34
+    });
   });
 
   it("rejects rolls without dice", () => {
