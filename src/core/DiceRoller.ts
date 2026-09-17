@@ -16,6 +16,19 @@ const mathRandomProvider: RandomProvider = {
 };
 
 let fallbackRollIdSequence = 0;
+let fallbackRollIdInstanceEntropy: string | undefined;
+
+function createFallbackEntropy(): string {
+  const cryptoApi = globalThis.crypto;
+
+  if (typeof cryptoApi?.getRandomValues === "function") {
+    const values = new Uint32Array(2);
+    cryptoApi.getRandomValues(values);
+    return `${values[0]?.toString(36) ?? "0"}${values[1]?.toString(36) ?? "0"}`;
+  }
+
+  return `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
 
 function createDefaultRollId(): string {
   const cryptoApi = globalThis.crypto;
@@ -24,8 +37,10 @@ function createDefaultRollId(): string {
     return cryptoApi.randomUUID();
   }
 
+  fallbackRollIdInstanceEntropy ??= createFallbackEntropy();
   fallbackRollIdSequence += 1;
-  return `roll-${Date.now().toString(36)}-${fallbackRollIdSequence.toString(36)}`;
+
+  return `roll-${Date.now().toString(36)}-${fallbackRollIdInstanceEntropy}-${fallbackRollIdSequence.toString(36)}`;
 }
 
 /** Generates authoritative logical dice results without rendering or physics. */
@@ -39,11 +54,14 @@ export class DiceRoller {
   }
 
   roll(request: DiceRollRequest): DiceRollResult {
-    if (request.dice.length === 0) {
-      throw new RangeError("A dice roll requires at least one die.");
-    }
+    this.validateDice(request.dice);
 
     const modifier = request.modifier ?? 0;
+
+    if (!Number.isFinite(modifier)) {
+      throw new RangeError(`Dice roll modifier must be finite; received ${String(modifier)}.`);
+    }
+
     const dice = request.dice.map(({ sides }) => ({
       sides,
       value: this.rollDie(sides)
@@ -57,6 +75,18 @@ export class DiceRoller {
       total,
       ...(request.reason === undefined ? {} : { reason: request.reason })
     };
+  }
+
+  private validateDice(dice: DiceRollRequest["dice"]): void {
+    if (dice.length === 0) {
+      throw new RangeError("A dice roll requires at least one die.");
+    }
+
+    for (let index = 0; index < dice.length; index += 1) {
+      if (!(index in dice) || dice[index] === undefined) {
+        throw new RangeError(`Dice roll contains no die at index ${index}.`);
+      }
+    }
   }
 
   private rollDie(sides: DiceSides): number {
