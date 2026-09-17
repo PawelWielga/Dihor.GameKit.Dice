@@ -7,6 +7,7 @@ import {
   getDiceFace,
   getDiceTopology,
   type DiceAppearance,
+  type DiceCameraOptions,
   type DiceFaceLabelMode,
   type DiceFontAppearance,
   type DiceRollRequest,
@@ -151,6 +152,13 @@ const tableColorValue = requireElement<HTMLOutputElement>("#table-color-value");
 const tableTexture = requireElement<HTMLInputElement>("#table-texture");
 const sampleTableTextureButton = requireElement<HTMLButtonElement>("#sample-table-texture-button");
 const resetTableButton = requireElement<HTMLButtonElement>("#reset-table-button");
+const cameraX = requireElement<HTMLInputElement>("#camera-x");
+const cameraY = requireElement<HTMLInputElement>("#camera-y");
+const cameraZ = requireElement<HTMLInputElement>("#camera-z");
+const cameraXValue = requireElement<HTMLOutputElement>("#camera-x-value");
+const cameraYValue = requireElement<HTMLOutputElement>("#camera-y-value");
+const cameraZValue = requireElement<HTMLOutputElement>("#camera-z-value");
+const resetCameraButton = requireElement<HTMLButtonElement>("#reset-camera-button");
 const fontPreset = requireElement<HTMLSelectElement>("#font-preset");
 const fontFamily = requireElement<HTMLInputElement>("#font-family");
 const fontWeight = requireElement<HTMLInputElement>("#font-weight");
@@ -195,10 +203,25 @@ let rolling = false;
 let comparisonMode = false;
 let demoRenderer: DiceRenderer | undefined;
 
-function configureCamera(comparison: boolean): void {
-  const camera = demoRenderer?.diceScene.camera;
+function createCameraOptions(): DiceCameraOptions {
+  return {
+    x: Number(cameraX.value),
+    y: Number(cameraY.value),
+    z: Number(cameraZ.value)
+  };
+}
 
-  if (!camera) {
+function updateCameraOutputs(): void {
+  cameraXValue.value = `${Number(cameraX.value).toFixed(0)}°`;
+  cameraYValue.value = `${Number(cameraY.value).toFixed(0)}°`;
+  cameraZValue.value = Number(cameraZ.value).toFixed(1);
+}
+
+function configureCamera(comparison: boolean): void {
+  const renderer = demoRenderer;
+  const camera = renderer?.diceScene.camera;
+
+  if (!renderer || !camera) {
     return;
   }
 
@@ -206,17 +229,18 @@ function configureCamera(comparison: boolean): void {
     // Keep roughly the same framing while moving the camera ~10x farther away.
     // The narrow FOV makes perspective scaling differences between the three slots negligible.
     camera.position.set(0, 55, 75);
+    camera.up.set(0, 1, 0);
     camera.fov = 4.8;
     camera.far = 200;
     camera.lookAt(0, 0.55, 0);
   } else {
-    camera.position.set(0, 5.5, 7.5);
     camera.fov = 45;
     camera.far = 100;
-    camera.lookAt(0, 0, 0);
+    renderer.diceScene.setCamera(createCameraOptions());
   }
 
   camera.updateProjectionMatrix();
+  renderer.render();
 }
 
 const overlay = new DiceOverlay({
@@ -245,7 +269,8 @@ const overlay = new DiceOverlay({
       ...options,
       scene: {
         ...options.scene,
-        table: createTableMaterial()
+        table: createTableMaterial(),
+        camera: createCameraOptions()
       }
     });
     demoRenderer = renderer;
@@ -296,6 +321,14 @@ function applyTableMaterial(): void {
       renderer.render();
     }
   });
+}
+
+function applyCamera(): void {
+  updateCameraOutputs();
+
+  if (!comparisonMode) {
+    configureCamera(false);
+  }
 }
 
 function syncFontControls(): void {
@@ -533,6 +566,15 @@ resetTableButton.addEventListener("click", () => {
   updateTableColorOutput();
   applyTableMaterial();
 });
+for (const cameraInput of [cameraX, cameraY, cameraZ]) {
+  cameraInput.addEventListener("input", applyCamera);
+}
+resetCameraButton.addEventListener("click", () => {
+  cameraX.value = "0";
+  cameraY.value = "53.75";
+  cameraZ.value = "9.3";
+  applyCamera();
+});
 fontPreset.addEventListener("change", syncFontControls);
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
@@ -567,5 +609,6 @@ window.addEventListener(
 
 updateColorOutputs();
 updateTableColorOutput();
+updateCameraOutputs();
 syncFontControls();
 updateDebugPanel();

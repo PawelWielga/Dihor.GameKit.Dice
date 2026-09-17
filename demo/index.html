@@ -251,6 +251,63 @@
               </div>
             </section>
 
+            <section class="control-section">
+              <div class="section-heading">
+                <span class="section-index">04</span>
+                <div>
+                  <h2>Camera</h2>
+                  <p>X orbits around the table, Y tilts away from top-down, Z controls distance.</p>
+                </div>
+              </div>
+
+              <label class="field">
+                <span>X / orbit <output id="camera-x-value">0°</output></span>
+                <input
+                  id="camera-x"
+                  name="camera-x"
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value="0"
+                />
+              </label>
+
+              <label class="field">
+                <span>Y / tilt from top <output id="camera-y-value">54°</output></span>
+                <input
+                  id="camera-y"
+                  name="camera-y"
+                  type="range"
+                  min="0"
+                  max="85"
+                  step="1"
+                  value="53.75"
+                />
+              </label>
+
+              <label class="field">
+                <span>Z / distance <output id="camera-z-value">9.3</output></span>
+                <input
+                  id="camera-z"
+                  name="camera-z"
+                  type="range"
+                  min="4"
+                  max="20"
+                  step="0.1"
+                  value="9.3"
+                />
+              </label>
+
+              <button id="reset-camera-button" class="button button--ghost" type="button">
+                Reset camera
+              </button>
+              <p class="hint">
+                Set X = 0° and Y = 0° for an exact vertical top-down view. At Y = 0°, changing X
+                does not change the view because the camera is directly above the table center.
+              </p>
+            </section>
+
             <section class="control-section control-section--actions">
               <label class="toggle">
                 <input id="debug-mode" type="checkbox" />

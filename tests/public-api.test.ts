@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   SUPPORTED_DICE_SIDES,
   type DiceAppearance,
+  type DiceCameraOptions,
   type DiceRollRequest,
   type DiceRollResult
 } from "../src/index.js";
 
 describe("public domain API", () => {
+  it("exposes semantic x/y/z orbital camera options", () => {
+    const camera: DiceCameraOptions = { x: 45, y: 30, z: 12 };
+
+    expect(camera).toEqual({ x: 45, y: 30, z: 12 });
+  });
+
   it("exposes the planned standard dice sides", () => {
     expect(SUPPORTED_DICE_SIDES).toEqual([4, 6, 8, 10, 12, 20]);
   });

@@ -107,6 +107,7 @@ export {
   type DiceMesh,
   type DiceMeshFactoryOptions,
   type DiceMeshOptions,
+  type DiceCameraOptions,
   type DiceQuaternion,
   type DiceRendererOptions,
   type DiceSceneOptions,

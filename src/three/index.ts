@@ -1,7 +1,11 @@
 export { DiceRenderer } from "./DiceRenderer.js";
 export type { DiceRendererOptions, DiceWebGLRendererFactory } from "./DiceRenderer.js";
 export { DiceScene } from "./DiceScene.js";
-export type { DiceSceneOptions, DiceTableMaterialOptions } from "./DiceScene.js";
+export type {
+  DiceCameraOptions,
+  DiceSceneOptions,
+  DiceTableMaterialOptions
+} from "./DiceScene.js";
 export type {
   DiceQuaternion,
   DiceTransform,

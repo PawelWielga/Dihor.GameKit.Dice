@@ -1,4 +1,4 @@
-import { Object3D, type Mesh, type MeshStandardMaterial } from "three";
+import { Object3D, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
 import { DiceScene } from "../src/index.js";
 
@@ -38,6 +38,49 @@ describe("DiceScene", () => {
     const material = floor.material as MeshStandardMaterial;
 
     expect(material.color.getHexString()).toBe("123456");
+    scene.dispose();
+  });
+
+  it("preserves the previous default camera framing through orbital defaults", () => {
+    const scene = new DiceScene({ showFloor: false });
+
+    expect(scene.camera.position.x).toBeCloseTo(0);
+    expect(scene.camera.position.y).toBeCloseTo(5.5);
+    expect(scene.camera.position.z).toBeCloseTo(7.5);
+    scene.dispose();
+  });
+
+  it("treats x=0 and y=0 as an exact top-down view", () => {
+    const scene = new DiceScene({
+      showFloor: false,
+      camera: { x: 0, y: 0, z: 10 }
+    });
+    const direction = new Vector3();
+    scene.camera.getWorldDirection(direction);
+
+    expect(scene.camera.position.x).toBeCloseTo(0);
+    expect(scene.camera.position.y).toBeCloseTo(10);
+    expect(scene.camera.position.z).toBeCloseTo(0);
+    expect(direction.x).toBeCloseTo(0);
+    expect(direction.y).toBeCloseTo(-1);
+    expect(direction.z).toBeCloseTo(0);
+    scene.dispose();
+  });
+
+  it("updates orbital camera x/y/z without rebuilding the scene", () => {
+    const scene = new DiceScene({ showFloor: false });
+
+    scene.setCamera({ x: 90, y: 60, z: 10 });
+
+    expect(scene.camera.position.x).toBeCloseTo(Math.sqrt(75));
+    expect(scene.camera.position.y).toBeCloseTo(5);
+    expect(scene.camera.position.z).toBeCloseTo(0);
+
+    scene.setCamera({ x: 180 });
+
+    expect(scene.camera.position.x).toBeCloseTo(0);
+    expect(scene.camera.position.y).toBeCloseTo(5);
+    expect(scene.camera.position.z).toBeCloseTo(-Math.sqrt(75));
     scene.dispose();
   });
 
