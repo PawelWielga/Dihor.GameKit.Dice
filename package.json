@@ -1,0 +1,43 @@
+{
+  "name": "@partybeam/dice-kit",
+  "version": "0.0.0",
+  "description": "Reusable framework-agnostic 3D dice rolling library for PartyBeam games.",
+  "type": "module",
+  "private": false,
+  "sideEffects": false,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "main": "./dist/partybeam-dice-kit.js",
+  "module": "./dist/partybeam-dice-kit.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/partybeam-dice-kit.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:demo": "vite --config vite.demo.config.ts",
+    "build:demo": "vite build --config vite.demo.config.ts",
+    "preview:demo": "vite preview --config vite.demo.config.ts"
+  },
+  "dependencies": {
+    "cannon-es": "0.20.0",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  }
+}
