@@ -120,7 +120,7 @@ describe("RollPlanner", () => {
       const expectedValue = sides === 6 ? 1 : Math.max(1, Math.floor(sides / 2));
       const planner = new RollPlanner({
         randomProvider,
-        maxAttemptsPerDie: sides === 100 ? 36 : 1,
+        maxAttemptsPerDie: 1,
         maxCombinedAttempts: 1,
         maxPlanningTimeMs: 5000,
         stability: {
@@ -135,7 +135,7 @@ describe("RollPlanner", () => {
       expect(plan.simulationSteps).toBeGreaterThan(0);
 
       if (sides !== 6) {
-        expect(plan.dice[0]?.initialState.position.y).toBeGreaterThan(sides === 100 ? 0.5 : 1);
+        expect(plan.dice[0]?.initialState.position.y).toBeGreaterThan(1);
       }
     }
   });

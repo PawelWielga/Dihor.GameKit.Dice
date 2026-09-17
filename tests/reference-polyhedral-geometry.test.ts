@@ -6,7 +6,7 @@ import {
   type DiceSides
 } from "../src/index.js";
 
-const REFERENCE_PROFILE_SIDES = [4, 10, 12, 20, 100] as const satisfies readonly DiceSides[];
+const REFERENCE_PROFILE_SIDES = [4, 10, 12, 20] as const satisfies readonly DiceSides[];
 
 describe("D8-derived rounded polyhedral geometry", () => {
   it("applies the approved reference profile to every remaining polyhedral die", () => {

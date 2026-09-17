@@ -382,29 +382,6 @@ function createD20(): DiceTopology {
   return createTopology(20, createIcosahedron());
 }
 
-function createD100(): DiceTopology {
-  const ringSides = 50;
-  const vertices: DiceVector3[] = [
-    { x: 0, y: 1, z: 0 },
-    { x: 0, y: -1, z: 0 }
-  ];
-
-  for (let index = 0; index < ringSides; index += 1) {
-    const angle = (2 * Math.PI * index) / ringSides;
-    vertices.push({ x: Math.cos(angle), y: 0, z: Math.sin(angle) });
-  }
-
-  const faces: number[][] = [];
-
-  for (let index = 0; index < ringSides; index += 1) {
-    const next = (index + 1) % ringSides;
-    faces.push([0, 2 + index, 2 + next]);
-    faces.push([1, 2 + next, 2 + index]);
-  }
-
-  return createTopology(100, createPolyhedron(vertices, faces));
-}
-
 function buildTopology(sides: DiceSides): DiceTopology {
   switch (sides) {
     case 4:
@@ -419,8 +396,6 @@ function buildTopology(sides: DiceSides): DiceTopology {
       return createD12();
     case 20:
       return createD20();
-    case 100:
-      return createD100();
   }
 }
 

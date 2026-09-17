@@ -214,8 +214,6 @@ function roundedPolyhedronProfile(sides: Exclude<DiceSides, 6>): {
       return { bevelRatio: 0.18, segments: 6 };
     case 20:
       return { bevelRatio: 0.16, segments: 6 };
-    case 100:
-      return { bevelRatio: 0.075, segments: 4 };
   }
 }
 
@@ -625,7 +623,7 @@ function createNumericMarkingsGeometry(
       width / Math.max(digits.length * 1.28, 1),
       height / 1.9
     );
-    const unit = availableUnit * (topology.sides >= 100 ? 0.46 : 0.52);
+    const unit = availableUnit * 0.52;
 
     if (!Number.isFinite(unit) || unit <= Number.EPSILON) {
       continue;
