@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Interactive PartyBeam.DiceKit playground for physical D6 rolls, materials and face textures."
+      content="Interactive PartyBeam.DiceKit playground for physical polyhedral dice rolls, materials and face textures."
     />
     <title>PartyBeam.DiceKit Playground</title>
     <link rel="stylesheet" href="./demo.css" />
@@ -18,7 +18,7 @@
           <p class="eyebrow">PartyBeam / DiceKit</p>
           <h1>Physical dice playground</h1>
           <p class="hero-copy">
-            Configure a D6, roll up to three dice and inspect the exact result returned by the
+            Configure a die, roll up to three dice and inspect the exact result returned by the
             public DiceKit API.
           </p>
         </div>
@@ -45,10 +45,13 @@
                 <label class="field">
                   <span>Dice type</span>
                   <select id="dice-type" name="dice-type">
-                    <option value="6">D6</option>
-                    <option value="4" disabled>D4 · later</option>
-                    <option value="8" disabled>D8 · later</option>
-                    <option value="20" disabled>D20 · later</option>
+                    <option value="4">D4</option>
+                    <option value="6" selected>D6</option>
+                    <option value="8">D8</option>
+                    <option value="10">D10</option>
+                    <option value="12">D12</option>
+                    <option value="20">D20</option>
+                    <option value="100">D100</option>
                   </select>
                 </label>
 
@@ -126,8 +129,9 @@
               <details class="face-textures">
                 <summary>Per-face texture overrides</summary>
                 <p class="hint">
-                  A successfully loaded face texture replaces the standard pips only on that
-                  physical face. Missing or broken assets fall back to normal markings.
+                  A successfully loaded face texture replaces the generated marking only on that
+                  physical face. The demo exposes the first six faces; the library API accepts every
+                  face of the selected die.
                 </p>
                 <div class="face-grid">
                   <label class="field"><span>Face 1</span><input id="face-1" type="url" placeholder="URL" /></label>
