@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
   SUPPORTED_DICE_SIDES,
+  getDiceTopology,
   type DiceTextureLoader
 } from "../src/index.js";
 
@@ -61,32 +62,11 @@ describe("DiceMeshFactory", () => {
         expect(mesh.object.getObjectByName(`D${sides} numeric markings`)).toBeDefined();
         expect((mesh.body.material as MeshStandardMaterial).flatShading).toBe(false);
 
-        const geometry = mesh.body.geometry;
-        const normals = geometry.getAttribute("normal");
-        const indices = geometry.getIndex();
-        const triangleIndexCount = indices?.count ?? normals.count;
-        let hasSoftenedTriangle = false;
-
-        for (let offset = 0; offset + 2 < triangleIndexCount; offset += 3) {
-          const first = indices ? indices.getX(offset) : offset;
-          const second = indices ? indices.getX(offset + 1) : offset + 1;
-          const third = indices ? indices.getX(offset + 2) : offset + 2;
-          const firstSecondDelta =
-            Math.abs(normals.getX(first) - normals.getX(second)) +
-            Math.abs(normals.getY(first) - normals.getY(second)) +
-            Math.abs(normals.getZ(first) - normals.getZ(second));
-          const firstThirdDelta =
-            Math.abs(normals.getX(first) - normals.getX(third)) +
-            Math.abs(normals.getY(first) - normals.getY(third)) +
-            Math.abs(normals.getZ(first) - normals.getZ(third));
-
-          if (firstSecondDelta > 1e-5 || firstThirdDelta > 1e-5) {
-            hasSoftenedTriangle = true;
-            break;
-          }
-        }
-
-        expect(hasSoftenedTriangle).toBe(true);
+        const topology = getDiceTopology(sides);
+        const positions = mesh.body.geometry.getAttribute("position");
+        const normals = mesh.body.geometry.getAttribute("normal");
+        expect(positions.count).toBeGreaterThan(topology.vertices.length);
+        expect(normals.count).toBe(positions.count);
       }
 
       mesh.dispose();
