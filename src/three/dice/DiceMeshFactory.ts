@@ -253,6 +253,70 @@ function appendOrientedTriangle(
   }
 }
 
+function samplesMeet(left: RoundedSample, right: RoundedSample): boolean {
+  return left.position.distanceToSquared(right.position) <= 1e-12;
+}
+
+function createOrderedCapRing(sections: readonly RoundedSample[][]): RoundedSample[] {
+  if (sections.length === 0) {
+    return [];
+  }
+
+  const remaining = sections.map((section) => [...section]);
+  const firstSection = remaining.shift();
+
+  if (!firstSection || firstSection.length < 2) {
+    return [];
+  }
+
+  const ring = [...firstSection];
+
+  while (remaining.length > 0) {
+    const tail = ring[ring.length - 1];
+
+    if (!tail) {
+      return [];
+    }
+
+    let matchIndex = -1;
+    let reverse = false;
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      const section = remaining[index];
+      const start = section?.[0];
+      const end = section?.[section.length - 1];
+
+      if (start && samplesMeet(tail, start)) {
+        matchIndex = index;
+        break;
+      }
+
+      if (end && samplesMeet(tail, end)) {
+        matchIndex = index;
+        reverse = true;
+        break;
+      }
+    }
+
+    if (matchIndex < 0) {
+      return [];
+    }
+
+    const matched = remaining.splice(matchIndex, 1)[0]!;
+    const ordered = reverse ? [...matched].reverse() : matched;
+    ring.push(...ordered.slice(1));
+  }
+
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+
+  if (first && last && ring.length > 2 && samplesMeet(first, last)) {
+    ring.pop();
+  }
+
+  return ring;
+}
+
 function createRoundedPolyhedralBodyGeometry(
   topology: DiceTopology,
   sides: Exclude<DiceSides, 6>,
@@ -415,25 +479,31 @@ function createRoundedPolyhedralBodyGeometry(
       continue;
     }
 
+    const ring = createOrderedCapRing(sections);
+
+    if (ring.length < 3) {
+      continue;
+    }
+
     const original = new Vector3(topologyVertex.x * size, topologyVertex.y * size, topologyVertex.z * size);
     const center = original.clone().multiplyScalar(1 - bevelRatio * 0.42);
 
-    for (const section of sections) {
-      for (let step = 0; step < section.length - 1; step += 1) {
-        const first = section[step]!;
-        const second = section[step + 1]!;
-        const expectedNormal = vertexNormal.clone().add(first.normal).add(second.normal).normalize();
+    for (let index = 0; index < ring.length; index += 1) {
+      const first = ring[index]!;
+      const second = ring[(index + 1) % ring.length]!;
+      const expectedNormal = vertexNormal.clone().add(first.normal).add(second.normal).normalize();
+      const u0 = index / ring.length;
+      const u1 = (index + 1) / ring.length;
 
-        appendOrientedTriangle(
-          positions,
-          normals,
-          uvs,
-          [center, first.position, second.position],
-          [vertexNormal, first.normal, second.normal],
-          [[0.5, 0.5], [0, step / segments], [1, (step + 1) / segments]],
-          expectedNormal
-        );
-      }
+      appendOrientedTriangle(
+        positions,
+        normals,
+        uvs,
+        [center, first.position, second.position],
+        [vertexNormal, first.normal, second.normal],
+        [[0.5, 0.5], [u0, 0], [u1, 1]],
+        expectedNormal
+      );
     }
   }
 
