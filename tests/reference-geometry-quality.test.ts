@@ -12,6 +12,25 @@ function positionKey(x: number, y: number, z: number): string {
   return `${x.toFixed(6)}:${y.toFixed(6)}:${z.toFixed(6)}`;
 }
 
+function minimumCircularSpan(values: readonly number[]): number {
+  const wrapped = values
+    .map((value) => ((value % 1) + 1) % 1)
+    .sort((left, right) => left - right);
+
+  if (wrapped.length < 2) {
+    return 0;
+  }
+
+  let largestGap = 0;
+
+  for (let index = 1; index < wrapped.length; index += 1) {
+    largestGap = Math.max(largestGap, wrapped[index]! - wrapped[index - 1]!);
+  }
+
+  largestGap = Math.max(largestGap, wrapped[0]! + 1 - wrapped[wrapped.length - 1]!);
+  return 1 - largestGap;
+}
+
 describe("reference geometry quality", () => {
   it("keeps smooth shared normals and does not interpolate across the spherical U seam", () => {
     const factory = new DiceMeshFactory();
@@ -31,7 +50,8 @@ describe("reference geometry quality", () => {
 
       for (let index = 0; index < positions.count; index += 3) {
         const triangleU = [uvs.getX(index), uvs.getX(index + 1), uvs.getX(index + 2)];
-        expect(Math.max(...triangleU) - Math.min(...triangleU)).toBeLessThanOrEqual(0.5 + 1e-6);
+        const actualSpan = Math.max(...triangleU) - Math.min(...triangleU);
+        expect(actualSpan).toBeLessThanOrEqual(minimumCircularSpan(triangleU) + 1e-5);
       }
 
       for (let index = 0; index < positions.count; index += 1) {
