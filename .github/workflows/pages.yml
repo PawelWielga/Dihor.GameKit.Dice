@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
   workflow_dispatch:
 
 permissions:
@@ -18,16 +19,25 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build and deploy demo
+    name: Build and deploy main + dev demos
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-source
+
+      - name: Checkout dev
+        uses: actions/checkout@v7
+        with:
+          ref: dev
+          path: dev-source
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -38,16 +48,33 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Install dependencies
+      - name: Install main dependencies
+        working-directory: main-source
         run: npm install --no-audit --no-fund
 
-      - name: Build demo
+      - name: Build main demo
+        working-directory: main-source
         run: npm run build:demo
+
+      - name: Install dev dependencies
+        working-directory: dev-source
+        run: npm install --no-audit --no-fund
+
+      - name: Build dev demo
+        working-directory: dev-source
+        run: npm run build:demo -- --base=/PartyBeam.DiceKit/dev/
+
+      - name: Assemble Pages artifact
+        shell: bash
+        run: |
+          mkdir -p pages-root/dev
+          cp -a main-source/dist-demo/. pages-root/
+          cp -a dev-source/dist-demo/. pages-root/dev/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: dist-demo
+          path: pages-root
 
       - name: Deploy to GitHub Pages
         id: deployment
