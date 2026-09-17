@@ -389,14 +389,12 @@ export class RollPlanner {
     // to the authoritative result without snapping or changing face identities after simulation.
     const attemptEnergy = Math.max(0.04, 1 - (context.attempt - 1) * 0.08);
     const percentileDie = context.sides === 100;
-    const tumbleLimit = (percentileDie ? 0.1 : context.sides >= 20 ? 4.0 : 5.8) * attemptEnergy;
-    const yawLimit = percentileDie ? 9 : 5.5;
-    const lateralLimit = size * (percentileDie ? 0.12 : 0.58) * attemptEnergy;
-    const dropHeight = size * (
-      percentileDie
-        ? this.randomRange(0.25, 0.4)
-        : this.randomRange(1.65, 2.75)
-    );
+    const tumbleLimit = (percentileDie ? 0.08 : context.sides >= 20 ? 4.0 : 5.8) * attemptEnergy;
+    const yawLimit = 5.5;
+    const lateralLimit = size * (percentileDie ? 0.08 : 0.58) * attemptEnergy;
+    const dropHeight = percentileDie
+      ? size * (0.04 + this.randomRange(0.18, 0.32) * attemptEnergy)
+      : size * this.randomRange(1.65, 2.75);
 
     return {
       position: {
@@ -407,12 +405,16 @@ export class RollPlanner {
       quaternion,
       velocity: {
         x: this.randomRange(-lateralLimit, lateralLimit),
-        y: size * (percentileDie ? this.randomRange(0.02, 0.12) : this.randomRange(0.15, 0.85)),
+        y: size * (percentileDie
+          ? this.randomRange(0.02, 0.12) * attemptEnergy
+          : this.randomRange(0.15, 0.85)),
         z: this.randomRange(-lateralLimit, lateralLimit)
       },
       angularVelocity: {
         x: this.randomRange(-tumbleLimit, tumbleLimit),
-        y: percentileDie ? this.randomRange(4, yawLimit) : this.randomRange(-yawLimit, yawLimit),
+        y: percentileDie
+          ? this.randomRange(2, 5) * attemptEnergy
+          : this.randomRange(-yawLimit, yawLimit),
         z: this.randomRange(-tumbleLimit, tumbleLimit)
       }
     };
