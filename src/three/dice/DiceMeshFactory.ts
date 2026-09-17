@@ -72,12 +72,15 @@ function validateSize(size: number): number {
 /** Factory for render meshes. Additional dice shapes can be added without changing DiceScene. */
 export class DiceMeshFactory {
   private readonly textureCache: DiceTextureCache;
+  private disposed = false;
 
   constructor(options: DiceMeshFactoryOptions = {}) {
     this.textureCache = new DiceTextureCache(options.textureLoader);
   }
 
   create(sides: DiceSides, options: D6MeshOptions = {}): DiceMesh {
+    this.assertActive();
+
     if (sides !== 6) {
       throw new RangeError(`DiceMeshFactory does not yet support D${sides}.`);
     }
@@ -86,6 +89,8 @@ export class DiceMeshFactory {
   }
 
   async createAsync(sides: DiceSides, options: D6MeshOptions = {}): Promise<DiceMesh> {
+    this.assertActive();
+
     if (sides !== 6) {
       throw new RangeError(`DiceMeshFactory does not yet support D${sides}.`);
     }
@@ -95,6 +100,7 @@ export class DiceMeshFactory {
 
   /** Creates a D6 immediately. Texture URLs are intentionally ignored by this synchronous path. */
   createD6(options: D6MeshOptions = {}): DiceMesh {
+    this.assertActive();
     const size = validateSize(options.size ?? 1);
     const appearance = resolveDiceAppearance(options.appearance);
     return this.buildD6(size, appearance, options.appearance);
@@ -102,6 +108,7 @@ export class DiceMeshFactory {
 
   /** Loads optional texture assets with fallback and then creates a complete D6 mesh. */
   async createD6Async(options: D6MeshOptions = {}): Promise<DiceMesh> {
+    this.assertActive();
     const size = validateSize(options.size ?? 1);
     const appearance = resolveDiceAppearance(options.appearance);
 
@@ -112,6 +119,7 @@ export class DiceMeshFactory {
     const textures = await this.loadD6Textures(options.appearance);
 
     try {
+      this.assertActive();
       return this.buildD6(size, appearance, options.appearance, textures);
     } catch (error) {
       for (const lease of textures.leases) {
@@ -120,6 +128,15 @@ export class DiceMeshFactory {
 
       throw error;
     }
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    this.textureCache.dispose();
   }
 
   private async loadD6Textures(appearance: DiceAppearance | undefined): Promise<D6TextureResources> {
@@ -268,5 +285,11 @@ export class DiceMeshFactory {
         }
       }
     };
+  }
+
+  private assertActive(): void {
+    if (this.disposed) {
+      throw new Error("DiceMeshFactory has been disposed.");
+    }
   }
 }
