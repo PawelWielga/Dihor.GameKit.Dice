@@ -1,5 +1,7 @@
 import {
+  BufferGeometry,
   CircleGeometry,
+  Float32BufferAttribute,
   Group,
   Matrix4,
   Mesh,
@@ -18,19 +20,25 @@ import {
 import {
   D6_FACE_NORMALS,
   D6_FACE_VALUES,
-  type D6FaceValue
-} from "../../core/dice/index.js";
-import type { DiceSides } from "../../core/DiceSides.js";
+  getDiceTopology,
+  type D6FaceValue,
+  type DiceSides,
+  type DiceTopology,
+  type DiceTopologyFace
+} from "../../core/index.js";
 import {
   DiceTextureCache,
   type DiceTextureLease,
   type DiceTextureLoader
 } from "./DiceTextureCache.js";
 
-export interface D6MeshOptions {
+export interface DiceMeshOptions {
   readonly size?: number;
   readonly appearance?: DiceAppearance;
 }
+
+/** Kept as an alias so existing D6 consumers do not need a breaking change. */
+export type D6MeshOptions = DiceMeshOptions;
 
 export interface DiceMeshFactoryOptions {
   /** Advanced hook useful for custom asset pipelines and tests. */
@@ -44,12 +52,19 @@ export interface DiceMesh {
   dispose(): void;
 }
 
-interface D6TextureResources {
+interface DiceTextureResources {
   readonly body?: DiceTextureLease;
   readonly normal?: DiceTextureLease;
   readonly roughness?: DiceTextureLease;
-  readonly faces: ReadonlyMap<D6FaceValue, DiceTextureLease>;
+  readonly faces: ReadonlyMap<number, DiceTextureLease>;
   readonly leases: readonly DiceTextureLease[];
+}
+
+interface FaceBasis {
+  readonly normal: Vector3;
+  readonly horizontal: Vector3;
+  readonly vertical: Vector3;
+  readonly center: Vector3;
 }
 
 const PIP_LAYOUTS: Readonly<Record<D6FaceValue, readonly (readonly [number, number])[]>> = {
@@ -61,6 +76,19 @@ const PIP_LAYOUTS: Readonly<Record<D6FaceValue, readonly (readonly [number, numb
   6: [[-1, 1], [-1, 0], [-1, -1], [1, 1], [1, 0], [1, -1]]
 };
 
+const DIGIT_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
+  "0": ["a", "b", "c", "d", "e", "f"],
+  "1": ["b", "c"],
+  "2": ["a", "b", "g", "e", "d"],
+  "3": ["a", "b", "c", "d", "g"],
+  "4": ["f", "g", "b", "c"],
+  "5": ["a", "f", "g", "c", "d"],
+  "6": ["a", "f", "g", "e", "c", "d"],
+  "7": ["a", "b", "c"],
+  "8": ["a", "b", "c", "d", "e", "f", "g"],
+  "9": ["a", "b", "c", "d", "f", "g"]
+};
+
 function validateSize(size: number): number {
   if (!Number.isFinite(size) || size <= 0) {
     throw new RangeError(`Dice size must be a positive finite number; received ${String(size)}.`);
@@ -69,7 +97,211 @@ function validateSize(size: number): number {
   return size;
 }
 
-/** Factory for render meshes. Additional dice shapes can be added without changing DiceScene. */
+function faceBasis(face: DiceTopologyFace, size: number): FaceBasis {
+  const normal = new Vector3(face.normal.x, face.normal.y, face.normal.z).normalize();
+  const center = new Vector3(face.center.x * size, face.center.y * size, face.center.z * size);
+  const reference = Math.abs(normal.y) > 0.9 ? new Vector3(0, 0, 1) : new Vector3(0, 1, 0);
+  const horizontal = new Vector3().crossVectors(reference, normal).normalize();
+  const vertical = new Vector3().crossVectors(normal, horizontal).normalize();
+  return { normal, horizontal, vertical, center };
+}
+
+function createTopologyGeometry(
+  topology: DiceTopology,
+  size: number,
+  values?: ReadonlySet<number>,
+  surfaceOffset = 0
+): BufferGeometry {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+
+  for (const face of topology.faces) {
+    if (values && !values.has(face.value)) {
+      continue;
+    }
+
+    const basis = faceBasis(face, size);
+    const vertices = face.vertexIndices.map((index) => {
+      const vertex = topology.vertices[index];
+
+      if (!vertex) {
+        throw new RangeError(`D${topology.sides} face ${face.value} references missing vertex ${index}.`);
+      }
+
+      return new Vector3(vertex.x * size, vertex.y * size, vertex.z * size)
+        .addScaledVector(basis.normal, surfaceOffset);
+    });
+    const projected = vertices.map((vertex) => {
+      const relative = vertex.clone().sub(basis.center);
+      return {
+        x: relative.dot(basis.horizontal),
+        y: relative.dot(basis.vertical)
+      };
+    });
+    const minX = Math.min(...projected.map((point) => point.x));
+    const maxX = Math.max(...projected.map((point) => point.x));
+    const minY = Math.min(...projected.map((point) => point.y));
+    const maxY = Math.max(...projected.map((point) => point.y));
+    const width = Math.max(maxX - minX, Number.EPSILON);
+    const height = Math.max(maxY - minY, Number.EPSILON);
+
+    for (let triangle = 1; triangle < vertices.length - 1; triangle += 1) {
+      for (const localIndex of [0, triangle, triangle + 1]) {
+        const vertex = vertices[localIndex]!;
+        const point = projected[localIndex]!;
+        positions.push(vertex.x, vertex.y, vertex.z);
+        normals.push(basis.normal.x, basis.normal.y, basis.normal.z);
+        uvs.push((point.x - minX) / width, (point.y - minY) / height);
+      }
+    }
+  }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function pushQuad(
+  positions: number[],
+  normals: number[],
+  basis: FaceBasis,
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  surfaceOffset: number
+): void {
+  const corners: readonly (readonly [number, number])[] = [
+    [-width / 2, height / 2],
+    [-width / 2, -height / 2],
+    [width / 2, -height / 2],
+    [width / 2, height / 2]
+  ];
+  const points = corners.map(([x, y]) =>
+    basis.center
+      .clone()
+      .addScaledVector(basis.horizontal, centerX + x)
+      .addScaledVector(basis.vertical, centerY + y)
+      .addScaledVector(basis.normal, surfaceOffset)
+  );
+
+  for (const index of [0, 1, 2, 0, 2, 3]) {
+    const point = points[index]!;
+    positions.push(point.x, point.y, point.z);
+    normals.push(basis.normal.x, basis.normal.y, basis.normal.z);
+  }
+}
+
+function addDigitSegments(
+  positions: number[],
+  normals: number[],
+  basis: FaceBasis,
+  digit: string,
+  centerX: number,
+  unit: number,
+  surfaceOffset: number
+): void {
+  const segments = DIGIT_SEGMENTS[digit] ?? [];
+  const digitWidth = unit;
+  const digitHeight = unit * 1.65;
+  const thickness = unit * 0.13;
+  const horizontalWidth = digitWidth * 0.72;
+  const verticalHeight = digitHeight * 0.42;
+
+  for (const segment of segments) {
+    switch (segment) {
+      case "a":
+        pushQuad(positions, normals, basis, centerX, digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        break;
+      case "g":
+        pushQuad(positions, normals, basis, centerX, 0, horizontalWidth, thickness, surfaceOffset);
+        break;
+      case "d":
+        pushQuad(positions, normals, basis, centerX, -digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        break;
+      case "f":
+        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        break;
+      case "b":
+        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        break;
+      case "e":
+        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        break;
+      case "c":
+        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        break;
+    }
+  }
+}
+
+function createNumericMarkingsGeometry(
+  topology: DiceTopology,
+  size: number,
+  texturedValues: ReadonlySet<number>
+): BufferGeometry | undefined {
+  const positions: number[] = [];
+  const normals: number[] = [];
+
+  for (const face of topology.faces) {
+    if (texturedValues.has(face.value)) {
+      continue;
+    }
+
+    const basis = faceBasis(face, size);
+    const localPoints = face.vertexIndices.map((index) => {
+      const vertex = topology.vertices[index]!;
+      const relative = new Vector3(vertex.x * size, vertex.y * size, vertex.z * size).sub(basis.center);
+      return {
+        x: relative.dot(basis.horizontal),
+        y: relative.dot(basis.vertical)
+      };
+    });
+    const width = Math.max(...localPoints.map((point) => point.x)) - Math.min(...localPoints.map((point) => point.x));
+    const height = Math.max(...localPoints.map((point) => point.y)) - Math.min(...localPoints.map((point) => point.y));
+    const digits = String(face.value);
+    const availableUnit = Math.min(
+      width / Math.max(digits.length * 1.28, 1),
+      height / 1.9
+    );
+    const unit = availableUnit * (topology.sides >= 100 ? 0.54 : 0.62);
+
+    if (!Number.isFinite(unit) || unit <= Number.EPSILON) {
+      continue;
+    }
+
+    const gap = unit * 0.18;
+    const totalWidth = digits.length * unit + Math.max(0, digits.length - 1) * gap;
+    const startX = -totalWidth / 2 + unit / 2;
+
+    for (let index = 0; index < digits.length; index += 1) {
+      addDigitSegments(
+        positions,
+        normals,
+        basis,
+        digits[index]!,
+        startX + index * (unit + gap),
+        unit,
+        size * 0.006
+      );
+    }
+  }
+
+  if (positions.length === 0) {
+    return undefined;
+  }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+  return geometry;
+}
+
+/** Factory for render meshes. All standard dice use project-owned geometry and shared topology data. */
 export class DiceMeshFactory {
   private readonly textureCache: DiceTextureCache;
   private disposed = false;
@@ -78,49 +310,34 @@ export class DiceMeshFactory {
     this.textureCache = new DiceTextureCache(options.textureLoader);
   }
 
-  create(sides: DiceSides, options: D6MeshOptions = {}): DiceMesh {
-    this.assertActive();
-
-    if (sides !== 6) {
-      throw new RangeError(`DiceMeshFactory does not yet support D${sides}.`);
-    }
-
-    return this.createD6(options);
-  }
-
-  async createAsync(sides: DiceSides, options: D6MeshOptions = {}): Promise<DiceMesh> {
-    this.assertActive();
-
-    if (sides !== 6) {
-      throw new RangeError(`DiceMeshFactory does not yet support D${sides}.`);
-    }
-
-    return this.createD6Async(options);
-  }
-
-  /** Creates a D6 immediately. Texture URLs are intentionally ignored by this synchronous path. */
-  createD6(options: D6MeshOptions = {}): DiceMesh {
+  create(sides: DiceSides, options: DiceMeshOptions = {}): DiceMesh {
     this.assertActive();
     const size = validateSize(options.size ?? 1);
     const appearance = resolveDiceAppearance(options.appearance);
-    return this.buildD6(size, appearance, options.appearance);
+
+    return sides === 6
+      ? this.buildD6(size, appearance, options.appearance)
+      : this.buildPolyhedral(sides, size, appearance, options.appearance);
   }
 
-  /** Loads optional texture assets with fallback and then creates a complete D6 mesh. */
-  async createD6Async(options: D6MeshOptions = {}): Promise<DiceMesh> {
+  async createAsync(sides: DiceSides, options: DiceMeshOptions = {}): Promise<DiceMesh> {
     this.assertActive();
     const size = validateSize(options.size ?? 1);
     const appearance = resolveDiceAppearance(options.appearance);
 
     if (!hasDiceTextureSources(options.appearance)) {
-      return this.buildD6(size, appearance, options.appearance);
+      return sides === 6
+        ? this.buildD6(size, appearance, options.appearance)
+        : this.buildPolyhedral(sides, size, appearance, options.appearance);
     }
 
-    const textures = await this.loadD6Textures(options.appearance);
+    const textures = await this.loadTextures(sides, options.appearance);
 
     try {
       this.assertActive();
-      return this.buildD6(size, appearance, options.appearance, textures);
+      return sides === 6
+        ? this.buildD6(size, appearance, options.appearance, textures)
+        : this.buildPolyhedral(sides, size, appearance, options.appearance, textures);
     } catch (error) {
       for (const lease of textures.leases) {
         lease.release();
@@ -128,6 +345,14 @@ export class DiceMeshFactory {
 
       throw error;
     }
+  }
+
+  createD6(options: D6MeshOptions = {}): DiceMesh {
+    return this.create(6, options);
+  }
+
+  async createD6Async(options: D6MeshOptions = {}): Promise<DiceMesh> {
+    return this.createAsync(6, options);
   }
 
   dispose(): void {
@@ -139,20 +364,28 @@ export class DiceMeshFactory {
     this.textureCache.dispose();
   }
 
-  private async loadD6Textures(appearance: DiceAppearance | undefined): Promise<D6TextureResources> {
+  private async loadTextures(
+    sides: DiceSides,
+    appearance: DiceAppearance | undefined
+  ): Promise<DiceTextureResources> {
+    const requestedFaces = Object.entries(appearance?.faces ?? {})
+      .map(([value, source]) => [Number(value), source] as const)
+      .filter(([value, source]) =>
+        Number.isInteger(value) && value >= 1 && value <= sides && typeof source === "string" && source.trim().length > 0
+      );
     const [body, normal, roughness, faceEntries] = await Promise.all([
       this.textureCache.acquire(appearance?.texture, "color"),
       this.textureCache.acquire(appearance?.normalMap, "data"),
       this.textureCache.acquire(appearance?.roughnessMap, "data"),
       Promise.all(
-        D6_FACE_VALUES.map(async (value) => {
-          const lease = await this.textureCache.acquire(appearance?.faces?.[value], "color");
+        requestedFaces.map(async ([value, source]) => {
+          const lease = await this.textureCache.acquire(source, "color");
           return [value, lease] as const;
         })
       )
     ]);
 
-    const faces = new Map<D6FaceValue, DiceTextureLease>();
+    const faces = new Map<number, DiceTextureLease>();
     const leases: DiceTextureLease[] = [];
 
     for (const lease of [body, normal, roughness]) {
@@ -175,7 +408,7 @@ export class DiceMeshFactory {
     size: number,
     appearance: ResolvedDiceAppearance,
     requestedAppearance: DiceAppearance | undefined,
-    textures?: D6TextureResources
+    textures?: DiceTextureResources
   ): DiceMesh {
     const halfSize = size / 2;
     const bodyGeometry = new RoundedBoxGeometry(size, size, size, 4, size * 0.12);
@@ -275,6 +508,106 @@ export class DiceMeshFactory {
         pipGeometry.dispose();
         pipMaterial.dispose();
         faceTextureGeometry?.dispose();
+
+        for (const material of faceTextureMaterials) {
+          material.dispose();
+        }
+
+        for (const lease of textures?.leases ?? []) {
+          lease.release();
+        }
+      }
+    };
+  }
+
+  private buildPolyhedral(
+    sides: Exclude<DiceSides, 6>,
+    size: number,
+    appearance: ResolvedDiceAppearance,
+    requestedAppearance: DiceAppearance | undefined,
+    textures?: DiceTextureResources
+  ): DiceMesh {
+    const topology = getDiceTopology(sides);
+    const bodyGeometry = createTopologyGeometry(topology, size);
+    const bodyMaterial = new MeshStandardMaterial({
+      color:
+        textures?.body && requestedAppearance?.color === undefined
+          ? "#ffffff"
+          : appearance.color,
+      map: textures?.body?.texture,
+      normalMap: textures?.normal?.texture,
+      roughnessMap: textures?.roughness?.texture,
+      metalness: appearance.metalness,
+      roughness: appearance.roughness,
+      flatShading: true
+    });
+    const object = new Group();
+    object.name = `PartyBeam.DiceKit D${sides}`;
+    const body = new Mesh(bodyGeometry, bodyMaterial);
+    body.name = `D${sides} body`;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    object.add(body);
+
+    const faceTextureGeometries: BufferGeometry[] = [];
+    const faceTextureMaterials: MeshStandardMaterial[] = [];
+    const texturedValues = new Set(textures?.faces.keys() ?? []);
+
+    for (const [value, lease] of textures?.faces ?? []) {
+      const geometry = createTopologyGeometry(topology, size, new Set([value]), size * 0.008);
+      const material = new MeshStandardMaterial({
+        color: "#ffffff",
+        map: lease.texture,
+        metalness: appearance.metalness,
+        roughness: appearance.roughness,
+        transparent: true,
+        alphaTest: 0.01,
+        flatShading: true
+      });
+      const faceMesh = new Mesh(geometry, material);
+      faceMesh.name = `D${sides} face texture ${value}`;
+      object.add(faceMesh);
+      faceTextureGeometries.push(geometry);
+      faceTextureMaterials.push(material);
+    }
+
+    const markingsGeometry = createNumericMarkingsGeometry(topology, size, texturedValues);
+    const markingsMaterial = markingsGeometry
+      ? new MeshStandardMaterial({
+          color: appearance.markingsColor,
+          metalness: 0,
+          roughness: 0.82,
+          flatShading: true
+        })
+      : undefined;
+
+    if (markingsGeometry && markingsMaterial) {
+      const markings = new Mesh(markingsGeometry, markingsMaterial);
+      markings.name = `D${sides} numeric markings`;
+      object.add(markings);
+    }
+
+    let disposed = false;
+
+    return {
+      sides,
+      object,
+      body,
+      dispose() {
+        if (disposed) {
+          return;
+        }
+
+        disposed = true;
+        object.clear();
+        bodyGeometry.dispose();
+        bodyMaterial.dispose();
+        markingsGeometry?.dispose();
+        markingsMaterial?.dispose();
+
+        for (const geometry of faceTextureGeometries) {
+          geometry.dispose();
+        }
 
         for (const material of faceTextureMaterials) {
           material.dispose();
