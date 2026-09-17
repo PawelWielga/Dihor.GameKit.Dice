@@ -1,4 +1,4 @@
-export { DiceMeshFactory } from "./ReferenceDiceMeshFactory.js";
+export { DiceMeshFactory } from "./UnifiedDiceMeshFactory.js";
 export type {
   D6MeshOptions,
   DiceMesh,
