@@ -8,4 +8,9 @@ export type {
   DiceVector3
 } from "./DiceTransform.js";
 export { DiceMeshFactory } from "./dice/index.js";
-export type { D6MeshOptions, DiceMesh } from "./dice/index.js";
+export type {
+  D6MeshOptions,
+  DiceMesh,
+  DiceMeshFactoryOptions,
+  DiceTextureLoader
+} from "./dice/index.js";
