@@ -54,7 +54,7 @@ class ImmediateTextureLoader implements DiceTextureLoader {
   }
 }
 
-async function flushMicrotasks(count = 12): Promise<void> {
+async function flushMicrotasks(count = 24): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve();
   }
