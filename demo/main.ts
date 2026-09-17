@@ -13,6 +13,7 @@ import {
   type DiceCameraOptions,
   type DiceFaceLabelMode,
   type DiceFontAppearance,
+  type DiceLightingOptions,
   type DiceRollRequest,
   type DiceRollResult,
   type DiceSides,
@@ -166,6 +167,22 @@ const cameraXValue = requireElement<HTMLOutputElement>("#camera-x-value");
 const cameraYValue = requireElement<HTMLOutputElement>("#camera-y-value");
 const cameraZValue = requireElement<HTMLOutputElement>("#camera-z-value");
 const resetCameraButton = requireElement<HTMLButtonElement>("#reset-camera-button");
+const ambientColor = requireElement<HTMLInputElement>("#ambient-color");
+const ambientColorValue = requireElement<HTMLOutputElement>("#ambient-color-value");
+const ambientIntensity = requireElement<HTMLInputElement>("#ambient-intensity");
+const ambientIntensityValue = requireElement<HTMLOutputElement>("#ambient-intensity-value");
+const keyLightColor = requireElement<HTMLInputElement>("#key-light-color");
+const keyLightColorValue = requireElement<HTMLOutputElement>("#key-light-color-value");
+const keyLightIntensity = requireElement<HTMLInputElement>("#key-light-intensity");
+const keyLightIntensityValue = requireElement<HTMLOutputElement>("#key-light-intensity-value");
+const keyLightX = requireElement<HTMLInputElement>("#key-light-x");
+const keyLightY = requireElement<HTMLInputElement>("#key-light-y");
+const keyLightZ = requireElement<HTMLInputElement>("#key-light-z");
+const keyLightShadow = requireElement<HTMLInputElement>("#key-light-shadow");
+const neutralLightingButton = requireElement<HTMLButtonElement>("#lighting-neutral-button");
+const warmLightingButton = requireElement<HTMLButtonElement>("#lighting-warm-button");
+const moodyLightingButton = requireElement<HTMLButtonElement>("#lighting-moody-button");
+const resetLightingButton = requireElement<HTMLButtonElement>("#reset-lighting-button");
 const fontPreset = requireElement<HTMLSelectElement>("#font-preset");
 const fontFamily = requireElement<HTMLInputElement>("#font-family");
 const fontWeight = requireElement<HTMLInputElement>("#font-weight");
@@ -280,7 +297,8 @@ const overlay = new DiceOverlay({
       scene: {
         ...options.scene,
         table: createTableMaterial(),
-        camera: createCameraOptions()
+        camera: createCameraOptions(),
+        lighting: createLightingOptions()
       }
     });
     demoRenderer = renderer;
@@ -355,6 +373,92 @@ function applyCamera(): void {
   if (!comparisonMode) {
     configureCamera(false);
   }
+}
+
+function readFiniteLightingValue(input: HTMLInputElement, label: string): number {
+  const value = Number(input.value);
+
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be a finite number; received ${input.value}.`);
+  }
+
+  return value;
+}
+
+function updateLightingOutputs(): void {
+  ambientColorValue.value = ambientColor.value.toUpperCase();
+  ambientIntensityValue.value = readFiniteLightingValue(ambientIntensity, "Ambient intensity").toFixed(2);
+  keyLightColorValue.value = keyLightColor.value.toUpperCase();
+  keyLightIntensityValue.value = readFiniteLightingValue(keyLightIntensity, "Key light intensity").toFixed(2);
+}
+
+function createLightingOptions(): DiceLightingOptions {
+  return {
+    ambient: {
+      color: ambientColor.value,
+      intensity: readFiniteLightingValue(ambientIntensity, "Ambient intensity")
+    },
+    lights: [
+      {
+        type: "directional",
+        color: keyLightColor.value,
+        intensity: readFiniteLightingValue(keyLightIntensity, "Key light intensity"),
+        position: {
+          x: readFiniteLightingValue(keyLightX, "Key light X"),
+          y: readFiniteLightingValue(keyLightY, "Key light Y"),
+          z: readFiniteLightingValue(keyLightZ, "Key light Z")
+        },
+        castShadow: keyLightShadow.checked
+      }
+    ]
+  };
+}
+
+function applyLighting(): void {
+  updateLightingOutputs();
+  const renderer = demoRenderer;
+
+  if (!renderer) {
+    return;
+  }
+
+  renderer.diceScene.setLighting(createLightingOptions());
+  renderer.render();
+}
+
+type LightingPreset = "neutral" | "warm" | "moody";
+
+function setLightingPreset(preset: LightingPreset): void {
+  if (preset === "neutral") {
+    ambientColor.value = "#ffffff";
+    ambientIntensity.value = "1.4";
+    keyLightColor.value = "#ffffff";
+    keyLightIntensity.value = "2.2";
+    keyLightX.value = "4";
+    keyLightY.value = "8";
+    keyLightZ.value = "5";
+    keyLightShadow.checked = false;
+  } else if (preset === "warm") {
+    ambientColor.value = "#6b4a32";
+    ambientIntensity.value = "0.85";
+    keyLightColor.value = "#ffb36b";
+    keyLightIntensity.value = "3";
+    keyLightX.value = "-4";
+    keyLightY.value = "7";
+    keyLightZ.value = "4";
+    keyLightShadow.checked = true;
+  } else {
+    ambientColor.value = "#18203a";
+    ambientIntensity.value = "0.3";
+    keyLightColor.value = "#7896ff";
+    keyLightIntensity.value = "2.4";
+    keyLightX.value = "5";
+    keyLightY.value = "4";
+    keyLightZ.value = "-3";
+    keyLightShadow.checked = true;
+  }
+
+  applyLighting();
 }
 
 function syncFontControls(): void {
@@ -609,6 +713,23 @@ resetCameraButton.addEventListener("click", () => {
   cameraZ.value = "9.3";
   applyCamera();
 });
+for (const lightingInput of [
+  ambientColor,
+  ambientIntensity,
+  keyLightColor,
+  keyLightIntensity,
+  keyLightX,
+  keyLightY,
+  keyLightZ,
+  keyLightShadow
+]) {
+  lightingInput.addEventListener("input", applyLighting);
+  lightingInput.addEventListener("change", applyLighting);
+}
+neutralLightingButton.addEventListener("click", () => setLightingPreset("neutral"));
+warmLightingButton.addEventListener("click", () => setLightingPreset("warm"));
+moodyLightingButton.addEventListener("click", () => setLightingPreset("moody"));
+resetLightingButton.addEventListener("click", () => setLightingPreset("neutral"));
 fontPreset.addEventListener("change", syncFontControls);
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
@@ -645,5 +766,6 @@ updateThrowForceOutput();
 updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();
+updateLightingOutputs();
 syncFontControls();
 updateDebugPanel();
