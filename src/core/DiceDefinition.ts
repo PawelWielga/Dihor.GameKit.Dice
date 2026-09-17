@@ -1,5 +1,5 @@
-import type { DiceAppearance } from "../appearance/DiceAppearance";
-import type { DiceSides } from "./DiceSides";
+import type { DiceAppearance } from "../appearance/DiceAppearance.js";
+import type { DiceSides } from "./DiceSides.js";
 
 /** Describes one physical die participating in a roll. */
 export interface DiceDefinition {
