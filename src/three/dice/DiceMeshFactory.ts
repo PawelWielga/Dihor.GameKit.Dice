@@ -205,7 +205,7 @@ function roundedPolyhedronProfile(sides: Exclude<DiceSides, 6>): {
 } {
   switch (sides) {
     case 4:
-      return { bevelRatio: 0.28, segments: 8 };
+      return { bevelRatio: 0.34, segments: 8 };
     case 8:
       return { bevelRatio: 0.3, segments: 8 };
     case 10:

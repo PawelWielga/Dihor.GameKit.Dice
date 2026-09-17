@@ -66,7 +66,7 @@ describe("polyhedral dice topologies", () => {
   });
 
   it("pins the approved D4 and D8 physical size baselines", () => {
-    expect(xSpan(4)).toBeCloseTo(1.242, 6);
+    expect(xSpan(4)).toBeCloseTo(1.14264, 6);
     expect(xSpan(8)).toBeCloseTo(1.725, 6);
   });
 
