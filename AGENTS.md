@@ -132,7 +132,7 @@ Rules:
 
 - Normal demo usage must go through the same public API used by consuming games.
 - Debug-only controls may expose internal diagnostics, but must be clearly separated from public API usage.
-- The production demo will eventually be built into `/docs` for GitHub Pages.
+- The production demo will eventually be published through GitHub Pages.
 
 ## GitHub workflow
 
@@ -142,7 +142,11 @@ Rules:
 - Do not silently expand an issue with unrelated features.
 - Reference the issue in the PR description.
 - Do not merge when known correctness problems remain.
-- Do not add GitHub Actions. Build and test locally unless repository policy changes explicitly.
+- GitHub Actions are allowed in this repository.
+- Keep CI workflows focused on reproducible validation such as install, typecheck, tests and builds.
+- GitHub Pages deployment may use GitHub Actions rather than committing generated demo output to the repository.
+- Do not add workflow secrets or broad write permissions unless a task explicitly requires them.
+- Local build and test commands must remain available even when the same checks run in GitHub Actions.
 
 ## Code quality
 
