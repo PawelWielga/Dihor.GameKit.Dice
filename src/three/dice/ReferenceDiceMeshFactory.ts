@@ -16,6 +16,7 @@ import {
   type DiceMeshOptions
 } from "./DiceMeshFactory.js";
 import { createSmoothConvexProfileGeometry } from "./ReferenceGeometryUtils.js";
+import { configureReferenceTextureSampling } from "./TextureSampling.js";
 
 const D8_REFERENCE_APEX = 0.5;
 const D8_REFERENCE_RING_AXIS = 0.488692;
@@ -318,6 +319,7 @@ function replaceReferenceBody(
     }
   }
 
+  const ownedFaceTextures = configureReferenceTextureSampling(mesh);
   const baseDispose = mesh.dispose.bind(mesh);
   let disposed = false;
 
@@ -332,6 +334,9 @@ function replaceReferenceBody(
 
       disposed = true;
       replacement.geometry.dispose();
+      for (const texture of ownedFaceTextures) {
+        texture.dispose();
+      }
       baseDispose();
     }
   };
