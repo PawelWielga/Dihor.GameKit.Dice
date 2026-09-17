@@ -17,6 +17,7 @@ import type {
   DiceMeshOptions
 } from "./DiceMeshFactory.js";
 import { createSmoothConvexProfileGeometry } from "./ReferenceGeometryUtils.js";
+import { configureReferenceTextureSampling } from "./TextureSampling.js";
 
 // Keep D6 visually consistent with the approved D8 profile while preserving the established
 // D6 outer size, face mapping, pips and physics collider.
@@ -189,6 +190,7 @@ function replaceD6Body(mesh: DiceMesh, size: number): DiceMesh {
   mesh.body.geometry = replacement;
   previousGeometry.dispose();
 
+  const ownedFaceTextures = configureReferenceTextureSampling(mesh);
   const baseDispose = mesh.dispose.bind(mesh);
   let disposed = false;
 
@@ -203,6 +205,9 @@ function replaceD6Body(mesh: DiceMesh, size: number): DiceMesh {
 
       disposed = true;
       replacement.dispose();
+      for (const texture of ownedFaceTextures) {
+        texture.dispose();
+      }
       baseDispose();
     }
   };
