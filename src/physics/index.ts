@@ -9,10 +9,8 @@ export type {
   StabilityOptions,
   StabilityResult
 } from "./DicePhysicsWorld.js";
-export {
-  RollPlanner,
-  RollPlanningError
-} from "./RollPlanner.js";
+export { RollPlanner } from "./NaturalRollPlanner.js";
+export { RollPlanningError } from "./RollPlanner.js";
 export type {
   RollInitialStateContext,
   RollInitialStateProvider,
