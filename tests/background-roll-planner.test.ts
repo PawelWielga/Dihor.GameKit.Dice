@@ -5,10 +5,12 @@ import {
   DEFAULT_STABILITY_CONFIG,
   RollPlanningError,
   type RollPlan,
-  type RollPlanningWorkerLike,
-  type RollPlanningWorkerRequest,
-  type RollPlanningWorkerResponse
+  type RollPlanningWorkerLike
 } from "../src/index.js";
+import type {
+  RollPlanningWorkerRequest,
+  RollPlanningWorkerResponse
+} from "../src/physics/RollPlannerWorkerProtocol.js";
 
 class FakeWorker implements RollPlanningWorkerLike {
   onmessage: ((event: { readonly data: RollPlanningWorkerResponse }) => void) | null = null;
