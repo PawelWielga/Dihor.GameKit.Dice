@@ -24,5 +24,5 @@ export interface DiceAppearance {
    * Optional texture overrides keyed by the physical face value.
    * Missing faces fall back to the standard appearance.
    */
-  readonly faces?: Readonly<Record<number, string>>;
+  readonly faces?: Readonly<Partial<Record<number, string>>>;
 }
