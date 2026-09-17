@@ -1,5 +1,8 @@
 import type { Body } from "cannon-es";
-import type { DiceAppearance } from "../appearance/index.js";
+import {
+  hasDiceTextureSources,
+  type DiceAppearance
+} from "../appearance/index.js";
 import type { D6FaceValue } from "../core/dice/index.js";
 import {
   DicePhysicsWorld,
@@ -50,6 +53,10 @@ export class DiceRollPlaybackError extends Error {
     super(message, options);
     this.name = "DiceRollPlaybackError";
   }
+}
+
+interface PlaybackPreparation {
+  cancelled: boolean;
 }
 
 interface PlaybackSession {
@@ -111,6 +118,7 @@ export class DiceRollPlayer {
   private readonly scheduler?: DiceAnimationScheduler;
   private readonly maxSubStepsPerFrame: number;
 
+  private activePreparation?: PlaybackPreparation;
   private activeSession?: PlaybackSession;
   private visibleMeshes: DiceMesh[] = [];
   private disposed = false;
@@ -131,7 +139,7 @@ export class DiceRollPlayer {
   ): Promise<DiceRollPlaybackResult> {
     this.assertActive();
 
-    if (this.activeSession) {
+    if (this.activeSession || this.activePreparation) {
       throw new DiceRollPlaybackError("A dice roll is already playing.");
     }
 
@@ -146,18 +154,39 @@ export class DiceRollPlayer {
     this.clearVisibleMeshes();
 
     const scheduler = this.scheduler ?? createBrowserScheduler();
-    const world = new DicePhysicsWorld(plan.physics);
     const meshes: DiceMesh[] = [];
+    const preparation: PlaybackPreparation = { cancelled: false };
+    this.activePreparation = preparation;
+    let world: DicePhysicsWorld | undefined;
 
     try {
-      const bodies = plan.dice.map((die) => world.addD6(die.initialState));
-
       for (let index = 0; index < plan.dice.length; index += 1) {
-        const mesh = this.meshFactory.createD6({
+        const appearance = options.appearances?.[index];
+        const meshOptions = {
           size: plan.physics.diceSize,
-          appearance: options.appearances?.[index]
-        });
+          appearance
+        };
+        const mesh = hasDiceTextureSources(appearance)
+          ? await this.meshFactory.createD6Async(meshOptions)
+          : this.meshFactory.createD6(meshOptions);
+
+        if (preparation.cancelled || this.disposed) {
+          mesh.dispose();
+          throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
+        }
+
         meshes.push(mesh);
+      }
+
+      if (preparation.cancelled || this.disposed) {
+        throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
+      }
+
+      this.activePreparation = undefined;
+      world = new DicePhysicsWorld(plan.physics);
+      const bodies = plan.dice.map((die) => world!.addD6(die.initialState));
+
+      for (const mesh of meshes) {
         this.target.diceScene.add(mesh.object);
       }
 
@@ -168,7 +197,7 @@ export class DiceRollPlayer {
       return await new Promise<DiceRollPlaybackResult>((resolve, reject) => {
         const session: PlaybackSession = {
           plan,
-          world,
+          world: world!,
           bodies,
           meshes,
           stability: resolveStabilityConfig(plan.stability),
@@ -184,8 +213,11 @@ export class DiceRollPlayer {
         this.scheduleFrame(session);
       });
     } catch (error) {
-      this.activeSession = undefined;
-      world.dispose();
+      if (this.activePreparation === preparation) {
+        this.activePreparation = undefined;
+      }
+
+      world?.dispose();
       this.removeAndDisposeMeshes(meshes);
       this.visibleMeshes = [];
       throw error;
@@ -193,6 +225,11 @@ export class DiceRollPlayer {
   }
 
   cancel(): void {
+    if (this.activePreparation) {
+      this.activePreparation.cancelled = true;
+      return;
+    }
+
     if (!this.activeSession) {
       return;
     }
