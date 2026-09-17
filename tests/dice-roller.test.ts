@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DiceRoller,
+  type DiceDefinition,
   type DiceRollRequest,
   type RandomProvider
 } from "../src/index.js";
@@ -21,6 +22,11 @@ class SequenceRandomProvider implements RandomProvider {
     return value;
   }
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("DiceRoller", () => {
   it("maps normalized random samples to valid die values", () => {
@@ -83,6 +89,28 @@ describe("DiceRoller", () => {
     expect(() => roller.roll({ dice: [] })).toThrowError(RangeError);
   });
 
+  it("rejects sparse dice arrays", () => {
+    const sparseDice = new Array<DiceDefinition>(1);
+    const roller = new DiceRoller({
+      randomProvider: new SequenceRandomProvider([]),
+      rollIdProvider: () => "unused"
+    });
+
+    expect(() => roller.roll({ dice: sparseDice })).toThrowError(RangeError);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "rejects non-finite modifier %s",
+    (modifier) => {
+      const roller = new DiceRoller({
+        randomProvider: new SequenceRandomProvider([]),
+        rollIdProvider: () => "unused"
+      });
+
+      expect(() => roller.roll({ dice: [{ sides: 6 }], modifier })).toThrowError(RangeError);
+    }
+  );
+
   it.each([-0.1, 1, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects invalid normalized RNG sample %s",
     (sample) => {
@@ -94,4 +122,21 @@ describe("DiceRoller", () => {
       expect(() => roller.roll({ dice: [{ sides: 6 }] })).toThrowError(RangeError);
     }
   );
+
+  it("keeps fallback roll IDs unique when randomUUID is unavailable", () => {
+    vi.stubGlobal("crypto", undefined);
+    vi.spyOn(Date, "now").mockReturnValue(123_456);
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.123_456).mockReturnValueOnce(0.654_321);
+
+    const roller = new DiceRoller({
+      randomProvider: new SequenceRandomProvider([0, 0])
+    });
+
+    const first = roller.roll({ dice: [{ sides: 6 }] });
+    const second = roller.roll({ dice: [{ sides: 6 }] });
+
+    expect(first.rollId).not.toBe(second.rollId);
+    expect(first.rollId).toContain("roll-");
+    expect(second.rollId).toContain("roll-");
+  });
 });
