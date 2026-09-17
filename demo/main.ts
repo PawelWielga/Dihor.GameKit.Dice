@@ -1,12 +1,15 @@
 import {
   BackgroundRollPlanner,
   DEFAULT_DICE_FONT_APPEARANCE,
+  DEFAULT_DICE_SCALE,
   DEFAULT_ENGRAVING_DEPTH,
   DEFAULT_THROW_FORCE,
   MAX_DICE_FONT_SIZE,
+  MAX_DICE_SCALE,
   MAX_ENGRAVING_DEPTH,
   MAX_THROW_FORCE,
   MIN_DICE_FONT_SIZE,
+  MIN_DICE_SCALE,
   MIN_ENGRAVING_DEPTH,
   MIN_THROW_FORCE,
   DiceOverlay,
@@ -166,6 +169,9 @@ const rollModeHint = requireElement<HTMLElement>("#roll-mode-hint");
 const throwForce = requireElement<HTMLInputElement>("#throw-force");
 const throwForceValue = requireElement<HTMLOutputElement>("#throw-force-value");
 const resetThrowForceButton = requireElement<HTMLButtonElement>("#reset-throw-force-button");
+const diceScale = requireElement<HTMLInputElement>("#dice-scale");
+const diceScaleValue = requireElement<HTMLOutputElement>("#dice-scale-value");
+const resetDiceScaleButton = requireElement<HTMLButtonElement>("#reset-dice-scale-button");
 const bodyColor = requireElement<HTMLInputElement>("#body-color");
 const markingsColor = requireElement<HTMLInputElement>("#markings-color");
 const bodyColorValue = requireElement<HTMLOutputElement>("#body-color-value");
@@ -422,6 +428,22 @@ function readThrowForce(): number {
 
 function updateThrowForceOutput(): void {
   throwForceValue.value = `${readThrowForce().toFixed(2)}×`;
+}
+
+function readDiceScale(): number {
+  const value = Number(diceScale.value);
+
+  if (!Number.isFinite(value) || value < MIN_DICE_SCALE || value > MAX_DICE_SCALE) {
+    throw new Error(
+      `Dice size must be between ${MIN_DICE_SCALE} and ${MAX_DICE_SCALE}; received ${diceScale.value}.`
+    );
+  }
+
+  return value;
+}
+
+function updateDiceScaleOutput(): void {
+  diceScaleValue.value = `${readDiceScale().toFixed(2)}×`;
 }
 
 function updateColorOutputs(): void {
@@ -838,6 +860,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
     renderedFontSize = readFontSize();
     const result = await overlay.roll(request, {
       throwForce: readThrowForce(),
+      diceScale: readDiceScale(),
       preSimulation,
       expectedDiceTotal: comparison ? 0 : readExpectedDiceTotal()
     });
@@ -881,6 +904,11 @@ throwForce.addEventListener("input", updateThrowForceOutput);
 resetThrowForceButton.addEventListener("click", () => {
   throwForce.value = String(DEFAULT_THROW_FORCE);
   updateThrowForceOutput();
+});
+diceScale.addEventListener("input", updateDiceScaleOutput);
+resetDiceScaleButton.addEventListener("click", () => {
+  diceScale.value = String(DEFAULT_DICE_SCALE);
+  updateDiceScaleOutput();
 });
 bodyColor.addEventListener("input", updateColorOutputs);
 markingsColor.addEventListener("input", updateColorOutputs);
@@ -970,6 +998,7 @@ window.addEventListener(
 );
 
 updateThrowForceOutput();
+updateDiceScaleOutput();
 updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();

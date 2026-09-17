@@ -169,6 +169,8 @@ The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5`
 
 For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`.
 
+Per-roll `diceScale` accepts values from `0.5` to `1.5` and defaults to `1.0`. The scale is written into `RollPlan.physics.diceSize`, so the Three.js mesh and cannon-es collider always use the same effective size. Multiple dice in the roll also scale their default spacing together.
+
 The standard RPG set uses **D6 = 16 mm** as its physical reference baseline. D4, D8, D10, D12 and D20 keep deliberately different relative extents matching the approved physical-set comparison instead of being normalized to the same bounding box. D100/D% is intentionally not part of the supported set.
 
 Numeric markings accept a relative `appearance.font.size` scale from `0.5` to `1.5`; `1` preserves the default look. It works with the bundled font, system font families and fonts loaded from a URL. D6 in the default `dots` mode is intentionally unaffected.

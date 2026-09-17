@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DirectRollPlanner,
   RollPlanner,
   RollPlanningError,
   SUPPORTED_DICE_SIDES,
@@ -88,6 +89,29 @@ function result(
     total: dice.reduce((sum, die) => sum + die.value, 0)
   };
 }
+
+describe("DirectRollPlanner", () => {
+  it("uses the same diceScale for direct physical size and spacing", () => {
+    const planner = new DirectRollPlanner({
+      randomProvider: { next: () => 0.5 }
+    });
+
+    const plan = planner.plan(
+      { dice: [{ sides: 8 }, { sides: 8 }] },
+      "direct-scale",
+      { diceScale: 0.75 }
+    );
+
+    expect(plan.preSimulated).toBe(false);
+    expect(plan.physics.diceSize).toBeCloseTo(0.75);
+    expect(
+      Math.abs(
+        plan.dice[1]!.initialState.position.x -
+        plan.dice[0]!.initialState.position.x
+      )
+    ).toBeCloseTo(0.75 * 2.5);
+  });
+});
 
 describe("RollPlanner", () => {
   it("finds and verifies replayable physical plans for every supported die type", () => {
