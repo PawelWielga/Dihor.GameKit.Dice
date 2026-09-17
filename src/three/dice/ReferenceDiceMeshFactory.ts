@@ -172,8 +172,10 @@ export class DiceMeshFactory extends BaseDiceMeshFactory {
     return sides === 8 ? replaceD8Body(mesh, options.size ?? 1) : mesh;
   }
 
-  override async createAsync(sides: DiceSides, options: DiceMeshOptions = {}): Promise<DiceMesh> {
-    const mesh = await super.createAsync(sides, options);
-    return sides === 8 ? replaceD8Body(mesh, options.size ?? 1) : mesh;
+  override createAsync(sides: DiceSides, options: DiceMeshOptions = {}): Promise<DiceMesh> {
+    const pending = super.createAsync(sides, options);
+    return sides === 8
+      ? pending.then((mesh) => replaceD8Body(mesh, options.size ?? 1))
+      : pending;
   }
 }
