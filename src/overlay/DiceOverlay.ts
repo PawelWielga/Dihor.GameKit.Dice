@@ -5,7 +5,8 @@ import {
 } from "../core/index.js";
 import {
   RollPlanner,
-  type RollPlan
+  type RollPlan,
+  type RollPlanningOptions
 } from "../physics/index.js";
 import {
   DiceRollPlayer,
@@ -35,8 +36,10 @@ export interface DiceOverlayRoller {
 }
 
 export interface DiceOverlayPlanner {
-  plan(result: DiceRollResult): RollPlan;
+  plan(result: DiceRollResult, options?: RollPlanningOptions): RollPlan;
 }
+
+export interface DiceOverlayRollOptions extends RollPlanningOptions {}
 
 export interface DiceOverlayRenderer extends DiceRenderTarget {
   dispose(): void;
@@ -151,7 +154,10 @@ export class DiceOverlay {
     return this.surface !== undefined;
   }
 
-  async roll(request: DiceRollRequest): Promise<DiceRollResult> {
+  async roll(
+    request: DiceRollRequest,
+    options: DiceOverlayRollOptions = {}
+  ): Promise<DiceRollResult> {
     this.assertActive();
 
     if (this.activeRoll) {
@@ -172,7 +178,7 @@ export class DiceOverlay {
       let plan: RollPlan;
 
       try {
-        plan = this.planner.plan(logicalResult);
+        plan = this.planner.plan(logicalResult, options);
       } catch (error) {
         throw this.wrapError("planning", error);
       }

@@ -1,4 +1,7 @@
 import {
+  DEFAULT_THROW_FORCE,
+  MAX_THROW_FORCE,
+  MIN_THROW_FORCE,
   DiceOverlay,
   DiceRenderer,
   DiceRoller,
@@ -143,6 +146,9 @@ const diceType = requireElement<HTMLSelectElement>("#dice-type");
 const diceCount = requireElement<HTMLSelectElement>("#dice-count");
 const modifier = requireElement<HTMLInputElement>("#modifier");
 const reason = requireElement<HTMLInputElement>("#reason");
+const throwForce = requireElement<HTMLInputElement>("#throw-force");
+const throwForceValue = requireElement<HTMLOutputElement>("#throw-force-value");
+const resetThrowForceButton = requireElement<HTMLButtonElement>("#reset-throw-force-button");
 const bodyColor = requireElement<HTMLInputElement>("#body-color");
 const markingsColor = requireElement<HTMLInputElement>("#markings-color");
 const bodyColorValue = requireElement<HTMLOutputElement>("#body-color-value");
@@ -253,8 +259,8 @@ const overlay = new DiceOverlay({
     }
   },
   planner: {
-    plan(result) {
-      debugPlan = (comparisonMode ? comparisonPlanner : planner).plan(result);
+    plan(result, options) {
+      debugPlan = (comparisonMode ? comparisonPlanner : planner).plan(result, options);
       return debugPlan;
     }
   },
@@ -287,6 +293,22 @@ function setStatus(message: string, state?: "busy" | "error"): void {
   } else {
     delete status.dataset.state;
   }
+}
+
+function readThrowForce(): number {
+  const value = Number(throwForce.value);
+
+  if (!Number.isFinite(value) || value < MIN_THROW_FORCE || value > MAX_THROW_FORCE) {
+    throw new Error(
+      `Throw force must be between ${MIN_THROW_FORCE} and ${MAX_THROW_FORCE}; received ${throwForce.value}.`
+    );
+  }
+
+  return value;
+}
+
+function updateThrowForceOutput(): void {
+  throwForceValue.value = `${readThrowForce().toFixed(2)}×`;
 }
 
 function updateColorOutputs(): void {
@@ -516,7 +538,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
 
   try {
     await nextPaint();
-    const result = await overlay.roll(request);
+    const result = await overlay.roll(request, { throwForce: readThrowForce() });
     debugFinalResult = result;
     showResult(result);
     updateDebugPanel();
@@ -549,6 +571,11 @@ function resetOutput(): void {
   setStatus("Ready to roll");
 }
 
+throwForce.addEventListener("input", updateThrowForceOutput);
+resetThrowForceButton.addEventListener("click", () => {
+  throwForce.value = String(DEFAULT_THROW_FORCE);
+  updateThrowForceOutput();
+});
 bodyColor.addEventListener("input", updateColorOutputs);
 markingsColor.addEventListener("input", updateColorOutputs);
 tableColor.addEventListener("input", () => {
@@ -607,6 +634,7 @@ window.addEventListener(
   { once: true }
 );
 
+updateThrowForceOutput();
 updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();

@@ -64,11 +64,15 @@ export {
   type DiceOverlayPlayerFactory,
   type DiceOverlayRenderer,
   type DiceOverlayRendererFactory,
+  type DiceOverlayRollOptions,
   type DiceOverlayRoller
 } from "./overlay/index.js";
 export {
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
+  DEFAULT_THROW_FORCE,
+  MAX_THROW_FORCE,
+  MIN_THROW_FORCE,
   DicePhysicsWorld,
   RollPlanner,
   RollPlanningError,
@@ -85,6 +89,7 @@ export {
   type RollPlan,
   type RollPlanDie,
   type RollPlannerOptions,
+  type RollPlanningOptions,
   type StabilityConfig,
   type StabilityOptions,
   type StabilityResult

@@ -167,6 +167,48 @@ describe("RollPlanner", () => {
     expect(plan.dice.map((die) => die.initialState.position.x)).toEqual([-2.5, 0, 2.5]);
   });
 
+  it("applies per-roll throw force without changing authoritative values, including multiple dice", () => {
+    const planner = new RollPlanner({
+      initialStateProvider: (context) => {
+        const state = settledState(context);
+        return {
+          ...state,
+          velocity: { x: 0.01, y: 0.01, z: 0.01 },
+          angularVelocity: { x: 0.01, y: 0.01, z: 0.01 }
+        };
+      },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: {
+        consecutiveSteps: 4,
+        maxSteps: 120
+      }
+    });
+    const authoritative = result([
+      { sides: 6, value: 4 },
+      { sides: 8, value: 7 }
+    ]);
+
+    const defaultPlan = planner.plan(authoritative);
+    const strongerPlan = planner.plan(authoritative, { throwForce: 1.5 });
+
+    expect(defaultPlan.dice.map((die) => die.expectedValue)).toEqual([4, 7]);
+    expect(strongerPlan.dice.map((die) => die.expectedValue)).toEqual([4, 7]);
+    expect(defaultPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.01);
+    expect(strongerPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.015);
+    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeCloseTo(0.015);
+  });
+
+  it("rejects throw force values outside the supported safe range", () => {
+    const planner = new RollPlanner({ initialStateProvider: settledState });
+    const authoritative = result([{ sides: 6, value: 1 }]);
+
+    expect(() => planner.plan(authoritative, { throwForce: 0.49 })).toThrowError(RangeError);
+    expect(() => planner.plan(authoritative, { throwForce: 1.51 })).toThrowError(RangeError);
+    expect(() => planner.plan(authoritative, { throwForce: Number.NaN })).toThrowError(RangeError);
+  });
+
   it("fails in a bounded way when the supplied physical states cannot reach the result", () => {
     const planner = new RollPlanner({
       initialStateProvider: (context) => settledState({ ...context, expectedValue: 1 }),

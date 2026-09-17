@@ -22,6 +22,15 @@ import type {
   StabilityConfig
 } from "./RollModels.js";
 
+export const MIN_THROW_FORCE = 0.5;
+export const DEFAULT_THROW_FORCE = 1;
+export const MAX_THROW_FORCE = 1.5;
+
+export interface RollPlanningOptions {
+  /** Multiplier applied to initial linear and angular velocity. Defaults to 1. */
+  readonly throwForce?: number;
+}
+
 export interface RollInitialStateContext {
   readonly attempt: number;
   readonly dieIndex: number;
@@ -71,6 +80,18 @@ function requirePositiveFinite(name: string, value: number): number {
   }
 
   return value;
+}
+
+function resolveThrowForce(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_THROW_FORCE;
+
+  if (!Number.isFinite(resolved) || resolved < MIN_THROW_FORCE || resolved > MAX_THROW_FORCE) {
+    throw new RangeError(
+      `throwForce must be between ${MIN_THROW_FORCE} and ${MAX_THROW_FORCE}; received ${String(resolved)}.`
+    );
+  }
+
+  return resolved;
 }
 
 function normalizeQuaternion(quaternion: PhysicsQuaternion): PhysicsQuaternion {
@@ -184,7 +205,8 @@ export class RollPlanner {
     );
   }
 
-  plan(result: DiceRollResult): RollPlan {
+  plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
+    const throwForce = resolveThrowForce(options.throwForce);
     const expectedDice = this.validateResult(result);
     const startedAt = this.nowProvider();
     let lastFailure = "No matching physical plan was found.";
@@ -207,7 +229,8 @@ export class RollPlanner {
           dieIndex,
           expectedDice.length,
           slotX,
-          startedAt
+          startedAt,
+          throwForce
         );
 
         plannedDice.push({
@@ -241,22 +264,26 @@ export class RollPlanner {
     dieIndex: number,
     diceCount: number,
     slotX: number,
-    startedAt: number
+    startedAt: number,
+    throwForce: number
   ): RollInitialState {
     for (let attempt = 1; attempt <= this.maxAttemptsPerDie; attempt += 1) {
       this.assertWithinDeadline(startedAt);
       const probeWorld = new DicePhysicsWorld(this.physicsOptions);
 
       try {
-        const state = this.initialStateProvider({
-          attempt,
-          dieIndex,
-          diceCount,
-          sides,
-          expectedValue,
-          slotX,
-          diceSize: probeWorld.config.diceSize
-        });
+        const state = this.applyThrowForce(
+          this.initialStateProvider({
+            attempt,
+            dieIndex,
+            diceCount,
+            sides,
+            expectedValue,
+            slotX,
+            diceSize: probeWorld.config.diceSize
+          }),
+          throwForce
+        );
         const body = probeWorld.addDie(sides, state);
         const simulation = probeWorld.simulateUntilStable([body], this.stabilityConfig);
 
@@ -343,6 +370,26 @@ export class RollPlanner {
     }
 
     return result.dice;
+  }
+
+  private applyThrowForce(state: RollInitialState, throwForce: number): RollInitialState {
+    if (throwForce === DEFAULT_THROW_FORCE) {
+      return state;
+    }
+
+    return {
+      ...state,
+      velocity: {
+        x: state.velocity.x * throwForce,
+        y: state.velocity.y * throwForce,
+        z: state.velocity.z * throwForce
+      },
+      angularVelocity: {
+        x: state.angularVelocity.x * throwForce,
+        y: state.angularVelocity.y * throwForce,
+        z: state.angularVelocity.z * throwForce
+      }
+    };
   }
 
   private createRandomInitialState(context: RollInitialStateContext): RollInitialState {

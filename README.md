@@ -155,11 +155,15 @@ const result = await dice.roll({
     { sides: 20 }
   ],
   reason: "Attack"
+}, {
+  throwForce: 1.2
 });
 
 console.log(result.dice);
 console.log(result.total);
 ```
+
+The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. It changes initial linear and angular velocity only; the logical result is still decided first and remains authoritative.
 
 The same appearance model supports a global texture plus optional physical-face texture overrides. Face textures remain attached to the same physical faces throughout planning and playback.
 

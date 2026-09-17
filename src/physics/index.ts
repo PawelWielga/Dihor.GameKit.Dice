@@ -10,13 +10,17 @@ export type {
   StabilityResult
 } from "./DicePhysicsWorld.js";
 export {
+  DEFAULT_THROW_FORCE,
+  MAX_THROW_FORCE,
+  MIN_THROW_FORCE,
   RollPlanner,
   RollPlanningError
 } from "./RollPlanner.js";
 export type {
   RollInitialStateContext,
   RollInitialStateProvider,
-  RollPlannerOptions
+  RollPlannerOptions,
+  RollPlanningOptions
 } from "./RollPlanner.js";
 export type {
   DicePhysicsConfig,

@@ -10,5 +10,6 @@ export type {
   DiceOverlayPlayerFactory,
   DiceOverlayRenderer,
   DiceOverlayRendererFactory,
+  DiceOverlayRollOptions,
   DiceOverlayRoller
 } from "./DiceOverlay.js";
