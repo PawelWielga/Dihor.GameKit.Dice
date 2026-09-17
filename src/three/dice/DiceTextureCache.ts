@@ -33,7 +33,7 @@ class ThreeDiceTextureLoader implements DiceTextureLoader {
 
 /**
  * Caches successful texture loads for the lifetime of the cache. Leases track active mesh use,
- * while `dispose()` owns the final GPU cleanup. Failed assets are not retained so later rolls can retry.
+ * while `dispose()` owns final GPU cleanup. Failed assets are not retained so later rolls can retry.
  */
 export class DiceTextureCache {
   private readonly loader: DiceTextureLoader;
@@ -69,6 +69,11 @@ export class DiceTextureCache {
 
           if (this.disposed) {
             texture.dispose();
+
+            if (this.entries.get(key) === createdEntry) {
+              this.entries.delete(key);
+            }
+
             return undefined;
           }
 
@@ -110,6 +115,11 @@ export class DiceTextureCache {
 
         released = true;
         entry.references = Math.max(0, entry.references - 1);
+
+        if (this.disposed && entry.references === 0 && this.entries.get(entry.key) === entry) {
+          entry.texture?.dispose();
+          this.entries.delete(entry.key);
+        }
       }
     };
   }
@@ -121,10 +131,11 @@ export class DiceTextureCache {
 
     this.disposed = true;
 
-    for (const entry of this.entries.values()) {
-      entry.texture?.dispose();
+    for (const [key, entry] of this.entries) {
+      if (entry.texture && entry.references === 0) {
+        entry.texture.dispose();
+        this.entries.delete(key);
+      }
     }
-
-    this.entries.clear();
   }
 }
