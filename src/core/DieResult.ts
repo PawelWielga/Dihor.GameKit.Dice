@@ -1,4 +1,4 @@
-import type { DiceSides } from "./DiceSides";
+import type { DiceSides } from "./DiceSides.js";
 
 /** Logical result of one die. Result ordering matches request ordering. */
 export interface DieResult {
