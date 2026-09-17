@@ -2,6 +2,10 @@
 
 Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Three.js and cannon-es.
 
+## Status
+
+The repository is in the bootstrap stage. The package/tooling foundation is available, while dice domain models, rendering, physics planning and the overlay API are implemented in follow-up issues from the MVP roadmap.
+
 ## Goals
 
 PartyBeam.DiceKit provides a framework-agnostic API for rolling configurable 3D dice in games and applications. The logical result is decided by the core layer first, while the visual layer uses a planned physics simulation to present a natural-looking roll that lands on the expected physical face.
@@ -19,6 +23,67 @@ The library is designed to support:
 - future D4, D6, D8, D10, D12, D20 and D100 support,
 - future replay and PartyBeam multiplayer integration,
 - an interactive browser demo hosted on GitHub Pages.
+
+## Requirements
+
+- Node.js 22.12+ (or a newer supported Node.js release)
+- npm
+
+The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the local demo:
+
+```bash
+npm run dev:demo
+```
+
+Build the library:
+
+```bash
+npm run build
+```
+
+Run tests:
+
+```bash
+npm test
+```
+
+Run TypeScript checks:
+
+```bash
+npm run typecheck
+```
+
+Build the static demo bundle:
+
+```bash
+npm run build:demo
+```
+
+The bootstrap demo output is written to `dist-demo/`. A later issue will publish that build to GitHub Pages.
+
+## Continuous integration
+
+GitHub Actions are allowed for this repository. Pull requests and pushes to `main` should run the same validation that remains available locally:
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+npm run build:demo
+```
+
+CI is a safety net, not a replacement for local validation when developing changes.
 
 ## Architecture
 
@@ -77,7 +142,7 @@ console.log(result.total);
 
 ## Demo
 
-An interactive demo will live in `demo/` and will be published to GitHub Pages from `/docs` once the MVP reaches that stage.
+The interactive development application lives in `demo/`. A later issue will publish its production build to GitHub Pages.
 
 Planned URL:
 
@@ -92,7 +157,10 @@ Planned URL:
 - Do not assume bit-for-bit deterministic physics across browsers or devices.
 - Prefer simple, testable abstractions over game-specific behavior.
 - Avoid paid commercial dependencies.
-- Do not add GitHub Actions; builds and tests are intended to run locally.
+- GitHub Actions may be used for CI and GitHub Pages deployment.
+- Local build and test commands must remain supported.
+
+See [`AGENTS.md`](./AGENTS.md) for detailed implementation rules.
 
 ## External references
 
