@@ -18,6 +18,7 @@ src/
 ├── physics/     # cannon-es adapter, pre-simulation and RollPlanner
 ├── three/       # Three.js scene, rendering and dice meshes
 ├── appearance/  # Colors, materials, textures and themes
+├── events/      # Versioned transport-neutral event contracts
 ├── overlay/     # Framework-agnostic integration/UI overlay
 └── index.ts     # Public exports only
 ```
@@ -49,6 +50,14 @@ src/
 - A die may have a global texture and optional per-face textures.
 - Per-face textures must stay attached to the same physical face throughout the roll.
 
+### `events`
+
+- Owns versioned JSON-friendly contracts such as `DiceRollEvent`.
+- May reference logical `core` types and replay-plan types, but must not own game logic or physics execution.
+- Must not depend on Three.js, overlay UI, PartyGameKit, WebSockets or another concrete transport.
+- Host-provided logical values remain authoritative. Replay data is optional presentation input only.
+- New incompatible replay payloads require an explicit new replay version rather than silently changing an existing version.
+
 ### `overlay`
 
 - Must remain framework-agnostic.
@@ -74,6 +83,8 @@ Three.js rendering
     ↓
 completed result returned to the caller
 ```
+
+For multiplayer, the host packages its authoritative logical result and optional `RollPlan` into a transport-neutral event. A client must not generate a replacement logical result locally for a host-originated roll.
 
 Do not implement a system where the random physical outcome becomes authoritative game logic.
 
@@ -132,7 +143,7 @@ Rules:
 
 - Normal demo usage must go through the same public API used by consuming games.
 - Debug-only controls may expose internal diagnostics, but must be clearly separated from public API usage.
-- The production demo will eventually be published through GitHub Pages.
+- The production demo is published through GitHub Pages.
 
 ## GitHub workflow
 
@@ -167,6 +178,7 @@ Use names that describe responsibility rather than implementation accidents. Cur
 - `RollPlanner` for finding a physical roll plan,
 - `RollPlan` / `RollInitialState` for physical initial conditions,
 - `DiceScene` / `DiceRenderer` for Three.js presentation,
-- `DiceOverlay` for the high-level reusable overlay.
+- `DiceOverlay` for the high-level reusable overlay,
+- `DiceRollEvent` for the versioned host-authoritative multiplayer contract.
 
 These names may evolve through issues/PRs, but keep responsibilities separate even if exact class names change.
