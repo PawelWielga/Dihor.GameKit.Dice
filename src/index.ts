@@ -1,9 +1,17 @@
 export {
   DEFAULT_DICE_APPEARANCE,
+  DEFAULT_DICE_FACE_LABEL_MODE,
+  DEFAULT_DICE_FONT_APPEARANCE,
   hasDiceTextureSources,
+  mergeDiceAppearances,
   resolveDiceAppearance,
+  resolveDiceFaceLabelMode,
+  resolveDiceFontAppearance,
   type DiceAppearance,
-  type ResolvedDiceAppearance
+  type DiceFaceLabelMode,
+  type DiceFontAppearance,
+  type ResolvedDiceAppearance,
+  type ResolvedDiceFontAppearance
 } from "./appearance/index.js";
 export {
   DiceRoller,

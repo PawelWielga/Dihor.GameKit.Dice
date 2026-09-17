@@ -7,6 +7,8 @@ import {
   getDiceFace,
   getDiceTopology,
   type DiceAppearance,
+  type DiceFaceLabelMode,
+  type DiceFontAppearance,
   type DiceRollRequest,
   type DiceRollResult,
   type DiceSides,
@@ -142,6 +144,12 @@ const bodyColor = requireElement<HTMLInputElement>("#body-color");
 const markingsColor = requireElement<HTMLInputElement>("#markings-color");
 const bodyColorValue = requireElement<HTMLOutputElement>("#body-color-value");
 const markingsColorValue = requireElement<HTMLOutputElement>("#markings-color-value");
+const fontPreset = requireElement<HTMLSelectElement>("#font-preset");
+const fontFamily = requireElement<HTMLInputElement>("#font-family");
+const fontWeight = requireElement<HTMLInputElement>("#font-weight");
+const fontUrl = requireElement<HTMLInputElement>("#font-url");
+const resetFontButton = requireElement<HTMLButtonElement>("#reset-font-button");
+const d6LabelMode = requireElement<HTMLSelectElement>("#d6-label-mode");
 const globalTexture = requireElement<HTMLInputElement>("#global-texture");
 const sampleTextureButton = requireElement<HTMLButtonElement>("#sample-texture-button");
 const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
@@ -248,6 +256,53 @@ function updateColorOutputs(): void {
   markingsColorValue.value = markingsColor.value.toUpperCase();
 }
 
+function syncFontControls(): void {
+  const custom = fontPreset.value === "custom";
+  fontFamily.disabled = !custom;
+  fontWeight.disabled = !custom;
+  fontUrl.disabled = !custom;
+}
+
+function createFontAppearance(): DiceFontAppearance | undefined {
+  switch (fontPreset.value) {
+    case "default":
+      return undefined;
+    case "georgia":
+      return { family: "Georgia", weight: 700 };
+    case "trebuchet":
+      return { family: "Trebuchet MS", weight: 700 };
+    case "custom": {
+      const family = fontFamily.value.trim();
+      const url = optionalValue(fontUrl);
+      const weight = Number(fontWeight.value || "700");
+
+      if (!Number.isFinite(weight) || weight < 1 || weight > 1000) {
+        throw new Error(`Font weight must be between 1 and 1000; received ${fontWeight.value}.`);
+      }
+
+      if (!family && !url) {
+        return undefined;
+      }
+
+      return {
+        family: family || "PartyBeam Custom Dice Font",
+        weight,
+        ...(url ? { url } : {})
+      };
+    }
+    default:
+      throw new Error(`Unknown font preset: ${fontPreset.value}.`);
+  }
+}
+
+function selectedD6LabelMode(): DiceFaceLabelMode {
+  if (d6LabelMode.value !== "dots" && d6LabelMode.value !== "numbers") {
+    throw new Error(`Unknown D6 label mode: ${d6LabelMode.value}.`);
+  }
+
+  return d6LabelMode.value;
+}
+
 function createAppearance(sides: DiceSides): DiceAppearance {
   const faces: Partial<Record<number, string>> = {};
 
@@ -260,10 +315,13 @@ function createAppearance(sides: DiceSides): DiceAppearance {
   }
 
   const texture = optionalValue(globalTexture);
+  const font = createFontAppearance();
 
   return {
     color: bodyColor.value,
     markingsColor: markingsColor.value,
+    ...(font ? { font } : {}),
+    ...(sides === 6 ? { faceLabelMode: selectedD6LabelMode() } : {}),
     ...(texture ? { texture } : {}),
     ...(Object.keys(faces).length > 0 ? { faces } : {})
   };
@@ -418,6 +476,14 @@ function resetOutput(): void {
 
 bodyColor.addEventListener("input", updateColorOutputs);
 markingsColor.addEventListener("input", updateColorOutputs);
+fontPreset.addEventListener("change", syncFontControls);
+resetFontButton.addEventListener("click", () => {
+  fontPreset.value = "default";
+  fontFamily.value = "";
+  fontWeight.value = "700";
+  fontUrl.value = "";
+  syncFontControls();
+});
 sampleTextureButton.addEventListener("click", () => {
   globalTexture.value = SAMPLE_TEXTURE_URL;
   globalTexture.focus();
@@ -443,4 +509,5 @@ window.addEventListener(
 );
 
 updateColorOutputs();
+syncFontControls();
 updateDebugPanel();

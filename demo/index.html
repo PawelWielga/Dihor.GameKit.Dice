@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Interactive PartyBeam.DiceKit playground for physical polyhedral dice rolls, materials and face textures."
+      content="Interactive PartyBeam.DiceKit playground for physical polyhedral dice rolls, materials, fonts and face textures."
     />
     <title>PartyBeam.DiceKit Playground</title>
     <link rel="stylesheet" href="./demo.css" />
@@ -108,6 +108,72 @@
                     <output id="markings-color-value">#191919</output>
                   </span>
                 </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Numeral font</span>
+                  <select id="font-preset" name="font-preset">
+                    <option value="default" selected>Cinzel 700 (bundled)</option>
+                    <option value="georgia">Georgia (system)</option>
+                    <option value="trebuchet">Trebuchet MS (system)</option>
+                    <option value="custom">Custom font</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>D6 markings</span>
+                  <select id="d6-label-mode" name="d6-label-mode">
+                    <option value="dots" selected>Dots</option>
+                    <option value="numbers">Numbers</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Custom font family</span>
+                  <input
+                    id="font-family"
+                    name="font-family"
+                    type="text"
+                    placeholder="Roboto Slab"
+                    disabled
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Font weight</span>
+                  <input
+                    id="font-weight"
+                    name="font-weight"
+                    type="number"
+                    value="700"
+                    min="1"
+                    max="1000"
+                    step="1"
+                    disabled
+                  />
+                </label>
+              </div>
+
+              <div class="field">
+                <span>Custom font URL <small>optional</small></span>
+                <input
+                  id="font-url"
+                  name="font-url"
+                  type="url"
+                  inputmode="url"
+                  placeholder="/fonts/RobotoSlab.woff2"
+                  disabled
+                />
+                <button id="reset-font-button" class="button button--ghost" type="button">
+                  Reset font to bundled default
+                </button>
+                <p class="hint">
+                  D6 keeps dots by default. Switch it to Numbers to verify the same font and the
+                  orientation marker under 6. D10/D20 also make 9/19 easy to inspect.
+                </p>
               </div>
 
               <div class="field">
