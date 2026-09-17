@@ -165,10 +165,7 @@ export class DiceRollPlayer {
         this.scheduleFrame(session);
       });
     } catch (error) {
-      if (this.activeSession?.world === world) {
-        this.activeSession = undefined;
-      }
-
+      this.activeSession = undefined;
       world.dispose();
       this.removeAndDisposeMeshes(meshes);
       this.visibleMeshes = [];
