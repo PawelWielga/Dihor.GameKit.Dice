@@ -69,7 +69,21 @@ Build the static demo bundle:
 npm run build:demo
 ```
 
-The bootstrap demo output is written to `dist-demo/`. Publishing it to `/docs` for GitHub Pages is handled by the dedicated Pages issue.
+The bootstrap demo output is written to `dist-demo/`. A later issue will publish that build to GitHub Pages.
+
+## Continuous integration
+
+GitHub Actions are allowed for this repository. Pull requests and pushes to `main` should run the same validation that remains available locally:
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+npm run build:demo
+```
+
+CI is a safety net, not a replacement for local validation when developing changes.
 
 ## Architecture
 
@@ -128,7 +142,7 @@ console.log(result.total);
 
 ## Demo
 
-The interactive development application lives in `demo/`. A later issue will publish its production build to GitHub Pages from `/docs`.
+The interactive development application lives in `demo/`. A later issue will publish its production build to GitHub Pages.
 
 Planned URL:
 
@@ -143,7 +157,8 @@ Planned URL:
 - Do not assume bit-for-bit deterministic physics across browsers or devices.
 - Prefer simple, testable abstractions over game-specific behavior.
 - Avoid paid commercial dependencies.
-- Do not add GitHub Actions; builds and tests are intended to run locally.
+- GitHub Actions may be used for CI and GitHub Pages deployment.
+- Local build and test commands must remain supported.
 
 See [`AGENTS.md`](./AGENTS.md) for detailed implementation rules.
 
