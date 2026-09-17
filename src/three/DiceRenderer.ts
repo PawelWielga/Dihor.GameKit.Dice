@@ -1,4 +1,4 @@
-import { WebGLRenderer, type WebGLRendererParameters } from "three";
+import { DoubleSide, Mesh, WebGLRenderer, type WebGLRendererParameters } from "three";
 import { DiceScene, type DiceSceneOptions } from "./DiceScene.js";
 
 export type DiceWebGLRendererFactory = (parameters: WebGLRendererParameters) => WebGLRenderer;
@@ -81,6 +81,19 @@ export class DiceRenderer {
     if (this.disposed) {
       return;
     }
+
+    // Temporary dev diagnostic: if the D8 artifact is caused by a reversed triangle,
+    // rendering both sides will make the missing/dark wedge disappear. Remove once verified.
+    this.diceScene.content.traverse((object) => {
+      if (object.name !== "D8 body" || !(object instanceof Mesh)) {
+        return;
+      }
+
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        material.side = DoubleSide;
+      }
+    });
 
     this.webglRenderer.render(this.diceScene.scene, this.diceScene.camera);
   }
