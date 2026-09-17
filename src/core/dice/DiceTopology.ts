@@ -34,6 +34,8 @@ const DEFAULT_POLYHEDRAL_SIZE_SCALE = 1.15;
 // Approved visual/physical baselines. Keep these independent from the generic polyhedral scale.
 const D4_SIZE_SCALE = 1.14264;
 const D8_SIZE_SCALE = 1.725;
+const D10_SIZE_SCALE = 1.3;
+const D10_ANTIPRISM_HALF_HEIGHT = 0.8;
 const topologyCache = new Map<DiceSides, DiceTopology>();
 
 function topologySizeScale(sides: DiceSides): number {
@@ -44,6 +46,8 @@ function topologySizeScale(sides: DiceSides): number {
       return 1;
     case 8:
       return D8_SIZE_SCALE;
+    case 10:
+      return D10_SIZE_SCALE;
     default:
       return DEFAULT_POLYHEDRAL_SIZE_SCALE;
   }
@@ -339,8 +343,7 @@ function createDual(source: Polyhedron): Polyhedron {
   return createPolyhedron(dualVertices, dualFaces);
 }
 
-function createAntiprism(sides: number): Polyhedron {
-  const halfHeight = 0.5;
+function createAntiprism(sides: number, halfHeight = 0.5): Polyhedron {
   const vertices: DiceVector3[] = [];
 
   for (let index = 0; index < sides; index += 1) {
@@ -369,8 +372,9 @@ function createAntiprism(sides: number): Polyhedron {
 }
 
 function createD10(): DiceTopology {
-  // The dual of a pentagonal antiprism is a ten-faced trapezohedron, matching the familiar D10 form.
-  return createTopology(10, createDual(createAntiprism(5)));
+  // A slightly taller source antiprism produces a wider, less needle-like trapezohedron after dualization.
+  // Keep the D10 recognisably elongated while bringing its footprint and volume in line with the set.
+  return createTopology(10, createDual(createAntiprism(5, D10_ANTIPRISM_HALF_HEIGHT)));
 }
 
 function createD12(): DiceTopology {
