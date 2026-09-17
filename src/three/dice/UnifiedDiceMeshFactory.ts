@@ -1,10 +1,7 @@
 import {
-  Float32BufferAttribute,
   Vector3,
   type BufferGeometry
 } from "three";
-import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   getDiceTopology,
   type DiceSides,
@@ -19,6 +16,7 @@ import type {
   DiceMeshFactoryOptions,
   DiceMeshOptions
 } from "./DiceMeshFactory.js";
+import { createSmoothConvexProfileGeometry } from "./ReferenceGeometryUtils.js";
 
 // Keep D6 visually consistent with the approved D8 profile while preserving the established
 // D6 outer size, face mapping, pips and physics collider.
@@ -175,24 +173,6 @@ function normalizeProfileExtent(points: Vector3[], targetExtent: number): void {
   }
 }
 
-function addSphericalUvs(geometry: BufferGeometry): void {
-  const positions = geometry.getAttribute("position");
-  const uvs: number[] = [];
-
-  for (let index = 0; index < positions.count; index += 1) {
-    const x = positions.getX(index);
-    const y = positions.getY(index);
-    const z = positions.getZ(index);
-    const radius = Math.max(Math.hypot(x, y, z), Number.EPSILON);
-    const normalizedY = Math.max(-1, Math.min(1, y / radius));
-    const u = 0.5 + Math.atan2(z, x) / (Math.PI * 2);
-    const v = 0.5 - Math.asin(normalizedY) / Math.PI;
-    uvs.push(u, v);
-  }
-
-  geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
-}
-
 function createReferenceD6BodyGeometry(size: number): BufferGeometry {
   const topology = getDiceTopology(6);
   const points = createReferenceProfilePoints(topology, size);
@@ -200,20 +180,14 @@ function createReferenceD6BodyGeometry(size: number): BufferGeometry {
   // The D8-derived bulge samples intentionally extend past the mathematical face planes. For D6
   // normalize them back to the established cube extent so the visible size and collider stay aligned.
   normalizeProfileExtent(points, size / 2);
-
-  const hull = new ConvexGeometry(points);
-  const geometry = mergeVertices(hull, 1e-6);
-  hull.dispose();
-  geometry.computeVertexNormals();
-  addSphericalUvs(geometry);
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  return geometry;
+  return createSmoothConvexProfileGeometry(points);
 }
 
 function replaceD6Body(mesh: DiceMesh, size: number): DiceMesh {
   const replacement = createReferenceD6BodyGeometry(size);
+  const previousGeometry = mesh.body.geometry;
   mesh.body.geometry = replacement;
+  previousGeometry.dispose();
 
   const baseDispose = mesh.dispose.bind(mesh);
   let disposed = false;
