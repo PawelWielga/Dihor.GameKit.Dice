@@ -4,7 +4,7 @@ Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Thr
 
 ## Status
 
-The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported.
+The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported, together with opt-in seeded random streams and replayable `RollPlan` inputs.
 
 ## Goals
 
@@ -22,9 +22,11 @@ The library supports:
 - optional global and per-face textures,
 - a framework-agnostic overlay API,
 - multiple dice in a single roll,
+- opt-in deterministic random streams for tests and replays,
+- JSON-serializable `RollPlan` replay inputs without stored animation frames,
 - an interactive browser demo hosted on GitHub Pages.
 
-Replay-oriented seeded rolls and PartyBeam multiplayer event contracts remain follow-up work.
+PartyBeam multiplayer event contracts remain follow-up work.
 
 ## Requirements
 
@@ -160,6 +162,36 @@ console.log(result.total);
 ```
 
 The same appearance model supports a global texture plus optional physical-face texture overrides. Face textures remain attached to the same physical faces throughout planning and playback.
+
+## Seeded rolls and replay
+
+Seeded behavior is opt-in through the existing `RandomProvider` abstraction. Use separate stream names so logical results do not depend on how many random samples physical planning consumes:
+
+```ts
+import {
+  DiceRoller,
+  RollPlanner,
+  createSeededRandomProvider
+} from "@partybeam/dice-kit";
+
+const seed = "match-42";
+
+const roller = new DiceRoller({
+  randomProvider: createSeededRandomProvider(seed, "logic")
+});
+
+const planner = new RollPlanner({
+  randomProvider: createSeededRandomProvider(seed, "physics")
+});
+
+const result = roller.roll({ dice: [{ sides: 20 }] });
+const plan = planner.plan(result);
+const savedPlan = JSON.stringify(plan);
+```
+
+The same seed and stream reproduce the same random sequence and therefore the same logical values or generated planning inputs. A saved `RollPlan` can be passed back to `DiceRollPlayer` without rolling or planning again. Bit-for-bit identical physics across different browsers, devices or engine versions is intentionally not guaranteed; the logical result remains authoritative.
+
+See [`docs/replay-and-determinism.md`](./docs/replay-and-determinism.md) for the replay contract and determinism guarantees.
 
 ## Demo
 
