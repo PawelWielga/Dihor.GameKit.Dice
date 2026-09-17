@@ -328,6 +328,103 @@
               </p>
             </section>
 
+            <section class="control-section">
+              <div class="section-heading">
+                <span class="section-index">05</span>
+                <div>
+                  <h2>Lighting</h2>
+                  <p>Change the scene mood without affecting dice physics or the logical result.</p>
+                </div>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field field--color">
+                  <span>Ambient color</span>
+                  <span class="color-control">
+                    <input id="ambient-color" name="ambient-color" type="color" value="#ffffff" />
+                    <output id="ambient-color-value">#FFFFFF</output>
+                  </span>
+                </label>
+
+                <label class="field">
+                  <span>Ambient intensity <output id="ambient-intensity-value">1.40</output></span>
+                  <input
+                    id="ambient-intensity"
+                    name="ambient-intensity"
+                    type="range"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="1.4"
+                  />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field field--color">
+                  <span>Key light color</span>
+                  <span class="color-control">
+                    <input id="key-light-color" name="key-light-color" type="color" value="#ffffff" />
+                    <output id="key-light-color-value">#FFFFFF</output>
+                  </span>
+                </label>
+
+                <label class="field">
+                  <span>Key intensity <output id="key-light-intensity-value">2.20</output></span>
+                  <input
+                    id="key-light-intensity"
+                    name="key-light-intensity"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.05"
+                    value="2.2"
+                  />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Key X</span>
+                  <input id="key-light-x" name="key-light-x" type="number" value="4" step="0.5" />
+                </label>
+                <label class="field">
+                  <span>Key Y</span>
+                  <input id="key-light-y" name="key-light-y" type="number" value="8" step="0.5" />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Key Z</span>
+                  <input id="key-light-z" name="key-light-z" type="number" value="5" step="0.5" />
+                </label>
+                <label class="toggle">
+                  <input id="key-light-shadow" type="checkbox" />
+                  <span>Cast shadows</span>
+                </label>
+              </div>
+
+              <div class="actions">
+                <button id="lighting-neutral-button" class="button button--ghost" type="button">
+                  Neutral
+                </button>
+                <button id="lighting-warm-button" class="button button--ghost" type="button">
+                  Warm
+                </button>
+                <button id="lighting-moody-button" class="button button--ghost" type="button">
+                  Dark / Moody
+                </button>
+                <button id="reset-lighting-button" class="button button--ghost" type="button">
+                  Reset lighting
+                </button>
+              </div>
+              <p class="hint">
+                Neutral matches the previous DiceKit defaults. Presets only change rendering.
+                Directional and point lights can also be mixed through the public API.
+              </p>
+            </section>
+
             <section class="control-section control-section--actions">
               <label class="toggle">
                 <input id="debug-mode" type="checkbox" />
