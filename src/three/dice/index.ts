@@ -1,4 +1,4 @@
-export { DiceMeshFactory } from "./DiceMeshFactory.js";
+export { DiceMeshFactory } from "./SoftEdgeDiceMeshFactory.js";
 export type {
   D6MeshOptions,
   DiceMesh,
