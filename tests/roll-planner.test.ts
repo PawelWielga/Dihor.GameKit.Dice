@@ -113,6 +113,29 @@ describe("RollPlanner", () => {
     }
   });
 
+  it("finds physical plans with the default initial-state strategy for every supported die type", () => {
+    const randomProvider = { next: () => 0.5 };
+
+    for (const sides of SUPPORTED_DICE_SIDES) {
+      const expectedValue = sides === 6 ? 1 : Math.max(1, Math.floor(sides / 2));
+      const planner = new RollPlanner({
+        randomProvider,
+        maxAttemptsPerDie: 1,
+        maxCombinedAttempts: 1,
+        maxPlanningTimeMs: 5000,
+        stability: {
+          consecutiveSteps: 4,
+          maxSteps: 480
+        }
+      });
+      const plan = planner.plan(result([{ sides, value: expectedValue }], `default-d${sides}`));
+
+      expect(plan.dice[0]?.sides).toBe(sides);
+      expect(plan.dice[0]?.expectedValue).toBe(expectedValue);
+      expect(plan.simulationSteps).toBeGreaterThan(0);
+    }
+  });
+
   it("supports mixed dice in the same planned roll", () => {
     const planner = new RollPlanner({
       initialStateProvider: settledState,
