@@ -3,7 +3,8 @@ export {
   DICE_ROLL_EVENT_VERSION,
   DICE_ROLL_REPLAY_VERSION,
   createDiceRollEvent,
-  diceRollResultFromEvent
+  diceRollResultFromEvent,
+  validateDiceRollEvent
 } from "./DiceRollEvent.js";
 export type {
   CreateDiceRollEventOptions,
