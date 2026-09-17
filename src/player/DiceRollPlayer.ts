@@ -174,9 +174,14 @@ export class DiceRollPlayer {
           size: plan.physics.diceSize,
           appearance
         };
-        const mesh = hasDiceTextureSources(appearance)
-          ? await this.meshFactory.createAsync(die.sides, meshOptions)
-          : this.meshFactory.create(die.sides, meshOptions);
+        const usesTextureAssets = hasDiceTextureSources(appearance);
+        const mesh = die.sides === 6
+          ? usesTextureAssets
+            ? await this.meshFactory.createD6Async(meshOptions)
+            : this.meshFactory.createD6(meshOptions)
+          : usesTextureAssets
+            ? await this.meshFactory.createAsync(die.sides, meshOptions)
+            : this.meshFactory.create(die.sides, meshOptions);
 
         if (preparation.cancelled || this.disposed) {
           mesh.dispose();
