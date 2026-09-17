@@ -1,9 +1,9 @@
+import type { DiceAppearance } from "../appearance/index.js";
 import type {
-  DiceAppearance,
   DiceDefinition,
   DiceRollResult,
   DiceSides
-} from "../index.js";
+} from "../core/index.js";
 import type { RollPlan } from "../physics/index.js";
 
 export const DICE_ROLL_EVENT_TYPE = "dice-roll" as const;
