@@ -82,6 +82,7 @@ export class DiceRenderer {
       return;
     }
 
+    this.webglRenderer.shadowMap.enabled = this.diceScene.hasShadowCastingLights;
     this.webglRenderer.render(this.diceScene.scene, this.diceScene.camera);
   }
 
