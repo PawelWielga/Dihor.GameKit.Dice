@@ -239,11 +239,17 @@ describe("DiceOverlay", () => {
 
   it("forwards throw force to planning without changing the logical roll result", async () => {
     const documentRef = new FakeDocument();
-    const plan = vi.fn(createPlan);
+    const planningOptions: unknown[] = [];
+    const planner: DiceOverlayPlanner = {
+      plan(result, options) {
+        planningOptions.push(options);
+        return createPlan(result);
+      }
+    };
     const overlay = new DiceOverlay({
       document: documentRef as unknown as Document,
       roller: new DiceRoller({ randomProvider: { next: () => 0 }, rollIdProvider: () => "force" }),
-      planner: { plan },
+      planner,
       rendererFactory: () => new FakeRenderer(),
       playerFactory: () => new FakePlayer()
     });
@@ -251,8 +257,7 @@ describe("DiceOverlay", () => {
     const result = await overlay.roll({ dice: [{ sides: 6 }] }, { throwForce: 1.35 });
 
     expect(result.dice[0]?.value).toBe(1);
-    expect(plan).toHaveBeenCalledTimes(1);
-    expect(plan.mock.calls[0]?.[1]).toEqual({ throwForce: 1.35 });
+    expect(planningOptions).toEqual([{ throwForce: 1.35 }]);
     overlay.dispose();
   });
 
