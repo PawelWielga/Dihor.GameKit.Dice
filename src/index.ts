@@ -75,6 +75,7 @@ export {
 } from "./overlay/index.js";
 export {
   BackgroundRollPlanner,
+  DirectRollPlanner,
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   DEFAULT_THROW_FORCE,
@@ -91,6 +92,7 @@ export {
   type BackgroundRollPlanningTiming,
   type DiceArenaBoundaryPoint,
   type DicePhysicsConfig,
+  type DirectRollPlannerOptions,
   type DicePhysicsWorldOptions,
   type PhysicsQuaternion,
   type PhysicsVector3,

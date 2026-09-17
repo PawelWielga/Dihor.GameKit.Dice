@@ -367,18 +367,20 @@ export class DiceRollPlayer {
       return session.world.getDieValue(expectedDie.sides, body);
     });
 
-    for (let index = 0; index < observed.length; index += 1) {
-      const actualValue = observed[index];
-      const expectedDie = session.plan.dice[index];
+    if (session.plan.preSimulated !== false) {
+      for (let index = 0; index < observed.length; index += 1) {
+        const actualValue = observed[index];
+        const expectedDie = session.plan.dice[index];
 
-      if (actualValue === undefined || !expectedDie || actualValue !== expectedDie.expectedValue) {
-        this.failSession(
-          session,
-          new DiceRollPlaybackError(
-            `Visible D${expectedDie?.sides ?? "?"} result mismatch at index ${index}: expected ${expectedDie?.expectedValue ?? "unknown"}, received ${actualValue ?? "unknown"}.`
-          )
-        );
-        return;
+        if (actualValue === undefined || !expectedDie || actualValue !== expectedDie.expectedValue) {
+          this.failSession(
+            session,
+            new DiceRollPlaybackError(
+              `Visible D${expectedDie?.sides ?? "?"} result mismatch at index ${index}: expected ${expectedDie?.expectedValue ?? "unknown"}, received ${actualValue ?? "unknown"}.`
+            )
+          );
+          return;
+        }
       }
     }
 
@@ -447,7 +449,14 @@ export class DiceRollPlayer {
       );
     }
 
-    requirePositiveInteger("simulationSteps", plan.simulationSteps);
+    if (
+      !Number.isInteger(plan.simulationSteps) ||
+      plan.simulationSteps < (plan.preSimulated === false ? 0 : 1)
+    ) {
+      throw new RangeError(
+        `simulationSteps must be ${plan.preSimulated === false ? "a non-negative" : "a positive"} integer; received ${String(plan.simulationSteps)}.`
+      );
+    }
     resolveStabilityConfig(plan.stability);
 
     for (let index = 0; index < plan.dice.length; index += 1) {
@@ -458,9 +467,12 @@ export class DiceRollPlayer {
       }
 
       if (
-        !Number.isInteger(die.expectedValue) ||
-        die.expectedValue < 1 ||
-        die.expectedValue > die.sides
+        plan.preSimulated !== false &&
+        (
+          !Number.isInteger(die.expectedValue) ||
+          die.expectedValue < 1 ||
+          die.expectedValue > die.sides
+        )
       ) {
         throw new RangeError(`Unsupported or invalid D${die.sides} plan at index ${index}.`);
       }

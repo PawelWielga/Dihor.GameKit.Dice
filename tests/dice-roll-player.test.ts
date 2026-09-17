@@ -185,6 +185,27 @@ describe("DiceRollPlayer", () => {
     diceScene.dispose();
   });
 
+  it("returns observed face values for a direct non-presimulated plan", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const player = new DiceRollPlayer(target, { scheduler });
+    const presimulated = createPlan();
+    const directPlan: RollPlan = {
+      ...presimulated,
+      dice: presimulated.dice.map((die) => ({ ...die, expectedValue: 0 })),
+      simulationSteps: 0,
+      preSimulated: false
+    };
+
+    const playback = player.play(directPlan);
+    scheduler.runFrames(20);
+    const result = await playback;
+
+    expect(result.dice.map((die) => die.value)).toEqual([1, 6]);
+    player.dispose();
+    diceScene.dispose();
+  });
+
   it("rejects a physically stable result that does not match the predetermined face", async () => {
     const scheduler = new ManualScheduler();
     const { diceScene, target } = createTarget();

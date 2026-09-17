@@ -10,6 +10,8 @@ export type {
   StabilityResult
 } from "./DicePhysicsWorld.js";
 export { BackgroundRollPlanner } from "./BackgroundRollPlanner.js";
+export { DirectRollPlanner } from "./DirectRollPlanner.js";
+export type { DirectRollPlannerOptions } from "./DirectRollPlanner.js";
 export type {
   BackgroundRollPlannerOptions,
   BackgroundRollPlanningTiming,

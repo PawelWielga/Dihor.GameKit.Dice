@@ -57,5 +57,8 @@ export interface RollPlan {
   readonly dice: readonly RollPlanDie[];
   readonly physics: DicePhysicsConfig;
   readonly stability: StabilityConfig;
+  /** Hidden simulation steps. Direct physical rolls use zero. */
   readonly simulationSteps: number;
+  /** False means the visible physics determines the result instead of verifying expectedValue. */
+  readonly preSimulated?: boolean;
 }
