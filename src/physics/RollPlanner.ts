@@ -1,5 +1,11 @@
-import type { DiceRollResult, DieResult, RandomProvider } from "../core/index.js";
-import type { D6FaceValue } from "../core/dice/index.js";
+import {
+  getDiceFace,
+  getDiceTopology,
+  type DiceRollResult,
+  type DiceSides,
+  type DieResult,
+  type RandomProvider
+} from "../core/index.js";
 import {
   DEFAULT_DICE_PHYSICS_CONFIG,
   DicePhysicsWorld,
@@ -20,7 +26,8 @@ export interface RollInitialStateContext {
   readonly attempt: number;
   readonly dieIndex: number;
   readonly diceCount: number;
-  readonly expectedValue: D6FaceValue;
+  readonly sides: DiceSides;
+  readonly expectedValue: number;
   readonly slotX: number;
   readonly diceSize: number;
 }
@@ -66,7 +73,70 @@ function requirePositiveFinite(name: string, value: number): number {
   return value;
 }
 
-/** Finds replayable physical initial states for logical D6 results without changing those results. */
+function normalizeQuaternion(quaternion: PhysicsQuaternion): PhysicsQuaternion {
+  const magnitude = Math.hypot(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+
+  if (!Number.isFinite(magnitude) || magnitude <= Number.EPSILON) {
+    throw new RangeError("Cannot normalize an invalid quaternion.");
+  }
+
+  return {
+    x: quaternion.x / magnitude,
+    y: quaternion.y / magnitude,
+    z: quaternion.z / magnitude,
+    w: quaternion.w / magnitude
+  };
+}
+
+function multiplyQuaternions(left: PhysicsQuaternion, right: PhysicsQuaternion): PhysicsQuaternion {
+  return normalizeQuaternion({
+    x: left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y,
+    y: left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x,
+    z: left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w,
+    w: left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z
+  });
+}
+
+function quaternionFromDirections(
+  from: { readonly x: number; readonly y: number; readonly z: number },
+  to: { readonly x: number; readonly y: number; readonly z: number }
+): PhysicsQuaternion {
+  const fromLength = Math.hypot(from.x, from.y, from.z);
+  const toLength = Math.hypot(to.x, to.y, to.z);
+
+  if (fromLength <= Number.EPSILON || toLength <= Number.EPSILON) {
+    throw new RangeError("Result-facing directions must be non-zero.");
+  }
+
+  const a = { x: from.x / fromLength, y: from.y / fromLength, z: from.z / fromLength };
+  const b = { x: to.x / toLength, y: to.y / toLength, z: to.z / toLength };
+  const dot = a.x * b.x + a.y * b.y + a.z * b.z;
+
+  if (dot < -0.999999) {
+    const reference = Math.abs(a.x) < 0.8 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 0, z: 1 };
+    const axis = {
+      x: a.y * reference.z - a.z * reference.y,
+      y: a.z * reference.x - a.x * reference.z,
+      z: a.x * reference.y - a.y * reference.x
+    };
+    const axisLength = Math.hypot(axis.x, axis.y, axis.z);
+    return {
+      x: axis.x / axisLength,
+      y: axis.y / axisLength,
+      z: axis.z / axisLength,
+      w: 0
+    };
+  }
+
+  return normalizeQuaternion({
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+    w: 1 + dot
+  });
+}
+
+/** Finds replayable physical initial states for authoritative logical dice results. */
 export class RollPlanner {
   private readonly randomProvider: RandomProvider;
   private readonly initialStateProvider: RollInitialStateProvider;
@@ -120,10 +190,10 @@ export class RollPlanner {
           throw new RollPlanningError(`Missing die result at index ${dieIndex}.`);
         }
 
-        const expectedValue = expectedDie.value as D6FaceValue;
         const slotX = this.slotX(dieIndex, expectedDice.length);
         const initialState = this.findInitialState(
-          expectedValue,
+          expectedDie.sides,
+          expectedDie.value,
           dieIndex,
           expectedDice.length,
           slotX,
@@ -131,8 +201,8 @@ export class RollPlanner {
         );
 
         plannedDice.push({
-          sides: 6,
-          expectedValue,
+          sides: expectedDie.sides,
+          expectedValue: expectedDie.value,
           initialState
         });
       }
@@ -156,7 +226,8 @@ export class RollPlanner {
   }
 
   private findInitialState(
-    expectedValue: D6FaceValue,
+    sides: DiceSides,
+    expectedValue: number,
     dieIndex: number,
     diceCount: number,
     slotX: number,
@@ -171,14 +242,15 @@ export class RollPlanner {
           attempt,
           dieIndex,
           diceCount,
+          sides,
           expectedValue,
           slotX,
           diceSize: probeWorld.config.diceSize
         });
-        const body = probeWorld.addD6(state);
+        const body = probeWorld.addDie(sides, state);
         const simulation = probeWorld.simulateUntilStable([body], this.stabilityConfig);
 
-        if (simulation.stable && probeWorld.getD6Value(body) === expectedValue) {
+        if (simulation.stable && probeWorld.getDieValue(sides, body) === expectedValue) {
           return state;
         }
       } finally {
@@ -187,7 +259,7 @@ export class RollPlanner {
     }
 
     throw new RollPlanningError(
-      `Unable to find a physical D6 plan for value ${expectedValue} after ${this.maxAttemptsPerDie} attempts.`
+      `Unable to find a physical D${sides} plan for value ${expectedValue} after ${this.maxAttemptsPerDie} attempts.`
     );
   }
 
@@ -200,13 +272,13 @@ export class RollPlanner {
     const world = new DicePhysicsWorld(this.physicsOptions);
 
     try {
-      const bodies = plannedDice.map((die) => world.addD6(die.initialState));
+      const bodies = plannedDice.map((die) => world.addDie(die.sides, die.initialState));
       const simulation = world.simulateUntilStable(bodies, this.stabilityConfig);
 
       if (!simulation.stable) {
         return {
           matches: false,
-          reason: "Combined D6 simulation did not stabilize within the configured step limit.",
+          reason: "Combined dice simulation did not stabilize within the configured step limit.",
           steps: simulation.steps,
           physics: world.config
         };
@@ -216,10 +288,14 @@ export class RollPlanner {
         const body = bodies[index];
         const expectedDie = plannedDice[index];
 
-        if (!body || !expectedDie || world.getD6Value(body) !== expectedDie.expectedValue) {
+        if (
+          !body ||
+          !expectedDie ||
+          world.getDieValue(expectedDie.sides, body) !== expectedDie.expectedValue
+        ) {
           return {
             matches: false,
-            reason: `Combined D6 simulation changed the expected result at index ${index}.`,
+            reason: `Combined dice simulation changed the expected result at index ${index}.`,
             steps: simulation.steps,
             physics: world.config
           };
@@ -249,12 +325,10 @@ export class RollPlanner {
         throw new RangeError(`Roll result contains no die at index ${index}.`);
       }
 
-      if (die.sides !== 6) {
-        throw new RangeError(`RollPlanner currently supports D6 only; received D${die.sides}.`);
-      }
-
-      if (!Number.isInteger(die.value) || die.value < 1 || die.value > 6) {
-        throw new RangeError(`Invalid D6 value at index ${index}: ${String(die.value)}.`);
+      if (!Number.isInteger(die.value) || die.value < 1 || die.value > die.sides) {
+        throw new RangeError(
+          `Invalid D${die.sides} value at index ${index}: ${String(die.value)}.`
+        );
       }
     }
 
@@ -264,22 +338,55 @@ export class RollPlanner {
   private createRandomInitialState(context: RollInitialStateContext): RollInitialState {
     const size = context.diceSize;
 
+    if (context.sides === 6) {
+      return {
+        position: {
+          x: context.slotX,
+          y: size * this.randomRange(2.2, 3.8),
+          z: 0
+        },
+        quaternion: this.randomQuaternion(),
+        velocity: {
+          x: 0,
+          y: size * this.randomRange(0.6, 2.4),
+          z: 0
+        },
+        angularVelocity: {
+          x: this.randomRange(-7.5, 7.5),
+          y: this.randomRange(-7.5, 7.5),
+          z: this.randomRange(-7.5, 7.5)
+        }
+      };
+    }
+
+    const topology = getDiceTopology(context.sides);
+    const resultFace = getDiceFace(context.sides, context.expectedValue);
+    const targetY = topology.resultDirection === "up" ? 1 : -1;
+    const aligned = quaternionFromDirections(resultFace.normal, { x: 0, y: targetY, z: 0 });
+    const yaw = this.randomRange(0, Math.PI * 2);
+    const yawQuaternion = {
+      x: 0,
+      y: Math.sin(yaw / 2),
+      z: 0,
+      w: Math.cos(yaw / 2)
+    };
+
     return {
       position: {
         x: context.slotX,
-        y: size * this.randomRange(2.2, 3.8),
+        y: size * this.randomRange(1.6, 2.2),
         z: 0
       },
-      quaternion: this.randomQuaternion(),
+      quaternion: multiplyQuaternions(yawQuaternion, aligned),
       velocity: {
         x: 0,
-        y: size * this.randomRange(0.6, 2.4),
+        y: 0,
         z: 0
       },
       angularVelocity: {
-        x: this.randomRange(-7.5, 7.5),
-        y: this.randomRange(-7.5, 7.5),
-        z: this.randomRange(-7.5, 7.5)
+        x: 0,
+        y: this.randomRange(-2.5, 2.5),
+        z: 0
       }
     };
   }
