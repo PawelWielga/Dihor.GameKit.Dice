@@ -1,8 +1,9 @@
 import type { DiceAppearance } from "../appearance/index.js";
-import type {
-  DiceDefinition,
-  DiceRollResult,
-  DiceSides
+import {
+  SUPPORTED_DICE_SIDES,
+  type DiceDefinition,
+  type DiceRollResult,
+  type DiceSides
 } from "../core/index.js";
 import type { RollPlan } from "../physics/index.js";
 
@@ -46,6 +47,10 @@ export interface CreateDiceRollEventOptions {
   readonly plan?: RollPlan;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function cloneAppearance(appearance: DiceAppearance | undefined): DiceAppearance | undefined {
   if (!appearance) {
     return undefined;
@@ -55,6 +60,59 @@ function cloneAppearance(appearance: DiceAppearance | undefined): DiceAppearance
     ...appearance,
     ...(appearance.faces ? { faces: { ...appearance.faces } } : {})
   };
+}
+
+function validateAppearance(
+  appearance: unknown,
+  sides: DiceSides,
+  index: number
+): asserts appearance is DiceAppearance | undefined {
+  if (appearance === undefined) {
+    return;
+  }
+
+  if (!isRecord(appearance)) {
+    throw new RangeError(`DiceRollEvent appearance at index ${index} must be an object.`);
+  }
+
+  for (const field of ["color", "markingsColor", "texture", "normalMap", "roughnessMap"] as const) {
+    const value = appearance[field];
+
+    if (value !== undefined && typeof value !== "string") {
+      throw new RangeError(`DiceRollEvent appearance.${field} at index ${index} must be a string.`);
+    }
+  }
+
+  for (const field of ["roughness", "metalness"] as const) {
+    const value = appearance[field];
+
+    if (
+      value !== undefined &&
+      (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)
+    ) {
+      throw new RangeError(
+        `DiceRollEvent appearance.${field} at index ${index} must be a finite number in 0..1.`
+      );
+    }
+  }
+
+  const faces = appearance.faces;
+
+  if (faces !== undefined) {
+    if (!isRecord(faces)) {
+      throw new RangeError(`DiceRollEvent appearance.faces at index ${index} must be an object.`);
+    }
+
+    for (const [faceKey, source] of Object.entries(faces)) {
+      const face = Number(faceKey);
+
+      if (!Number.isInteger(face) || face < 1 || face > sides || typeof source !== "string") {
+        throw new RangeError(
+          `DiceRollEvent appearance.faces contains an invalid D${sides} face at index ${index}.`
+        );
+      }
+    }
+  }
 }
 
 function validateResult(result: DiceRollResult): void {
@@ -75,7 +133,13 @@ function validateResult(result: DiceRollResult): void {
   for (let index = 0; index < result.dice.length; index += 1) {
     const die = result.dice[index];
 
-    if (!die || !Number.isInteger(die.value) || die.value < 1 || die.value > die.sides) {
+    if (
+      !die ||
+      !SUPPORTED_DICE_SIDES.includes(die.sides) ||
+      !Number.isInteger(die.value) ||
+      die.value < 1 ||
+      die.value > die.sides
+    ) {
       throw new RangeError(`DiceRollEvent contains an invalid die result at index ${index}.`);
     }
 
@@ -141,6 +205,105 @@ function validatePlan(result: DiceRollResult, plan: RollPlan | undefined): void 
   }
 }
 
+function validateReplayFromUnknown(result: DiceRollResult, replay: unknown): void {
+  if (replay === undefined) {
+    return;
+  }
+
+  if (!isRecord(replay) || replay.version !== DICE_ROLL_REPLAY_VERSION) {
+    throw new RangeError(`Unsupported DiceRollEvent replay version.`);
+  }
+
+  const plan = replay.plan;
+
+  if (!isRecord(plan) || !Array.isArray(plan.dice) || typeof plan.rollId !== "string") {
+    throw new RangeError("DiceRollEvent replay plan is malformed.");
+  }
+
+  validatePlan(result, plan as unknown as RollPlan);
+}
+
+/**
+ * Validates an unknown transport payload and narrows it to the current DiceRollEvent contract.
+ * This is intended for JSON.parse(...) output received from a network or another trust boundary.
+ */
+export function validateDiceRollEvent(event: unknown): DiceRollEvent {
+  if (!isRecord(event)) {
+    throw new RangeError("DiceRollEvent payload must be an object.");
+  }
+
+  if (event.type !== DICE_ROLL_EVENT_TYPE) {
+    throw new RangeError(`Unsupported DiceRollEvent type: ${String(event.type)}.`);
+  }
+
+  if (event.version !== DICE_ROLL_EVENT_VERSION) {
+    throw new RangeError(`Unsupported DiceRollEvent version: ${String(event.version)}.`);
+  }
+
+  if (typeof event.rollId !== "string" || event.rollId.trim().length === 0) {
+    throw new RangeError("DiceRollEvent requires a non-empty rollId.");
+  }
+
+  if (!Array.isArray(event.dice) || event.dice.length === 0) {
+    throw new RangeError("DiceRollEvent requires at least one die.");
+  }
+
+  if (
+    typeof event.modifier !== "number" ||
+    !Number.isFinite(event.modifier) ||
+    typeof event.total !== "number" ||
+    !Number.isFinite(event.total)
+  ) {
+    throw new RangeError("DiceRollEvent modifier and total must be finite numbers.");
+  }
+
+  if (event.reason !== undefined && typeof event.reason !== "string") {
+    throw new RangeError("DiceRollEvent reason must be a string when provided.");
+  }
+
+  const dice = event.dice.map((rawDie, index) => {
+    if (!isRecord(rawDie)) {
+      throw new RangeError(`DiceRollEvent die at index ${index} must be an object.`);
+    }
+
+    const sides = rawDie.sides;
+    const value = rawDie.value;
+
+    if (
+      typeof sides !== "number" ||
+      !SUPPORTED_DICE_SIDES.includes(sides as DiceSides) ||
+      typeof value !== "number" ||
+      !Number.isInteger(value) ||
+      value < 1 ||
+      value > sides
+    ) {
+      throw new RangeError(`DiceRollEvent contains an invalid die result at index ${index}.`);
+    }
+
+    const typedSides = sides as DiceSides;
+    validateAppearance(rawDie.appearance, typedSides, index);
+
+    return {
+      sides: typedSides,
+      value,
+      ...(rawDie.appearance === undefined ? {} : { appearance: rawDie.appearance })
+    } satisfies DiceRollEventDie;
+  });
+
+  const result: DiceRollResult = {
+    rollId: event.rollId,
+    dice: dice.map((die) => ({ sides: die.sides, value: die.value })),
+    modifier: event.modifier,
+    total: event.total,
+    ...(event.reason === undefined ? {} : { reason: event.reason })
+  };
+
+  validateResult(result);
+  validateReplayFromUnknown(result, event.replay);
+
+  return event as unknown as DiceRollEvent;
+}
+
 /** Creates a versioned host-authoritative event from a logical result and optional replay data. */
 export function createDiceRollEvent(
   result: DiceRollResult,
@@ -184,12 +347,14 @@ export function createDiceRollEvent(
  * Reconstructs the authoritative logical result on a client without rolling again.
  * The optional replay data is presentation-only and never changes these values.
  */
-export function diceRollResultFromEvent(event: DiceRollEvent): DiceRollResult {
+export function diceRollResultFromEvent(event: unknown): DiceRollResult {
+  const validatedEvent = validateDiceRollEvent(event);
+
   return {
-    rollId: event.rollId,
-    dice: event.dice.map((die) => ({ sides: die.sides, value: die.value })),
-    modifier: event.modifier,
-    total: event.total,
-    ...(event.reason === undefined ? {} : { reason: event.reason })
+    rollId: validatedEvent.rollId,
+    dice: validatedEvent.dice.map((die) => ({ sides: die.sides, value: die.value })),
+    modifier: validatedEvent.modifier,
+    total: validatedEvent.total,
+    ...(validatedEvent.reason === undefined ? {} : { reason: validatedEvent.reason })
   };
 }
