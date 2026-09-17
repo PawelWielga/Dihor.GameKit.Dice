@@ -25,6 +25,18 @@ export {
   type RollIdProvider
 } from "./core/index.js";
 export {
+  DiceOverlay,
+  DiceOverlayError,
+  type DiceOverlayErrorPhase,
+  type DiceOverlayOptions,
+  type DiceOverlayPlanner,
+  type DiceOverlayPlayer,
+  type DiceOverlayPlayerFactory,
+  type DiceOverlayRenderer,
+  type DiceOverlayRendererFactory,
+  type DiceOverlayRoller
+} from "./overlay/index.js";
+export {
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   DicePhysicsWorld,
