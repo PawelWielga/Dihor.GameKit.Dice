@@ -10,6 +10,9 @@ import {
   type DiceFontLoadEnvironment
 } from "../src/appearance/DiceFont.js";
 import {
+  getDiceFaceLabelBaseFontSize,
+  getDiceFaceLabelBaseline,
+  getDiceFaceLabelPlaneScale,
   getDiceOrientationMarkerIndices,
   usesNumericFaceLabels
 } from "../src/three/dice/DiceFaceLabels.js";
@@ -72,7 +75,6 @@ describe("dice font appearance", () => {
     });
   });
 
-
   it("falls back to bundled Cinzel when a custom font URL fails", async () => {
     const attempts: string[] = [];
     const environment: DiceFontLoadEnvironment = {
@@ -124,5 +126,25 @@ describe("numeric face label rules", () => {
     expect(getDiceOrientationMarkerIndices("19")).toEqual([1]);
     expect(getDiceOrientationMarkerIndices("69")).toEqual([0, 1]);
     expect(getDiceOrientationMarkerIndices("20")).toEqual([]);
+  });
+
+  it("uses visibly larger default numeral sizing than the initial font implementation", () => {
+    expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(300);
+    expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(238);
+    expect(getDiceFaceLabelPlaneScale(6)).toBeGreaterThan(0.62);
+    expect(getDiceFaceLabelPlaneScale(20)).toBeGreaterThan(0.48);
+  });
+
+  it("centers the numeral bounds without reserving space for an orientation dot", () => {
+    const canvasSize = 512;
+    const ascent = 250;
+    const descent = 18;
+    const baseline = getDiceFaceLabelBaseline(canvasSize, ascent, descent);
+    const top = baseline - ascent;
+    const bottom = baseline + descent;
+
+    expect((top + bottom) / 2).toBe(canvasSize / 2);
+    expect(getDiceOrientationMarkerIndices("6")).toEqual([0]);
+    expect(getDiceOrientationMarkerIndices("8")).toEqual([]);
   });
 });
