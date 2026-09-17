@@ -236,6 +236,7 @@ let debugFinalResult: DiceRollResult | undefined;
 let rolling = false;
 let comparisonMode = false;
 let demoRenderer: DiceRenderer | undefined;
+let renderedFontSize = DEFAULT_DICE_FONT_APPEARANCE.size;
 
 function createCameraOptions(): DiceCameraOptions {
   return {
@@ -490,6 +491,24 @@ function updateFontSizeOutput(): void {
   fontSizeValue.value = `${readFontSize().toFixed(2)}×`;
 }
 
+function applyFontSizePreview(): void {
+  updateFontSizeOutput();
+  const renderer = demoRenderer;
+
+  if (!renderer) {
+    return;
+  }
+
+  const previewScale = readFontSize() / renderedFontSize;
+
+  renderer.diceScene.content.traverse((object) => {
+    if (object.name.includes(" font label ")) {
+      object.scale.setScalar(previewScale);
+    }
+  });
+  renderer.render();
+}
+
 function createFontAppearance(): DiceFontAppearance | undefined {
   const size = readFontSize();
 
@@ -674,6 +693,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
 
   try {
     await nextPaint();
+    renderedFontSize = readFontSize();
     const result = await overlay.roll(request, { throwForce: readThrowForce() });
     debugFinalResult = result;
     showResult(result);
@@ -756,10 +776,10 @@ warmLightingButton.addEventListener("click", () => setLightingPreset("warm"));
 moodyLightingButton.addEventListener("click", () => setLightingPreset("moody"));
 resetLightingButton.addEventListener("click", () => setLightingPreset("neutral"));
 fontPreset.addEventListener("change", syncFontControls);
-fontSize.addEventListener("input", updateFontSizeOutput);
+fontSize.addEventListener("input", applyFontSizePreview);
 resetFontSizeButton.addEventListener("click", () => {
   fontSize.value = String(DEFAULT_DICE_FONT_APPEARANCE.size);
-  updateFontSizeOutput();
+  applyFontSizePreview();
 });
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
@@ -768,7 +788,7 @@ resetFontButton.addEventListener("click", () => {
   fontUrl.value = "";
   fontSize.value = String(DEFAULT_DICE_FONT_APPEARANCE.size);
   syncFontControls();
-  updateFontSizeOutput();
+  applyFontSizePreview();
 });
 sampleTextureButton.addEventListener("click", () => {
   globalTexture.value = SAMPLE_TEXTURE_URL;
