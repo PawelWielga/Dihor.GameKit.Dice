@@ -2,6 +2,8 @@ export {
   DEFAULT_DICE_APPEARANCE,
   DEFAULT_DICE_FACE_LABEL_MODE,
   DEFAULT_DICE_FONT_APPEARANCE,
+  MAX_DICE_FONT_SIZE,
+  MIN_DICE_FONT_SIZE,
   hasDiceTextureSources,
   mergeDiceAppearances,
   resolveDiceAppearance,

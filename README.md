@@ -19,6 +19,7 @@ The library supports:
 - D4, D6, D8, D10, D12 and D20 dice,
 - mixed dice types in one roll,
 - per-die colors and materials,
+- configurable numeric fonts and relative numeral sizing,
 - optional global and per-face textures,
 - a framework-agnostic overlay API,
 - multiple dice in a single roll,
@@ -148,7 +149,10 @@ const result = await dice.roll({
       sides: 6,
       appearance: {
         color: "#7b1e1e",
-        markingsColor: "#f5e6c8"
+        markingsColor: "#f5e6c8",
+        font: {
+          size: 1.1
+        }
       }
     },
     { sides: 8 },
@@ -166,6 +170,8 @@ console.log(result.total);
 The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. It changes initial linear and angular velocity only; the logical result is still decided first and remains authoritative.
 
 The standard RPG set uses **D6 = 16 mm** as its physical reference baseline. D4, D8, D10, D12 and D20 keep deliberately different relative extents matching the approved physical-set comparison instead of being normalized to the same bounding box. D100/D% is intentionally not part of the supported set.
+
+Numeric markings accept a relative `appearance.font.size` scale from `0.5` to `1.5`; `1` preserves the default look. It works with the bundled font, system font families and fonts loaded from a URL. D6 in the default `dots` mode is intentionally unaffected.
 
 The same appearance model supports a global texture plus optional physical-face texture overrides. Face textures remain attached to the same physical faces throughout planning and playback.
 

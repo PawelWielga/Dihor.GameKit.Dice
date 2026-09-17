@@ -62,9 +62,13 @@ function createBrowserEnvironment(): DiceFontLoadEnvironment | undefined {
 }
 
 async function loadBundledDefault(
-  environment: DiceFontLoadEnvironment
+  environment: DiceFontLoadEnvironment,
+  size = DEFAULT_DICE_FONT_APPEARANCE.size
 ): Promise<ResolvedDiceFontAppearance> {
-  const fallback = DEFAULT_DICE_FONT_APPEARANCE;
+  const fallback: ResolvedDiceFontAppearance = {
+    ...DEFAULT_DICE_FONT_APPEARANCE,
+    size
+  };
 
   try {
     await environment.load(fallback, bundledCinzelUrl);
@@ -94,12 +98,12 @@ export async function loadDiceFont(
       await environment.load(font, font.url);
       return font;
     } catch {
-      return loadBundledDefault(environment);
+      return loadBundledDefault(environment, font.size);
     }
   }
 
   if (font.family === DEFAULT_DICE_FONT_APPEARANCE.family) {
-    await loadBundledDefault(environment);
+    await loadBundledDefault(environment, font.size);
   }
 
   // A family without URL is intentionally trusted to have been registered by the host document.

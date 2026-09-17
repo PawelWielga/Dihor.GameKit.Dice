@@ -1,6 +1,9 @@
 import {
+  DEFAULT_DICE_FONT_APPEARANCE,
   DEFAULT_THROW_FORCE,
+  MAX_DICE_FONT_SIZE,
   MAX_THROW_FORCE,
+  MIN_DICE_FONT_SIZE,
   MIN_THROW_FORCE,
   DiceOverlay,
   DiceRenderer,
@@ -187,6 +190,9 @@ const fontPreset = requireElement<HTMLSelectElement>("#font-preset");
 const fontFamily = requireElement<HTMLInputElement>("#font-family");
 const fontWeight = requireElement<HTMLInputElement>("#font-weight");
 const fontUrl = requireElement<HTMLInputElement>("#font-url");
+const fontSize = requireElement<HTMLInputElement>("#font-size");
+const fontSizeValue = requireElement<HTMLOutputElement>("#font-size-value");
+const resetFontSizeButton = requireElement<HTMLButtonElement>("#reset-font-size-button");
 const resetFontButton = requireElement<HTMLButtonElement>("#reset-font-button");
 const d6LabelMode = requireElement<HTMLSelectElement>("#d6-label-mode");
 const globalTexture = requireElement<HTMLInputElement>("#global-texture");
@@ -468,14 +474,32 @@ function syncFontControls(): void {
   fontUrl.disabled = !custom;
 }
 
+function readFontSize(): number {
+  const size = Number(fontSize.value);
+
+  if (!Number.isFinite(size) || size < MIN_DICE_FONT_SIZE || size > MAX_DICE_FONT_SIZE) {
+    throw new Error(
+      `Font size must be between ${MIN_DICE_FONT_SIZE} and ${MAX_DICE_FONT_SIZE}; received ${fontSize.value}.`
+    );
+  }
+
+  return size;
+}
+
+function updateFontSizeOutput(): void {
+  fontSizeValue.value = `${readFontSize().toFixed(2)}×`;
+}
+
 function createFontAppearance(): DiceFontAppearance | undefined {
+  const size = readFontSize();
+
   switch (fontPreset.value) {
     case "default":
-      return undefined;
+      return size === DEFAULT_DICE_FONT_APPEARANCE.size ? undefined : { size };
     case "georgia":
-      return { family: "Georgia", weight: 700 };
+      return { family: "Georgia", weight: 700, size };
     case "trebuchet":
-      return { family: "Trebuchet MS", weight: 700 };
+      return { family: "Trebuchet MS", weight: 700, size };
     case "custom": {
       const family = fontFamily.value.trim();
       const url = optionalValue(fontUrl);
@@ -486,12 +510,13 @@ function createFontAppearance(): DiceFontAppearance | undefined {
       }
 
       if (!family && !url) {
-        return undefined;
+        return size === DEFAULT_DICE_FONT_APPEARANCE.size ? undefined : { size };
       }
 
       return {
         family: family || "PartyBeam Custom Dice Font",
         weight,
+        size,
         ...(url ? { url } : {})
       };
     }
@@ -731,12 +756,19 @@ warmLightingButton.addEventListener("click", () => setLightingPreset("warm"));
 moodyLightingButton.addEventListener("click", () => setLightingPreset("moody"));
 resetLightingButton.addEventListener("click", () => setLightingPreset("neutral"));
 fontPreset.addEventListener("change", syncFontControls);
+fontSize.addEventListener("input", updateFontSizeOutput);
+resetFontSizeButton.addEventListener("click", () => {
+  fontSize.value = String(DEFAULT_DICE_FONT_APPEARANCE.size);
+  updateFontSizeOutput();
+});
 resetFontButton.addEventListener("click", () => {
   fontPreset.value = "default";
   fontFamily.value = "";
   fontWeight.value = "700";
   fontUrl.value = "";
+  fontSize.value = String(DEFAULT_DICE_FONT_APPEARANCE.size);
   syncFontControls();
+  updateFontSizeOutput();
 });
 sampleTextureButton.addEventListener("click", () => {
   globalTexture.value = SAMPLE_TEXTURE_URL;
@@ -767,5 +799,6 @@ updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();
 updateLightingOutputs();
+updateFontSizeOutput();
 syncFontControls();
 updateDebugPanel();

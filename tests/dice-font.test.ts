@@ -26,6 +26,7 @@ describe("dice font appearance", () => {
     expect(resolved).toEqual(DEFAULT_DICE_FONT_APPEARANCE);
     expect(resolved.family).toBe("Cinzel");
     expect(resolved.weight).toBe(700);
+    expect(resolved.size).toBe(1);
     expect(resolveDiceFaceLabelMode(undefined)).toBe("dots");
   });
 
@@ -33,13 +34,15 @@ describe("dice font appearance", () => {
     const resolved = resolveDiceFontAppearance({
       family: " Roboto Slab ",
       url: " /fonts/RobotoSlab.woff2 ",
-      weight: 650
+      weight: 650,
+      size: 1.2
     });
 
     expect(resolved).toEqual({
       family: "Roboto Slab",
       url: "/fonts/RobotoSlab.woff2",
-      weight: 650
+      weight: 650,
+      size: 1.2
     });
     expect(resolveDiceFaceLabelMode({ faceLabelMode: "numbers" })).toBe("numbers");
   });
@@ -51,7 +54,8 @@ describe("dice font appearance", () => {
         font: {
           family: "Roboto Slab",
           url: "/fonts/RobotoSlab.woff2",
-          weight: 600
+          weight: 600,
+          size: 0.9
         },
         faces: { 1: "/one.png" }
       },
@@ -68,12 +72,25 @@ describe("dice font appearance", () => {
       font: {
         family: "Roboto Slab",
         url: "/fonts/RobotoSlab.woff2",
-        weight: 700
+        weight: 700,
+        size: 0.9
       },
       faces: {
         1: "/one.png",
         2: "/two.png"
       }
+    });
+  });
+
+  it("allows per-die font-size overrides through nested appearance merging", () => {
+    const merged = mergeDiceAppearances(
+      { font: { family: "Georgia", size: 0.85 } },
+      { font: { size: 1.3 } }
+    );
+
+    expect(merged?.font).toEqual({
+      family: "Georgia",
+      size: 1.3
     });
   });
 
@@ -93,17 +110,23 @@ describe("dice font appearance", () => {
       {
         family: "Broken Font",
         url: "/fonts/missing.woff2",
-        weight: 700
+        weight: 700,
+        size: 1.25
       },
       environment
     );
 
-    expect(resolved).toEqual(DEFAULT_DICE_FONT_APPEARANCE);
+    expect(resolved).toEqual({
+      ...DEFAULT_DICE_FONT_APPEARANCE,
+      size: 1.25
+    });
     expect(attempts).toEqual(["Broken Font", "Cinzel"]);
   });
 
-  it("rejects invalid font weights and label modes", () => {
+  it("rejects invalid font weights, sizes and label modes", () => {
     expect(() => resolveDiceFontAppearance({ weight: 0 })).toThrow(RangeError);
+    expect(() => resolveDiceFontAppearance({ size: 0.49 })).toThrow(RangeError);
+    expect(() => resolveDiceFontAppearance({ size: 1.51 })).toThrow(RangeError);
     expect(() =>
       resolveDiceFaceLabelMode({ faceLabelMode: "letters" as never })
     ).toThrow(RangeError);
@@ -111,8 +134,9 @@ describe("dice font appearance", () => {
 });
 
 describe("numeric face label rules", () => {
-  it("keeps D6 pips by default and enables numbers explicitly", () => {
+  it("keeps D6 pips independent from font sizing and enables numbers explicitly", () => {
     expect(usesNumericFaceLabels(6, undefined)).toBe(false);
+    expect(usesNumericFaceLabels(6, { font: { size: 1.5 } })).toBe(false);
     expect(usesNumericFaceLabels(6, { faceLabelMode: "numbers" })).toBe(true);
   });
 
@@ -134,6 +158,12 @@ describe("numeric face label rules", () => {
     expect(getDiceFaceLabelCanvasSize()).toBe(1024);
     expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(820);
     expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(660);
+    expect(getDiceFaceLabelBaseFontSize("6", 1.2)).toBeCloseTo(
+      getDiceFaceLabelBaseFontSize("6") * 1.2
+    );
+    expect(getDiceFaceLabelBaseFontSize("20", 0.75)).toBeCloseTo(
+      getDiceFaceLabelBaseFontSize("20") * 0.75
+    );
     expect(getDiceFaceLabelPlaneScale(4)).toBeCloseTo(0.57);
     expect(getDiceFaceLabelPlaneScale(6)).toBeCloseTo(0.84);
     expect(getDiceFaceLabelPlaneScale(8)).toBeCloseTo(0.65);

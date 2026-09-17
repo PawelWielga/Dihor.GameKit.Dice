@@ -134,8 +134,8 @@ export function getDiceFaceLabelPlaneScale(sides: DiceSides): number {
 }
 
 /** Base canvas font size before fitting unusually wide/tall custom fonts to the face. */
-export function getDiceFaceLabelBaseFontSize(label: string): number {
-  return label.length > 1 ? 700 : 870;
+export function getDiceFaceLabelBaseFontSize(label: string, size = 1): number {
+  return (label.length > 1 ? 700 : 870) * size;
 }
 
 export function getDiceFaceLabelCanvasSize(): number {
@@ -273,7 +273,7 @@ function drawLabel(
   const markerIndices = new Set(getDiceOrientationMarkerIndices(label));
   const maximumWidth = LABEL_CANVAS_SIZE * LABEL_MAXIMUM_WIDTH_RATIO;
   const maximumHeight = LABEL_CANVAS_SIZE * LABEL_MAXIMUM_HEIGHT_RATIO;
-  let fontSize = getDiceFaceLabelBaseFontSize(label);
+  let fontSize = getDiceFaceLabelBaseFontSize(label, font.size);
   let metrics = measureLabel(context, label, markerIndices, font, fontSize);
 
   const widthScale = maximumWidth / metrics.textBounds.width;

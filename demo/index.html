@@ -150,6 +150,25 @@
                 </label>
               </div>
 
+              <div class="field">
+                <span>Numeral size <output id="font-size-value">1.00×</output></span>
+                <input
+                  id="font-size"
+                  name="font-size"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1"
+                />
+                <button id="reset-font-size-button" class="button button--ghost" type="button">
+                  Reset numeral size
+                </button>
+                <p class="hint">
+                  Relative scale of generated numeric markings. D6 dots are intentionally unchanged.
+                </p>
+              </div>
+
               <div class="field-grid field-grid--two">
                 <label class="field">
                   <span>Custom font family</span>

@@ -9,11 +9,15 @@ export interface DiceFontAppearance {
 
   /** CSS numeric font weight. Defaults to 700. */
   readonly weight?: number;
+
+  /** Relative numeral-size scale. 1 keeps the default DiceKit sizing. */
+  readonly size?: number;
 }
 
 export interface ResolvedDiceFontAppearance {
   readonly family: string;
   readonly weight: number;
+  readonly size: number;
   readonly url?: string;
 }
 
@@ -63,9 +67,13 @@ export interface ResolvedDiceAppearance {
   readonly metalness: number;
 }
 
+export const MIN_DICE_FONT_SIZE = 0.5;
+export const MAX_DICE_FONT_SIZE = 1.5;
+
 export const DEFAULT_DICE_FONT_APPEARANCE: ResolvedDiceFontAppearance = Object.freeze({
   family: "Cinzel",
-  weight: 700
+  weight: 700,
+  size: 1
 });
 
 export const DEFAULT_DICE_FACE_LABEL_MODE: DiceFaceLabelMode = "dots";
@@ -163,6 +171,20 @@ function resolveFontWeight(value: number | undefined): number {
   return value;
 }
 
+function resolveFontSize(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_DICE_FONT_APPEARANCE.size;
+  }
+
+  if (!Number.isFinite(value) || value < MIN_DICE_FONT_SIZE || value > MAX_DICE_FONT_SIZE) {
+    throw new RangeError(
+      `font.size must be a finite number in the ${MIN_DICE_FONT_SIZE}..${MAX_DICE_FONT_SIZE} range; received ${String(value)}.`
+    );
+  }
+
+  return value;
+}
+
 function mergeOptionalRecords<T>(
   base: Readonly<Partial<Record<number, T>>> | undefined,
   override: Readonly<Partial<Record<number, T>>> | undefined
@@ -239,6 +261,7 @@ export function resolveDiceFontAppearance(
   return {
     family: resolveFontFamily(font.family),
     weight: resolveFontWeight(font.weight),
+    size: resolveFontSize(font.size),
     ...(url ? { url } : {})
   };
 }
