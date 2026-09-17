@@ -108,7 +108,7 @@
                 </label>
               </div>
 
-              <label class="field">
+              <div class="field">
                 <span>Global texture URL <small>optional</small></span>
                 <input
                   id="global-texture"
@@ -116,8 +116,12 @@
                   type="url"
                   inputmode="url"
                   placeholder="https://example.com/dice-texture.jpg"
+                  aria-label="Global texture URL"
                 />
-              </label>
+                <button id="sample-texture-button" class="button button--ghost" type="button">
+                  Use test texture
+                </button>
+              </div>
 
               <details class="face-textures">
                 <summary>Per-face texture overrides</summary>
