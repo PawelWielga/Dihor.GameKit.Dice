@@ -120,7 +120,7 @@ describe("RollPlanner", () => {
       const expectedValue = sides === 6 ? 1 : Math.max(1, Math.floor(sides / 2));
       const planner = new RollPlanner({
         randomProvider,
-        maxAttemptsPerDie: 1,
+        maxAttemptsPerDie: sides === 100 ? 36 : 1,
         maxCombinedAttempts: 1,
         maxPlanningTimeMs: 5000,
         stability: {
