@@ -24,6 +24,7 @@ export type {
   RollPlanningOptions
 } from "./RollPlanner.js";
 export type {
+  DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
   PhysicsVector3,

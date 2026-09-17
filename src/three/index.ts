@@ -10,6 +10,7 @@ export type {
   DicePointLightOptions,
   DiceSceneLightOptions,
   DiceSceneOptions,
+  DiceTableBoundaryPoint,
   DiceTableMaterialOptions
 } from "./DiceScene.js";
 export type {

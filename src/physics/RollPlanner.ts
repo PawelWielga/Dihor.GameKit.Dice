@@ -14,6 +14,7 @@ import {
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
 import type {
+  DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
   RollInitialState,
@@ -30,6 +31,8 @@ export const MAX_DICE_PER_ROLL = 6;
 export interface RollPlanningOptions {
   /** Multiplier applied to initial linear and angular velocity. Defaults to 1. */
   readonly throwForce?: number;
+  /** Camera/table viewport polygon used as invisible physical walls for this roll. */
+  readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
 }
 
 export interface RollInitialStateContext {
@@ -208,6 +211,10 @@ export class RollPlanner {
 
   plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
     const throwForce = resolveThrowForce(options.throwForce);
+    const physicsOptions: DicePhysicsWorldOptions = {
+      ...this.physicsOptions,
+      ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
+    };
     const expectedDice = this.validateResult(result);
     const startedAt = this.nowProvider();
     let lastFailure = "No matching physical plan was found.";
@@ -231,7 +238,8 @@ export class RollPlanner {
           expectedDice.length,
           slotX,
           startedAt,
-          throwForce
+          throwForce,
+          physicsOptions
         );
 
         plannedDice.push({
@@ -241,7 +249,7 @@ export class RollPlanner {
         });
       }
 
-      const verification = this.verifyCombinedPlan(plannedDice);
+      const verification = this.verifyCombinedPlan(plannedDice, physicsOptions);
 
       if (verification.matches) {
         return {
@@ -266,11 +274,12 @@ export class RollPlanner {
     diceCount: number,
     slotX: number,
     startedAt: number,
-    throwForce: number
+    throwForce: number,
+    physicsOptions: DicePhysicsWorldOptions
   ): RollInitialState {
     for (let attempt = 1; attempt <= this.maxAttemptsPerDie; attempt += 1) {
       this.assertWithinDeadline(startedAt);
-      const probeWorld = new DicePhysicsWorld(this.physicsOptions);
+      const probeWorld = new DicePhysicsWorld(physicsOptions);
 
       try {
         const state = this.applyThrowForce(
@@ -301,13 +310,16 @@ export class RollPlanner {
     );
   }
 
-  private verifyCombinedPlan(plannedDice: readonly RollPlanDie[]): {
+  private verifyCombinedPlan(
+    plannedDice: readonly RollPlanDie[],
+    physicsOptions: DicePhysicsWorldOptions
+  ): {
     readonly matches: boolean;
     readonly reason: string;
     readonly steps: number;
     readonly physics: DicePhysicsConfig;
   } {
-    const world = new DicePhysicsWorld(this.physicsOptions);
+    const world = new DicePhysicsWorld(physicsOptions);
 
     try {
       const bodies = plannedDice.map((die) => world.addDie(die.sides, die.initialState));

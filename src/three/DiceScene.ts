@@ -12,6 +12,7 @@ import {
   SRGBColorSpace,
   Texture,
   TextureLoader,
+  Vector3,
   type ColorRepresentation,
   type Object3D
 } from "three";
@@ -39,6 +40,11 @@ export interface DiceCameraOptions {
   readonly x?: number;
   readonly y?: number;
   readonly z?: number;
+}
+
+export interface DiceTableBoundaryPoint {
+  readonly x: number;
+  readonly z: number;
 }
 
 export interface DiceLightPosition {
@@ -278,6 +284,38 @@ export class DiceScene {
 
     this.camera.aspect = safeWidth / safeHeight;
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Projects the current viewport corners onto the table plane (world y=0).
+   * The returned polygon is recalculated from current camera/projection state on every call.
+   */
+  getTableBoundary(): readonly DiceTableBoundaryPoint[] {
+    this.camera.updateMatrixWorld(true);
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+
+    return corners.map(([ndcX, ndcY]) => {
+      const projected = new Vector3(ndcX, ndcY, 0.5).unproject(this.camera);
+      const direction = projected.sub(this.camera.position);
+
+      if (direction.y >= -1e-8) {
+        throw new RangeError(
+          "The current camera viewport does not have a finite intersection with the dice table."
+        );
+      }
+
+      const distance = -this.camera.position.y / direction.y;
+      if (!Number.isFinite(distance) || distance <= 0) {
+        throw new RangeError(
+          "The current camera viewport does not intersect the dice table in front of the camera."
+        );
+      }
+
+      return {
+        x: this.camera.position.x + direction.x * distance,
+        z: this.camera.position.z + direction.z * distance
+      };
+    });
   }
 
   /**

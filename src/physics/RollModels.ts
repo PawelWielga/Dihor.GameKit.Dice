@@ -13,6 +13,12 @@ export interface PhysicsQuaternion {
   readonly w: number;
 }
 
+/** A point on the table plane used by the invisible physical arena boundary. */
+export interface DiceArenaBoundaryPoint {
+  readonly x: number;
+  readonly z: number;
+}
+
 export interface RollInitialState {
   readonly position: PhysicsVector3;
   readonly quaternion: PhysicsQuaternion;
@@ -29,6 +35,8 @@ export interface DicePhysicsConfig {
   readonly angularDamping: number;
   readonly diceSize: number;
   readonly arenaHalfExtent: number;
+  /** Optional convex table-plane polygon. When present it replaces the legacy square arena. */
+  readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
 }
 
 export interface StabilityConfig {
