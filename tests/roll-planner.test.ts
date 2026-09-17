@@ -110,10 +110,6 @@ describe("RollPlanner", () => {
       expect(plan.dice[0]?.sides).toBe(sides);
       expect(plan.dice[0]?.expectedValue).toBe(expectedValue);
       expect(plan.simulationSteps).toBeGreaterThan(0);
-
-      if (sides !== 6) {
-        expect(plan.dice[0]?.initialState.position.y).toBeGreaterThan(1);
-      }
     }
   });
 
@@ -137,6 +133,10 @@ describe("RollPlanner", () => {
       expect(plan.dice[0]?.sides).toBe(sides);
       expect(plan.dice[0]?.expectedValue).toBe(expectedValue);
       expect(plan.simulationSteps).toBeGreaterThan(0);
+
+      if (sides !== 6) {
+        expect(plan.dice[0]?.initialState.position.y).toBeGreaterThan(1);
+      }
     }
   });
 
