@@ -4,6 +4,7 @@ import { DiceRenderer } from "../src/index.js";
 
 class FakeWebGLRenderer {
   readonly domElement = {} as HTMLCanvasElement;
+  readonly shadowMap = { enabled: false };
   readonly setPixelRatio = vi.fn();
   readonly setSize = vi.fn();
   readonly render = vi.fn();
@@ -80,6 +81,33 @@ describe("DiceRenderer", () => {
     );
     expect(fakeRenderer.setAnimationLoop).toHaveBeenCalledWith(expect.any(Function));
     expect(fakeRenderer.setAnimationLoop).toHaveBeenLastCalledWith(null);
+    renderer.dispose();
+  });
+
+  it("enables renderer shadows only while configured lights cast them", () => {
+    const fakeRenderer = new FakeWebGLRenderer();
+    const fakeContainer = createContainer(320, 240);
+    const renderer = new DiceRenderer(fakeContainer.container, {
+      autoResize: false,
+      scene: {
+        lighting: {
+          lights: [
+            {
+              type: "directional",
+              castShadow: true
+            }
+          ]
+        }
+      },
+      rendererFactory: () => fakeRenderer as unknown as WebGLRenderer
+    });
+
+    renderer.render();
+    expect(fakeRenderer.shadowMap.enabled).toBe(true);
+
+    renderer.diceScene.setLighting({ lights: [] });
+    renderer.render();
+    expect(fakeRenderer.shadowMap.enabled).toBe(false);
     renderer.dispose();
   });
 
