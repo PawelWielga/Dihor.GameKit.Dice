@@ -61,15 +61,26 @@ describe("DiceMeshFactory", () => {
         expect(mesh.object.getObjectByName(`D${sides} numeric markings`)).toBeDefined();
         expect((mesh.body.material as MeshStandardMaterial).flatShading).toBe(false);
 
-        const normals = mesh.body.geometry.getAttribute("normal");
+        const geometry = mesh.body.geometry;
+        const normals = geometry.getAttribute("normal");
+        const indices = geometry.getIndex();
+        const triangleIndexCount = indices?.count ?? normals.count;
         let hasSoftenedTriangle = false;
 
-        for (let index = 0; index + 2 < normals.count; index += 3) {
-          const dx = Math.abs(normals.getX(index) - normals.getX(index + 1));
-          const dy = Math.abs(normals.getY(index) - normals.getY(index + 1));
-          const dz = Math.abs(normals.getZ(index) - normals.getZ(index + 1));
+        for (let offset = 0; offset + 2 < triangleIndexCount; offset += 3) {
+          const first = indices ? indices.getX(offset) : offset;
+          const second = indices ? indices.getX(offset + 1) : offset + 1;
+          const third = indices ? indices.getX(offset + 2) : offset + 2;
+          const firstSecondDelta =
+            Math.abs(normals.getX(first) - normals.getX(second)) +
+            Math.abs(normals.getY(first) - normals.getY(second)) +
+            Math.abs(normals.getZ(first) - normals.getZ(second));
+          const firstThirdDelta =
+            Math.abs(normals.getX(first) - normals.getX(third)) +
+            Math.abs(normals.getY(first) - normals.getY(third)) +
+            Math.abs(normals.getZ(first) - normals.getZ(third));
 
-          if (dx + dy + dz > 1e-5) {
+          if (firstSecondDelta > 1e-5 || firstThirdDelta > 1e-5) {
             hasSoftenedTriangle = true;
             break;
           }
