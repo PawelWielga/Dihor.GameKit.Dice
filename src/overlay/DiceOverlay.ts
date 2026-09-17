@@ -4,7 +4,7 @@ import {
   type DiceRollResult
 } from "../core/index.js";
 import {
-  RollPlanner,
+  BackgroundRollPlanner,
   type RollPlan,
   type RollPlanningOptions
 } from "../physics/index.js";
@@ -36,7 +36,12 @@ export interface DiceOverlayRoller {
 }
 
 export interface DiceOverlayPlanner {
-  plan(result: DiceRollResult, options?: RollPlanningOptions): RollPlan;
+  plan(
+    result: DiceRollResult,
+    options?: RollPlanningOptions
+  ): RollPlan | Promise<RollPlan>;
+  cancel?(): void;
+  dispose?(): void;
 }
 
 export interface DiceOverlayRollOptions extends RollPlanningOptions {}
@@ -145,7 +150,7 @@ export class DiceOverlay {
   constructor(options: DiceOverlayOptions = {}) {
     this.options = options;
     this.roller = options.roller ?? new DiceRoller();
-    this.planner = options.planner ?? new RollPlanner();
+    this.planner = options.planner ?? new BackgroundRollPlanner();
     this.rendererFactory = options.rendererFactory ?? createDefaultRenderer;
     this.playerFactory = options.playerFactory ?? createDefaultPlayer;
   }
@@ -186,7 +191,8 @@ export class DiceOverlay {
       let plan: RollPlan;
 
       try {
-        plan = this.planner.plan(logicalResult, {
+        this.presentRolling(surface, request.reason ?? logicalResult.reason);
+        plan = await this.planner.plan(logicalResult, {
           ...options,
           arenaBoundary: surface.renderer.diceScene.getTableBoundary()
         });
@@ -196,8 +202,6 @@ export class DiceOverlay {
         }
         throw this.wrapError("planning", error);
       }
-
-      this.presentRolling(surface, request.reason ?? logicalResult.reason);
 
       try {
         const playback = await surface.player.play(plan, {
@@ -225,6 +229,7 @@ export class DiceOverlay {
 
   /** Removes current overlay/canvas and cancels an active visible roll. The instance remains reusable. */
   close(): void {
+    this.planner.cancel?.();
     const surface = this.surface;
 
     if (!surface) {
@@ -248,6 +253,7 @@ export class DiceOverlay {
     }
 
     this.close();
+    this.planner.dispose?.();
     this.disposed = true;
   }
 

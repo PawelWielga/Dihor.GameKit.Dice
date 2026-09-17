@@ -74,6 +74,7 @@ export {
   type DiceOverlayRoller
 } from "./overlay/index.js";
 export {
+  BackgroundRollPlanner,
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   DEFAULT_THROW_FORCE,
@@ -86,6 +87,8 @@ export {
   createD6Collider,
   createDiceCollider,
   resolveStabilityConfig,
+  type BackgroundRollPlannerOptions,
+  type BackgroundRollPlanningTiming,
   type DiceArenaBoundaryPoint,
   type DicePhysicsConfig,
   type DicePhysicsWorldOptions,
@@ -98,6 +101,8 @@ export {
   type RollPlanDie,
   type RollPlannerOptions,
   type RollPlanningOptions,
+  type RollPlanningWorkerFactory,
+  type RollPlanningWorkerLike,
   type StabilityConfig,
   type StabilityOptions,
   type StabilityResult

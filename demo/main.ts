@@ -1,4 +1,5 @@
 import {
+  BackgroundRollPlanner,
   DEFAULT_DICE_FONT_APPEARANCE,
   DEFAULT_ENGRAVING_DEPTH,
   DEFAULT_THROW_FORCE,
@@ -225,6 +226,7 @@ const debugJson = requireElement<HTMLElement>("#debug-json");
 
 const roller = new DiceRoller();
 const planner = new RollPlanner();
+const backgroundPlanner = new BackgroundRollPlanner({ fallbackPlanner: planner });
 const comparisonPlanner = new RollPlanner({
   initialStateProvider: createComparisonInitialState,
   slotSpacing: COMPARISON_SLOT_SPACING,
@@ -296,9 +298,17 @@ const overlay = new DiceOverlay({
     }
   },
   planner: {
-    plan(result, options) {
-      debugPlan = (comparisonMode ? comparisonPlanner : planner).plan(result, options);
+    async plan(result, options) {
+      debugPlan = comparisonMode
+        ? comparisonPlanner.plan(result, options)
+        : await backgroundPlanner.plan(result, options);
       return debugPlan;
+    },
+    cancel() {
+      backgroundPlanner.cancel();
+    },
+    dispose() {
+      backgroundPlanner.dispose();
     }
   },
   renderer: {
