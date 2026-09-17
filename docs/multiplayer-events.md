@@ -42,17 +42,16 @@ The event contains the result itself. `replay.plan` is optional presentation dat
 
 ## Client flow
 
-A client must not call `DiceRoller` for a host-originated event.
+A client must not call `DiceRoller` for a host-originated event. Values received from JSON or another transport boundary should be validated before use rather than trusted through a TypeScript cast.
 
 ```ts
 import {
   DICE_ROLL_REPLAY_VERSION,
-  DiceRollPlayer,
   diceRollResultFromEvent,
-  type DiceRollEvent
+  validateDiceRollEvent
 } from "@partybeam/dice-kit";
 
-const event = JSON.parse(payload) as DiceRollEvent;
+const event = validateDiceRollEvent(JSON.parse(payload));
 const authoritativeResult = diceRollResultFromEvent(event);
 
 // Update score/game state from authoritativeResult immediately.
@@ -69,6 +68,8 @@ if (event.replay?.version === DICE_ROLL_REPLAY_VERSION) {
   // A lightweight client can show numbers/text only.
 }
 ```
+
+`validateDiceRollEvent` rejects unsupported event/replay versions, invalid die types or values, malformed appearance fields, mismatched totals and replay plans that disagree with the authoritative result.
 
 The renderer is optional. A phone, server, test harness or low-power client can consume `rollId`, `dice`, `modifier`, `total` and `reason` without importing or constructing a Three.js renderer.
 
