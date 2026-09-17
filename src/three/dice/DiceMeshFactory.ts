@@ -491,29 +491,30 @@ function addDigitSegments(
   const thickness = unit * 0.2;
   const horizontalWidth = digitWidth * 0.78;
   const verticalHeight = digitHeight * 0.43;
+  const glyphCenterX = digit === "1" ? centerX - digitWidth * 0.38 : centerX;
 
   for (const segment of segments) {
     switch (segment) {
       case "a":
-        pushQuad(positions, normals, basis, centerX, digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
         break;
       case "g":
-        pushQuad(positions, normals, basis, centerX, 0, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, 0, horizontalWidth, thickness, surfaceOffset);
         break;
       case "d":
-        pushQuad(positions, normals, basis, centerX, -digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX, -digitHeight / 2, horizontalWidth, thickness, surfaceOffset);
         break;
       case "f":
-        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX - digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "b":
-        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX + digitWidth * 0.38, digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "e":
-        pushQuad(positions, normals, basis, centerX - digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX - digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
       case "c":
-        pushQuad(positions, normals, basis, centerX + digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
+        pushQuad(positions, normals, basis, glyphCenterX + digitWidth * 0.38, -digitHeight * 0.25, thickness, verticalHeight, surfaceOffset);
         break;
     }
   }
