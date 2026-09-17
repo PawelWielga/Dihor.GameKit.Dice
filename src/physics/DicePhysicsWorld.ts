@@ -1,6 +1,10 @@
 import { Body, Box, Plane, Vec3, World } from "cannon-es";
-import { getD6TopValue, type D6FaceValue } from "../core/dice/index.js";
-import { createD6Collider } from "./dice/index.js";
+import {
+  getDiceValueFromOrientation,
+  type D6FaceValue,
+  type DiceSides
+} from "../core/index.js";
+import { createDiceCollider } from "./dice/index.js";
 import type {
   DicePhysicsConfig,
   PhysicsQuaternion,
@@ -185,7 +189,7 @@ export class DicePhysicsWorld {
     this.createArenaWalls();
   }
 
-  addD6(initialState: RollInitialState): Body {
+  addDie(sides: DiceSides, initialState: RollInitialState): Body {
     this.assertActive();
     validateVector("position", initialState.position);
     validateQuaternion("quaternion", initialState.quaternion);
@@ -193,7 +197,7 @@ export class DicePhysicsWorld {
     validateVector("angularVelocity", initialState.angularVelocity);
 
     const body = new Body({ mass: 1 });
-    body.addShape(createD6Collider(this.config.diceSize));
+    body.addShape(createDiceCollider(sides, this.config.diceSize));
     body.position.set(
       initialState.position.x,
       initialState.position.y,
@@ -219,13 +223,23 @@ export class DicePhysicsWorld {
     return body;
   }
 
+  /** Backward-compatible D6 convenience wrapper. */
+  addD6(initialState: RollInitialState): Body {
+    return this.addDie(6, initialState);
+  }
+
   step(): void {
     this.assertActive();
     this.world.step(this.config.timeStep);
   }
 
+  getDieValue(sides: DiceSides, body: Body): number {
+    return getDiceValueFromOrientation(sides, body.quaternion);
+  }
+
+  /** Backward-compatible D6 convenience wrapper. */
   getD6Value(body: Body): D6FaceValue {
-    return getD6TopValue(body.quaternion);
+    return this.getDieValue(6, body) as D6FaceValue;
   }
 
   areBodiesStable(

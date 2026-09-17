@@ -12,5 +12,6 @@ export type {
   D6MeshOptions,
   DiceMesh,
   DiceMeshFactoryOptions,
+  DiceMeshOptions,
   DiceTextureLoader
 } from "./dice/index.js";

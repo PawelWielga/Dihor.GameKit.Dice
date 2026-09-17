@@ -4,25 +4,27 @@ Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Thr
 
 ## Status
 
-The repository is in the bootstrap stage. The package/tooling foundation is available, while dice domain models, rendering, physics planning and the overlay API are implemented in follow-up issues from the MVP roadmap.
+The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported.
 
 ## Goals
 
 PartyBeam.DiceKit provides a framework-agnostic API for rolling configurable 3D dice in games and applications. The logical result is decided by the core layer first, while the visual layer uses a planned physics simulation to present a natural-looking roll that lands on the expected physical face.
 
-The library is designed to support:
+The library supports:
 
 - reusable dice rolls across multiple games,
 - Three.js rendering,
 - cannon-es physics,
 - predetermined physical outcomes,
+- D4, D6, D8, D10, D12, D20 and D100 dice,
+- mixed dice types in one roll,
 - per-die colors and materials,
 - optional global and per-face textures,
 - a framework-agnostic overlay API,
 - multiple dice in a single roll,
-- future D4, D6, D8, D10, D12, D20 and D100 support,
-- future replay and PartyBeam multiplayer integration,
 - an interactive browser demo hosted on GitHub Pages.
+
+Replay-oriented seeded rolls and PartyBeam multiplayer event contracts remain follow-up work.
 
 ## Requirements
 
@@ -109,7 +111,7 @@ src/
 └── index.ts     # Public package entry point
 ```
 
-The intended roll pipeline is:
+The roll pipeline is:
 
 ```text
 DiceRoller
@@ -129,12 +131,16 @@ DiceRollResult
 
 The physical face itself must land on the expected value. The implementation must not fake the final result by rotating the die after the simulation or remapping face labels/textures after the roll.
 
-## Planned public API
+## Public API example
 
-The exact API will be finalized as part of the public API issue, but the intended usage is similar to:
+A normal game can use `DiceOverlay` for the complete logical → planned → visible roll:
 
 ```ts
-const result = await diceKit.roll({
+import { DiceOverlay } from "@partybeam/dice-kit";
+
+const dice = new DiceOverlay();
+
+const result = await dice.roll({
   dice: [
     {
       sides: 6,
@@ -142,13 +148,18 @@ const result = await diceKit.roll({
         color: "#7b1e1e",
         markingsColor: "#f5e6c8"
       }
-    }
+    },
+    { sides: 8 },
+    { sides: 20 }
   ],
   reason: "Attack"
 });
 
+console.log(result.dice);
 console.log(result.total);
 ```
+
+The same appearance model supports a global texture plus optional physical-face texture overrides. Face textures remain attached to the same physical faces throughout planning and playback.
 
 ## Demo
 
