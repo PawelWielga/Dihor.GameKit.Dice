@@ -8,6 +8,10 @@ import {
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import {
+  resolveDiceAppearance,
+  type DiceAppearance
+} from "../../appearance/index.js";
+import {
   D6_FACE_NORMALS,
   D6_FACE_VALUES,
   type D6FaceValue
@@ -16,6 +20,7 @@ import type { DiceSides } from "../../core/DiceSides.js";
 
 export interface D6MeshOptions {
   readonly size?: number;
+  readonly appearance?: DiceAppearance;
 }
 
 export interface DiceMesh {
@@ -44,26 +49,27 @@ function validateSize(size: number): number {
 
 /** Factory for render meshes. Additional dice shapes can be added without changing DiceScene. */
 export class DiceMeshFactory {
-  create(sides: DiceSides): DiceMesh {
+  create(sides: DiceSides, options: D6MeshOptions = {}): DiceMesh {
     if (sides !== 6) {
       throw new RangeError(`DiceMeshFactory does not yet support D${sides}.`);
     }
 
-    return this.createD6();
+    return this.createD6(options);
   }
 
   createD6(options: D6MeshOptions = {}): DiceMesh {
     const size = validateSize(options.size ?? 1);
+    const appearance = resolveDiceAppearance(options.appearance);
     const halfSize = size / 2;
     const bodyGeometry = new RoundedBoxGeometry(size, size, size, 4, size * 0.12);
     const bodyMaterial = new MeshStandardMaterial({
-      color: 0xf2f0e6,
-      metalness: 0,
-      roughness: 0.72
+      color: appearance.color,
+      metalness: appearance.metalness,
+      roughness: appearance.roughness
     });
     const pipGeometry = new CircleGeometry(size * 0.055, 16);
     const pipMaterial = new MeshStandardMaterial({
-      color: 0x191919,
+      color: appearance.markingsColor,
       metalness: 0,
       roughness: 0.82
     });

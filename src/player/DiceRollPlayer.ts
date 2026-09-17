@@ -1,4 +1,5 @@
 import type { Body } from "cannon-es";
+import type { DiceAppearance } from "../appearance/index.js";
 import type { D6FaceValue } from "../core/dice/index.js";
 import {
   DicePhysicsWorld,
@@ -26,6 +27,11 @@ export interface DiceRollPlayerOptions {
   readonly meshFactory?: DiceMeshFactory;
   readonly scheduler?: DiceAnimationScheduler;
   readonly maxSubStepsPerFrame?: number;
+}
+
+export interface DiceRollPlaybackOptions {
+  /** Appearance entries are matched to RollPlan dice by index. Missing entries use defaults. */
+  readonly appearances?: readonly (DiceAppearance | undefined)[];
 }
 
 export interface DiceRollPlaybackDieResult {
@@ -119,7 +125,10 @@ export class DiceRollPlayer {
     );
   }
 
-  async play(plan: RollPlan): Promise<DiceRollPlaybackResult> {
+  async play(
+    plan: RollPlan,
+    options: DiceRollPlaybackOptions = {}
+  ): Promise<DiceRollPlaybackResult> {
     this.assertActive();
 
     if (this.activeSession) {
@@ -127,6 +136,13 @@ export class DiceRollPlayer {
     }
 
     this.validatePlan(plan);
+
+    if (options.appearances && options.appearances.length > plan.dice.length) {
+      throw new RangeError(
+        `Received ${options.appearances.length} appearance entries for ${plan.dice.length} dice.`
+      );
+    }
+
     this.clearVisibleMeshes();
 
     const scheduler = this.scheduler ?? createBrowserScheduler();
@@ -136,8 +152,11 @@ export class DiceRollPlayer {
     try {
       const bodies = plan.dice.map((die) => world.addD6(die.initialState));
 
-      for (const die of plan.dice) {
-        const mesh = this.meshFactory.createD6({ size: plan.physics.diceSize });
+      for (let index = 0; index < plan.dice.length; index += 1) {
+        const mesh = this.meshFactory.createD6({
+          size: plan.physics.diceSize,
+          appearance: options.appearances?.[index]
+        });
         meshes.push(mesh);
         this.target.diceScene.add(mesh.object);
       }

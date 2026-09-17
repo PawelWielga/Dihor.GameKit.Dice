@@ -1,4 +1,9 @@
-export type { DiceAppearance } from "./appearance/index.js";
+export {
+  DEFAULT_DICE_APPEARANCE,
+  resolveDiceAppearance,
+  type DiceAppearance,
+  type ResolvedDiceAppearance
+} from "./appearance/index.js";
 export {
   DiceRoller,
   D6_FACE_NORMALS,
@@ -46,6 +51,7 @@ export {
   type DiceAnimationScheduler,
   type DiceRenderTarget,
   type DiceRollPlaybackDieResult,
+  type DiceRollPlaybackOptions,
   type DiceRollPlaybackResult,
   type DiceRollPlayerOptions
 } from "./player/index.js";
