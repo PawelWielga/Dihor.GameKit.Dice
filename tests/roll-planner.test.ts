@@ -51,6 +51,8 @@ describe("RollPlanner", () => {
     expect(plan.dice.map((die) => die.initialState.position.x)).toEqual([-2.5, 0, 2.5]);
     expect(plan.simulationSteps).toBeGreaterThan(0);
     expect(plan.physics.timeStep).toBeGreaterThan(0);
+    expect(plan.physics.arenaHalfExtent).toBe(5);
+    expect(plan.stability.consecutiveSteps).toBe(4);
   });
 
   it("fails in a bounded way when the supplied physical states cannot reach the result", () => {

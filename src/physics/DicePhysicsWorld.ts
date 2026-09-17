@@ -1,11 +1,12 @@
-import { Body, Plane, Vec3, World } from "cannon-es";
+import { Body, Box, Plane, Vec3, World } from "cannon-es";
 import { getD6TopValue, type D6FaceValue } from "../core/dice/index.js";
 import { createD6Collider } from "./dice/index.js";
 import type {
   DicePhysicsConfig,
   PhysicsQuaternion,
   PhysicsVector3,
-  RollInitialState
+  RollInitialState,
+  StabilityConfig
 } from "./RollModels.js";
 
 export interface DicePhysicsWorldOptions {
@@ -16,6 +17,7 @@ export interface DicePhysicsWorldOptions {
   readonly linearDamping?: number;
   readonly angularDamping?: number;
   readonly diceSize?: number;
+  readonly arenaHalfExtent?: number;
 }
 
 export interface StabilityOptions {
@@ -37,7 +39,15 @@ export const DEFAULT_DICE_PHYSICS_CONFIG: DicePhysicsConfig = {
   restitution: 0.22,
   linearDamping: 0.12,
   angularDamping: 0.16,
-  diceSize: 1
+  diceSize: 1,
+  arenaHalfExtent: 5
+};
+
+export const DEFAULT_STABILITY_CONFIG: StabilityConfig = {
+  linearThreshold: 0.08,
+  angularThreshold: 0.08,
+  consecutiveSteps: 10,
+  maxSteps: 480
 };
 
 function requireFinite(name: string, value: number): number {
@@ -99,6 +109,12 @@ function validateQuaternion(name: string, quaternion: PhysicsQuaternion): void {
 
 function resolveConfig(options: DicePhysicsWorldOptions): DicePhysicsConfig {
   const gravity = options.gravity ?? DEFAULT_DICE_PHYSICS_CONFIG.gravity;
+  const diceSize = requirePositive(
+    "diceSize",
+    options.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize
+  );
+  const defaultArenaScale =
+    DEFAULT_DICE_PHYSICS_CONFIG.arenaHalfExtent / DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
 
   return {
     gravity: {
@@ -120,7 +136,32 @@ function resolveConfig(options: DicePhysicsWorldOptions): DicePhysicsConfig {
       "angularDamping",
       options.angularDamping ?? DEFAULT_DICE_PHYSICS_CONFIG.angularDamping
     ),
-    diceSize: requirePositive("diceSize", options.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize)
+    diceSize,
+    arenaHalfExtent: requirePositive(
+      "arenaHalfExtent",
+      options.arenaHalfExtent ?? diceSize * defaultArenaScale
+    )
+  };
+}
+
+export function resolveStabilityConfig(options: StabilityOptions = {}): StabilityConfig {
+  return {
+    linearThreshold: requirePositive(
+      "linearThreshold",
+      options.linearThreshold ?? DEFAULT_STABILITY_CONFIG.linearThreshold
+    ),
+    angularThreshold: requirePositive(
+      "angularThreshold",
+      options.angularThreshold ?? DEFAULT_STABILITY_CONFIG.angularThreshold
+    ),
+    consecutiveSteps: requirePositiveInteger(
+      "consecutiveSteps",
+      options.consecutiveSteps ?? DEFAULT_STABILITY_CONFIG.consecutiveSteps
+    ),
+    maxSteps: requirePositiveInteger(
+      "maxSteps",
+      options.maxSteps ?? DEFAULT_STABILITY_CONFIG.maxSteps
+    )
   };
 }
 
@@ -129,7 +170,7 @@ export class DicePhysicsWorld {
   readonly world: World;
   readonly config: DicePhysicsConfig;
 
-  private readonly floorBody: Body;
+  private readonly staticBodies: Body[] = [];
   private disposed = false;
 
   constructor(options: DicePhysicsWorldOptions = {}) {
@@ -140,10 +181,8 @@ export class DicePhysicsWorld {
     this.world.defaultContactMaterial.friction = this.config.friction;
     this.world.defaultContactMaterial.restitution = this.config.restitution;
 
-    this.floorBody = new Body({ mass: 0 });
-    this.floorBody.addShape(new Plane());
-    this.floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    this.world.addBody(this.floorBody);
+    this.createFloor();
+    this.createArenaWalls();
   }
 
   addD6(initialState: RollInitialState): Body {
@@ -191,8 +230,8 @@ export class DicePhysicsWorld {
 
   areBodiesStable(
     bodies: readonly Body[],
-    linearThreshold = 0.08,
-    angularThreshold = 0.08
+    linearThreshold = DEFAULT_STABILITY_CONFIG.linearThreshold,
+    angularThreshold = DEFAULT_STABILITY_CONFIG.angularThreshold
   ): boolean {
     requirePositive("linearThreshold", linearThreshold);
     requirePositive("angularThreshold", angularThreshold);
@@ -215,29 +254,22 @@ export class DicePhysicsWorld {
       throw new RangeError("Stability simulation requires at least one body.");
     }
 
-    const linearThreshold = requirePositive(
-      "linearThreshold",
-      options.linearThreshold ?? 0.08
-    );
-    const angularThreshold = requirePositive(
-      "angularThreshold",
-      options.angularThreshold ?? 0.08
-    );
-    const consecutiveSteps = requirePositiveInteger(
-      "consecutiveSteps",
-      options.consecutiveSteps ?? 10
-    );
-    const maxSteps = requirePositiveInteger("maxSteps", options.maxSteps ?? 480);
-
+    const stability = resolveStabilityConfig(options);
     let stableSteps = 0;
 
-    for (let step = 1; step <= maxSteps; step += 1) {
+    for (let step = 1; step <= stability.maxSteps; step += 1) {
       this.step();
 
-      if (this.areBodiesStable(bodies, linearThreshold, angularThreshold)) {
+      if (
+        this.areBodiesStable(
+          bodies,
+          stability.linearThreshold,
+          stability.angularThreshold
+        )
+      ) {
         stableSteps += 1;
 
-        if (stableSteps >= consecutiveSteps) {
+        if (stableSteps >= stability.consecutiveSteps) {
           return { stable: true, steps: step };
         }
       } else {
@@ -245,11 +277,11 @@ export class DicePhysicsWorld {
       }
     }
 
-    return { stable: false, steps: maxSteps };
+    return { stable: false, steps: stability.maxSteps };
   }
 
   removeBody(body: Body): void {
-    if (!this.disposed && body !== this.floorBody) {
+    if (!this.disposed && !this.staticBodies.includes(body)) {
       this.world.removeBody(body);
     }
   }
@@ -263,7 +295,49 @@ export class DicePhysicsWorld {
       this.world.removeBody(body);
     }
 
+    this.staticBodies.length = 0;
     this.disposed = true;
+  }
+
+  private createFloor(): void {
+    const floor = new Body({ mass: 0 });
+    floor.addShape(new Plane());
+    floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    this.world.addBody(floor);
+    this.staticBodies.push(floor);
+  }
+
+  private createArenaWalls(): void {
+    const extent = this.config.arenaHalfExtent;
+    const thickness = this.config.diceSize * 0.25;
+    const wallHeight = this.config.diceSize * 8;
+    const halfHeight = wallHeight / 2;
+    const longHalfExtent = extent + thickness;
+
+    this.addStaticBox(
+      new Vec3(thickness / 2, halfHeight, longHalfExtent),
+      new Vec3(-extent - thickness / 2, halfHeight, 0)
+    );
+    this.addStaticBox(
+      new Vec3(thickness / 2, halfHeight, longHalfExtent),
+      new Vec3(extent + thickness / 2, halfHeight, 0)
+    );
+    this.addStaticBox(
+      new Vec3(longHalfExtent, halfHeight, thickness / 2),
+      new Vec3(0, halfHeight, -extent - thickness / 2)
+    );
+    this.addStaticBox(
+      new Vec3(longHalfExtent, halfHeight, thickness / 2),
+      new Vec3(0, halfHeight, extent + thickness / 2)
+    );
+  }
+
+  private addStaticBox(halfExtents: Vec3, position: Vec3): void {
+    const body = new Body({ mass: 0 });
+    body.addShape(new Box(halfExtents));
+    body.position.copy(position);
+    this.world.addBody(body);
+    this.staticBodies.push(body);
   }
 
   private assertActive(): void {
