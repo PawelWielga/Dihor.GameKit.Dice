@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DICE_APPEARANCE,
+  hasDiceTextureSources,
   resolveDiceAppearance
 } from "../src/index.js";
 
@@ -21,6 +22,15 @@ describe("DiceAppearance", () => {
       roughness: 0.65,
       metalness: DEFAULT_DICE_APPEARANCE.metalness
     });
+  });
+
+  it("detects global and per-face texture sources", () => {
+    expect(hasDiceTextureSources(undefined)).toBe(false);
+    expect(hasDiceTextureSources({ color: "#ffffff" })).toBe(false);
+    expect(hasDiceTextureSources({ texture: "/body.png" })).toBe(true);
+    expect(hasDiceTextureSources({ normalMap: "/normal.png" })).toBe(true);
+    expect(hasDiceTextureSources({ faces: { 6: "/critical.png" } })).toBe(true);
+    expect(hasDiceTextureSources({ texture: "   ", faces: { 1: "" } })).toBe(false);
   });
 
   it("rejects invalid material factors and empty colors", () => {
