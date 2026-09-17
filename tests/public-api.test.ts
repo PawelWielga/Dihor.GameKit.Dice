@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   SUPPORTED_DICE_SIDES,
+  type DiceAppearance,
   type DiceRollRequest,
   type DiceRollResult
-} from "../src/index";
+} from "../src/index.js";
 
 describe("public domain API", () => {
   it("exposes the planned standard dice sides", () => {
@@ -37,6 +38,18 @@ describe("public domain API", () => {
     expect(request.dice).toHaveLength(2);
     expect(request.dice[0]?.appearance?.color).toBe("#7b1e1e");
     expect(request.dice[1]?.appearance?.faces?.[20]).toBe("/textures/critical.png");
+  });
+
+  it("models missing face texture overrides as undefined", () => {
+    const appearance: DiceAppearance = {
+      faces: {
+        20: "/textures/critical.png"
+      }
+    };
+
+    const missingFace: string | undefined = appearance.faces?.[1];
+
+    expect(missingFace).toBeUndefined();
   });
 
   it("defines an authoritative result contract with roll id and normalized modifier", () => {
