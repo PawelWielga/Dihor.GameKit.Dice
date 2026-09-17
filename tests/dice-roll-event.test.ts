@@ -7,6 +7,7 @@ import {
   createDiceRollEvent,
   createSeededRandomProvider,
   diceRollResultFromEvent,
+  validateDiceRollEvent,
   type DiceDefinition,
   type DiceRollResult,
   type RollPlan
@@ -76,7 +77,7 @@ describe("DiceRollEvent", () => {
         }
       }
     ]);
-    expect(restored).toEqual(event);
+    expect(validateDiceRollEvent(restored)).toEqual(event);
   });
 
   it("reconstructs the host result without rolling locally", () => {
@@ -115,5 +116,38 @@ describe("DiceRollEvent", () => {
       createDiceRollEvent(result, { definitions: [{ sides: 6 }, { sides: 20 }] })
     ).toThrowError(RangeError);
     expect(() => createDiceRollEvent({ ...result, total: 999 })).toThrowError(RangeError);
+  });
+
+  it("validates unknown transport payloads before clients use them", () => {
+    const valid = JSON.parse(JSON.stringify(createDiceRollEvent(logicalResult())));
+
+    expect(validateDiceRollEvent(valid)).toEqual(valid);
+    expect(() => validateDiceRollEvent({ ...valid, version: 999 })).toThrowError(RangeError);
+    expect(() => validateDiceRollEvent({ ...valid, total: 999 })).toThrowError(RangeError);
+    expect(() =>
+      validateDiceRollEvent({
+        ...valid,
+        dice: [{ sides: 7, value: 1 }, valid.dice[1]]
+      })
+    ).toThrowError(RangeError);
+  });
+
+  it("rejects malformed or unsupported replay payloads received over transport", () => {
+    const result = logicalResult();
+    const event = createDiceRollEvent(result, { plan: replayPlan(result) });
+    const payload = JSON.parse(JSON.stringify(event));
+
+    expect(() =>
+      validateDiceRollEvent({
+        ...payload,
+        replay: { ...payload.replay, version: 999 }
+      })
+    ).toThrowError(RangeError);
+    expect(() =>
+      validateDiceRollEvent({
+        ...payload,
+        replay: { version: DICE_ROLL_REPLAY_VERSION, plan: null }
+      })
+    ).toThrowError(RangeError);
   });
 });
