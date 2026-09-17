@@ -1,4 +1,4 @@
-import type { D6FaceValue } from "../core/dice/index.js";
+import type { DiceSides } from "../core/index.js";
 
 export interface PhysicsVector3 {
   readonly x: number;
@@ -39,8 +39,8 @@ export interface StabilityConfig {
 }
 
 export interface RollPlanDie {
-  readonly sides: 6;
-  readonly expectedValue: D6FaceValue;
+  readonly sides: DiceSides;
+  readonly expectedValue: number;
   readonly initialState: RollInitialState;
 }
 
