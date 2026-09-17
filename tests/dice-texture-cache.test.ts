@@ -23,7 +23,7 @@ class FakeTextureLoader implements DiceTextureLoader {
 }
 
 describe("DiceTextureCache", () => {
-  it("shares the same active texture and disposes it after the last release", async () => {
+  it("reuses a successful texture across sequential leases until cache disposal", async () => {
     const loader = new FakeTextureLoader();
     const cache = new DiceTextureCache(loader);
     const [first, second] = await Promise.all([
@@ -37,8 +37,28 @@ describe("DiceTextureCache", () => {
 
     const dispose = vi.spyOn(first!.texture, "dispose");
     first?.release();
-    expect(dispose).not.toHaveBeenCalled();
     second?.release();
+    expect(dispose).not.toHaveBeenCalled();
+
+    const third = await cache.acquire("/shared.png", "color");
+    expect(loader.calls).toEqual(["/shared.png"]);
+    expect(third?.texture).toBe(first?.texture);
+    third?.release();
+
+    cache.dispose();
+    cache.dispose();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers disposal of an actively leased texture until the lease is released", async () => {
+    const cache = new DiceTextureCache(new FakeTextureLoader());
+    const lease = await cache.acquire("/active.png", "color");
+    const dispose = vi.spyOn(lease!.texture, "dispose");
+
+    cache.dispose();
+    expect(dispose).not.toHaveBeenCalled();
+
+    lease?.release();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
@@ -55,5 +75,6 @@ describe("DiceTextureCache", () => {
     expect(loader.calls).toEqual(["/missing.png", "/missing.png"]);
     expect(retried).toBeDefined();
     retried?.release();
+    cache.dispose();
   });
 });
