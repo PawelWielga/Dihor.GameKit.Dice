@@ -4,7 +4,7 @@ Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Thr
 
 ## Status
 
-The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
+The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12 and D20 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
 
 ## Goals
 
@@ -16,7 +16,7 @@ The library supports:
 - Three.js rendering,
 - cannon-es physics,
 - predetermined physical outcomes,
-- D4, D6, D8, D10, D12, D20 and D100 dice,
+- D4, D6, D8, D10, D12 and D20 dice,
 - mixed dice types in one roll,
 - per-die colors and materials,
 - optional global and per-face textures,
