@@ -30,19 +30,22 @@ interface Polyhedron {
 }
 
 const EPSILON = 1e-9;
-const BASE_POLYHEDRAL_SIZE_SCALE = 1.15;
+const DEFAULT_POLYHEDRAL_SIZE_SCALE = 1.15;
+// Approved visual/physical baselines. Keep these independent from the generic polyhedral scale.
+const D4_SIZE_SCALE = 1.242;
+const D8_SIZE_SCALE = 1.725;
 const topologyCache = new Map<DiceSides, DiceTopology>();
 
 function topologySizeScale(sides: DiceSides): number {
   switch (sides) {
     case 4:
-      return BASE_POLYHEDRAL_SIZE_SCALE * 1.2;
+      return D4_SIZE_SCALE;
     case 6:
       return 1;
     case 8:
-      return BASE_POLYHEDRAL_SIZE_SCALE * 1.5;
+      return D8_SIZE_SCALE;
     default:
-      return BASE_POLYHEDRAL_SIZE_SCALE;
+      return DEFAULT_POLYHEDRAL_SIZE_SCALE;
   }
 }
 
