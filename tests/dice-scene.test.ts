@@ -164,6 +164,41 @@ describe("DiceScene", () => {
     scene.dispose();
   });
 
+  it("projects a top-down camera viewport onto the table plane", () => {
+    const scene = new DiceScene({
+      showFloor: false,
+      camera: { x: 0, y: 0, z: 10 }
+    });
+    scene.setSize(200, 100);
+
+    const boundary = scene.getTableBoundary();
+    const xs = boundary.map((point) => point.x);
+    const zs = boundary.map((point) => point.z);
+    const halfHeight = 10 * Math.tan((45 / 2) * (Math.PI / 180));
+
+    expect(boundary).toHaveLength(4);
+    expect(Math.max(...xs)).toBeCloseTo(halfHeight * 2, 4);
+    expect(Math.min(...xs)).toBeCloseTo(-halfHeight * 2, 4);
+    expect(Math.max(...zs)).toBeCloseTo(halfHeight, 4);
+    expect(Math.min(...zs)).toBeCloseTo(-halfHeight, 4);
+    scene.dispose();
+  });
+
+  it("updates projected table boundaries after camera and viewport changes", () => {
+    const scene = new DiceScene({ showFloor: false, camera: { x: 0, y: 20, z: 10 } });
+    scene.setSize(800, 800);
+    const first = scene.getTableBoundary();
+
+    scene.setCamera({ x: 45, y: 35, z: 12 });
+    scene.setSize(1600, 900);
+    const second = scene.getTableBoundary();
+
+    expect(second).toHaveLength(4);
+    expect(second).not.toEqual(first);
+    expect(second.every((point) => Number.isFinite(point.x) && Number.isFinite(point.z))).toBe(true);
+    scene.dispose();
+  });
+
   it("normalizes invalid dimensions instead of producing a broken projection", () => {
     const scene = new DiceScene({ showFloor: false });
 

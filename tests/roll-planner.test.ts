@@ -140,6 +140,26 @@ describe("RollPlanner", () => {
     }
   });
 
+  it("uses the same per-roll viewport boundary in hidden planning and replay config", () => {
+    const boundary = [
+      { x: -6, z: -4 },
+      { x: 6, z: -4 },
+      { x: 5, z: 4 },
+      { x: -5, z: 4 }
+    ] as const;
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    });
+
+    const plan = planner.plan(result([{ sides: 6, value: 1 }]), { arenaBoundary: boundary });
+
+    expect(plan.physics.arenaBoundary).toEqual(boundary);
+  });
+
   it("supports mixed dice in the same planned roll", () => {
     const planner = new RollPlanner({
       initialStateProvider: settledState,

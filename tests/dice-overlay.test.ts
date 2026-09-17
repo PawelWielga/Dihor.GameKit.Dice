@@ -257,7 +257,9 @@ describe("DiceOverlay", () => {
     const result = await overlay.roll({ dice: [{ sides: 6 }] }, { throwForce: 1.35 });
 
     expect(result.dice[0]?.value).toBe(1);
-    expect(planningOptions).toEqual([{ throwForce: 1.35 }]);
+    expect(planningOptions).toHaveLength(1);
+    expect(planningOptions[0]).toMatchObject({ throwForce: 1.35 });
+    expect((planningOptions[0] as { arenaBoundary?: unknown[] }).arenaBoundary).toHaveLength(4);
     overlay.dispose();
   });
 
@@ -292,7 +294,7 @@ describe("DiceOverlay", () => {
     overlay.dispose();
   });
 
-  it("propagates planning failures without mounting a renderer", async () => {
+  it("propagates planning failures and cleans up the temporary renderer", async () => {
     const documentRef = new FakeDocument();
     const rendererFactory = vi.fn(() => new FakeRenderer());
     const overlay = new DiceOverlay({
@@ -312,7 +314,7 @@ describe("DiceOverlay", () => {
       name: "DiceOverlayError",
       phase: "planning"
     } satisfies Partial<DiceOverlayError>);
-    expect(rendererFactory).not.toHaveBeenCalled();
+    expect(rendererFactory).toHaveBeenCalledTimes(1);
     expect(documentRef.body.children).toHaveLength(0);
   });
 

@@ -175,20 +175,26 @@ export class DiceOverlay {
         throw this.wrapError("roll", error);
       }
 
-      let plan: RollPlan;
-
-      try {
-        plan = this.planner.plan(logicalResult, options);
-      } catch (error) {
-        throw this.wrapError("planning", error);
-      }
-
       let surface: OverlaySurface;
 
       try {
         surface = this.ensureSurface();
       } catch (error) {
         throw this.wrapError("rendering", error);
+      }
+
+      let plan: RollPlan;
+
+      try {
+        plan = this.planner.plan(logicalResult, {
+          ...options,
+          arenaBoundary: surface.renderer.diceScene.getTableBoundary()
+        });
+      } catch (error) {
+        if (this.surface === surface) {
+          this.close();
+        }
+        throw this.wrapError("planning", error);
       }
 
       this.presentRolling(surface, request.reason ?? logicalResult.reason);
