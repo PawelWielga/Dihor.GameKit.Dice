@@ -59,6 +59,23 @@ describe("DiceMeshFactory", () => {
 
       if (sides !== 6) {
         expect(mesh.object.getObjectByName(`D${sides} numeric markings`)).toBeDefined();
+        expect((mesh.body.material as MeshStandardMaterial).flatShading).toBe(false);
+
+        const normals = mesh.body.geometry.getAttribute("normal");
+        let hasSoftenedTriangle = false;
+
+        for (let index = 0; index + 2 < normals.count; index += 3) {
+          const dx = Math.abs(normals.getX(index) - normals.getX(index + 1));
+          const dy = Math.abs(normals.getY(index) - normals.getY(index + 1));
+          const dz = Math.abs(normals.getZ(index) - normals.getZ(index + 1));
+
+          if (dx + dy + dz > 1e-5) {
+            hasSoftenedTriangle = true;
+            break;
+          }
+        }
+
+        expect(hasSoftenedTriangle).toBe(true);
       }
 
       mesh.dispose();
