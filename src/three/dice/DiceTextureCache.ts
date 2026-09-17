@@ -1,4 +1,5 @@
 import {
+  RepeatWrapping,
   SRGBColorSpace,
   Texture,
   TextureLoader
@@ -66,6 +67,10 @@ export class DiceTextureCache {
           if (role === "color") {
             texture.colorSpace = SRGBColorSpace;
           }
+
+          // Reference dice bodies unwrap longitude seams by allowing U to continue past 1.
+          // RepeatWrapping preserves that continuation and is harmless for 0..1 face textures.
+          texture.wrapS = RepeatWrapping;
 
           if (this.disposed) {
             texture.dispose();
