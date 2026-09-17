@@ -1,1 +1,1 @@
-export type { DiceAppearance } from "./DiceAppearance";
+export type { DiceAppearance } from "./DiceAppearance.js";
