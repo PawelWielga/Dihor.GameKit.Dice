@@ -4,7 +4,7 @@ import {
   LinearMipmapLinearFilter,
   Matrix4,
   Mesh,
-  MeshBasicMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
   SRGBColorSpace,
@@ -28,9 +28,11 @@ import type { DiceMesh } from "./DiceMeshFactory.js";
 interface LabelSurface {
   readonly mesh: Mesh;
   readonly geometry: PlaneGeometry;
-  readonly material: MeshBasicMaterial;
+  readonly material: MeshStandardMaterial;
   readonly texture: CanvasTexture;
+  readonly bumpTexture: CanvasTexture;
   readonly canvas: HTMLCanvasElement;
+  readonly bumpCanvas: HTMLCanvasElement;
   readonly value: number;
 }
 
@@ -43,31 +45,38 @@ interface FaceBasis {
   readonly height: number;
 }
 
-interface GlyphMeasurement {
+interface CharacterLayout {
   readonly character: string;
-  readonly advance: number;
-  readonly left: number;
-  readonly right: number;
-  readonly ascent: number;
-  readonly descent: number;
-  readonly originX: number;
+  readonly width: number;
+  readonly marker: boolean;
+  readonly x: number;
+  readonly centerX: number;
 }
 
-interface LabelMeasurement {
-  readonly glyphs: readonly GlyphMeasurement[];
-  readonly visualLeft: number;
-  readonly visualRight: number;
-  readonly visualWidth: number;
-  readonly ascent: number;
-  readonly descent: number;
+interface LabelMetrics {
+  readonly characters: readonly CharacterLayout[];
+  readonly gap: number;
+  readonly totalWidth: number;
+  readonly textBounds: {
+    readonly left: number;
+    readonly right: number;
+    readonly width: number;
+    readonly ascent: number;
+    readonly descent: number;
+    readonly height: number;
+  };
 }
 
 const LABEL_CANVAS_SIZE = 1024;
-const LABEL_MAXIMUM_WIDTH_RATIO = 0.92;
-const LABEL_MAXIMUM_HEIGHT_RATIO = 0.78;
+const BUMP_CANVAS_SIZE = 256;
+const LABEL_MAXIMUM_WIDTH_RATIO = 0.94;
+const LABEL_MAXIMUM_HEIGHT_RATIO = 0.82;
 const LABEL_GAP_RATIO = 0.02;
 const ORIENTATION_MARKER_GAP_RATIO = 0.075;
 const ORIENTATION_MARKER_RADIUS_RATIO = 0.026;
+const ORIENTATION_MARKER_MIN_RADIUS = 10;
+const ENGRAVED_BUMP_SCALE = -0.075;
+const ENGRAVED_ROUGHNESS = 0.72;
 
 function faceBasis(
   topology: ReturnType<typeof getDiceTopology>,
@@ -107,44 +116,42 @@ function faceBasis(
   };
 }
 
-/** Controls how much of each physical face is available to the transparent numeral plane. */
 export function getDiceFaceLabelPlaneScale(sides: DiceSides): number {
   switch (sides) {
     case 4:
-      return 0.54;
+      return 0.57;
     case 6:
-      return 0.8;
+      return 0.84;
     case 8:
-      return 0.61;
+      return 0.65;
     case 10:
-      return 0.56;
+      return 0.59;
     case 12:
-      return 0.66;
+      return 0.7;
     case 20:
-      return 0.61;
+      return 0.65;
   }
 }
 
 /** Base canvas font size before fitting unusually wide/tall custom fonts to the face. */
 export function getDiceFaceLabelBaseFontSize(label: string): number {
-  return label.length > 1 ? 660 : 820;
+  return label.length > 1 ? 700 : 870;
 }
 
-/** Exposed for deterministic rendering-quality tests. */
 export function getDiceFaceLabelCanvasSize(): number {
   return LABEL_CANVAS_SIZE;
 }
 
-/**
- * Centers only the actual numeral bounds around the canvas center. Orientation dots are added
- * afterwards and therefore never shift the main glyph up or down.
- */
 export function getDiceFaceLabelBaseline(
   canvasSize: number,
   ascent: number,
   descent: number
 ): number {
   return canvasSize / 2 + (ascent - descent) / 2;
+}
+
+export function getDiceFaceLabelBumpScale(): number {
+  return ENGRAVED_BUMP_SCALE;
 }
 
 function quoteFontFamily(family: string): string {
@@ -172,8 +179,8 @@ export function usesNumericFaceLabels(
   return sides !== 6 || resolveDiceFaceLabelMode(appearance) === "numbers";
 }
 
-function metricOrFallback(value: number, fallback: number): number {
-  return Number.isFinite(value) && value >= 0 ? value : fallback;
+function resolveMetric(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function configureLabelContext(
@@ -191,55 +198,69 @@ function configureLabelContext(
 function measureLabel(
   context: CanvasRenderingContext2D,
   label: string,
+  markerIndices: ReadonlySet<number>,
+  font: ResolvedDiceFontAppearance,
   fontSize: number
-): LabelMeasurement {
+): LabelMetrics {
+  configureLabelContext(context, font, fontSize);
   const gap = fontSize * LABEL_GAP_RATIO;
-  const glyphs: GlyphMeasurement[] = [];
-  let originX = 0;
-
-  for (let index = 0; index < label.length; index += 1) {
-    const character = label[index]!;
+  const characters = [...label].map((character, index) => {
     const metrics = context.measureText(character);
-    const advance = metrics.width;
-    const left = metricOrFallback(metrics.actualBoundingBoxLeft, 0);
-    const right = metricOrFallback(metrics.actualBoundingBoxRight, advance);
-    const ascent = metricOrFallback(metrics.actualBoundingBoxAscent, fontSize * 0.74);
-    const descent = metricOrFallback(metrics.actualBoundingBoxDescent, fontSize * 0.08);
-
-    glyphs.push({
+    return {
       character,
-      advance,
-      left,
-      right,
-      ascent,
-      descent,
-      originX
+      width: metrics.width,
+      left: resolveMetric(metrics.actualBoundingBoxLeft, 0),
+      right: resolveMetric(metrics.actualBoundingBoxRight, metrics.width),
+      ascent: resolveMetric(metrics.actualBoundingBoxAscent, fontSize * 0.72),
+      descent: resolveMetric(metrics.actualBoundingBoxDescent, fontSize * 0.2),
+      marker: markerIndices.has(index)
+    };
+  });
+
+  let cursorX = 0;
+  const positionedCharacters: CharacterLayout[] = [];
+  let left = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let ascent = 0;
+  let descent = 0;
+
+  for (const metrics of characters) {
+    const characterLeft = cursorX - metrics.left;
+    const characterRight = cursorX + metrics.right;
+    left = Math.min(left, characterLeft);
+    right = Math.max(right, characterRight);
+    ascent = Math.max(ascent, metrics.ascent);
+    descent = Math.max(descent, metrics.descent);
+    positionedCharacters.push({
+      character: metrics.character,
+      width: metrics.width,
+      marker: metrics.marker,
+      x: cursorX,
+      centerX: (characterLeft + characterRight) / 2
     });
-
-    originX += advance;
-
-    if (index < label.length - 1) {
-      originX += gap;
-    }
+    cursorX += metrics.width + gap;
   }
 
-  const visualLeft = Math.min(...glyphs.map((glyph) => glyph.originX - glyph.left));
-  const visualRight = Math.max(...glyphs.map((glyph) => glyph.originX + glyph.right));
+  const totalWidth = cursorX - (characters.length > 0 ? gap : 0);
 
   return {
-    glyphs,
-    visualLeft,
-    visualRight,
-    visualWidth: visualRight - visualLeft,
-    ascent: Math.max(...glyphs.map((glyph) => glyph.ascent)),
-    descent: Math.max(...glyphs.map((glyph) => glyph.descent))
+    characters: positionedCharacters,
+    gap,
+    totalWidth,
+    textBounds: {
+      left,
+      right,
+      width: right - left,
+      ascent,
+      descent,
+      height: ascent + descent
+    }
   };
 }
 
 function drawLabel(
   canvas: HTMLCanvasElement,
   value: number,
-  color: string,
   font: ResolvedDiceFontAppearance
 ): boolean {
   const context = canvas.getContext("2d");
@@ -253,49 +274,41 @@ function drawLabel(
   const maximumWidth = LABEL_CANVAS_SIZE * LABEL_MAXIMUM_WIDTH_RATIO;
   const maximumHeight = LABEL_CANVAS_SIZE * LABEL_MAXIMUM_HEIGHT_RATIO;
   let fontSize = getDiceFaceLabelBaseFontSize(label);
+  let metrics = measureLabel(context, label, markerIndices, font, fontSize);
 
-  const measure = () => {
-    configureLabelContext(context, font, fontSize);
-    return measureLabel(context, label, fontSize);
-  };
+  const widthScale = maximumWidth / metrics.textBounds.width;
+  const heightScale = maximumHeight / metrics.textBounds.height;
+  const scale = Math.min(widthScale, heightScale, 1);
 
-  let measurement = measure();
-  const initialHeight = measurement.ascent + measurement.descent;
-  const fitScale = Math.min(
-    1,
-    measurement.visualWidth > 0 ? maximumWidth / measurement.visualWidth : 1,
-    initialHeight > 0 ? maximumHeight / initialHeight : 1
-  );
-
-  if (fitScale < 1) {
-    fontSize *= fitScale;
-    measurement = measure();
+  if (scale < 1) {
+    fontSize *= scale;
+    metrics = measureLabel(context, label, markerIndices, font, fontSize);
   }
 
   context.clearRect(0, 0, LABEL_CANVAS_SIZE, LABEL_CANVAS_SIZE);
-  context.fillStyle = color;
   configureLabelContext(context, font, fontSize);
+  context.fillStyle = "#ffffff";
 
   const baseline = getDiceFaceLabelBaseline(
     LABEL_CANVAS_SIZE,
-    measurement.ascent,
-    measurement.descent
+    metrics.textBounds.ascent,
+    metrics.textBounds.descent
   );
-  const visualCenter = (measurement.visualLeft + measurement.visualRight) / 2;
-  const offsetX = LABEL_CANVAS_SIZE / 2 - visualCenter;
+  const textOffsetX = (LABEL_CANVAS_SIZE - metrics.textBounds.width) / 2 - metrics.textBounds.left;
 
-  for (let index = 0; index < measurement.glyphs.length; index += 1) {
-    const glyph = measurement.glyphs[index]!;
-    const glyphOriginX = offsetX + glyph.originX;
-    context.fillText(glyph.character, glyphOriginX, baseline);
+  for (const character of metrics.characters) {
+    const drawX = textOffsetX + character.x;
+    context.fillText(character.character, drawX, baseline);
 
-    if (markerIndices.has(index)) {
-      const radius = Math.max(10, fontSize * ORIENTATION_MARKER_RADIUS_RATIO);
-      const markerX = glyphOriginX + (glyph.right - glyph.left) / 2;
+    if (character.marker) {
+      const radius = Math.max(
+        ORIENTATION_MARKER_MIN_RADIUS,
+        fontSize * ORIENTATION_MARKER_RADIUS_RATIO
+      );
       const markerY =
-        baseline + glyph.descent + fontSize * ORIENTATION_MARKER_GAP_RATIO;
+        baseline + metrics.textBounds.descent + fontSize * ORIENTATION_MARKER_GAP_RATIO;
       context.beginPath();
-      context.arc(markerX, markerY, radius, 0, Math.PI * 2);
+      context.arc(textOffsetX + character.centerX, markerY, radius, 0, Math.PI * 2);
       context.fill();
     }
   }
@@ -303,15 +316,48 @@ function drawLabel(
   return true;
 }
 
-function createCanvas(): HTMLCanvasElement | undefined {
+function createCanvas(size = LABEL_CANVAS_SIZE): HTMLCanvasElement | undefined {
   if (typeof document === "undefined") {
     return undefined;
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = LABEL_CANVAS_SIZE;
-  canvas.height = LABEL_CANVAS_SIZE;
+  canvas.width = size;
+  canvas.height = size;
   return canvas;
+}
+
+/**
+ * Downsamples the white alpha mask onto an opaque black canvas. This creates a compact
+ * grayscale height map with naturally anti-aliased edges for the recessed bump effect.
+ */
+function syncBumpCanvas(
+  sourceCanvas: HTMLCanvasElement,
+  bumpCanvas: HTMLCanvasElement
+): boolean {
+  const context = bumpCanvas.getContext("2d");
+
+  if (!context) {
+    return false;
+  }
+
+  context.clearRect(0, 0, bumpCanvas.width, bumpCanvas.height);
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, bumpCanvas.width, bumpCanvas.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    sourceCanvas,
+    0,
+    0,
+    sourceCanvas.width,
+    sourceCanvas.height,
+    0,
+    0,
+    bumpCanvas.width,
+    bumpCanvas.height
+  );
+  return true;
 }
 
 function texturedFaceValues(
@@ -374,8 +420,14 @@ function createLabelSurface(
   font: ResolvedDiceFontAppearance
 ): LabelSurface | undefined {
   const canvas = createCanvas();
+  const bumpCanvas = createCanvas(BUMP_CANVAS_SIZE);
 
-  if (!canvas || !drawLabel(canvas, face.value, color, font)) {
+  if (
+    !canvas ||
+    !bumpCanvas ||
+    !drawLabel(canvas, face.value, font) ||
+    !syncBumpCanvas(canvas, bumpCanvas)
+  ) {
     return undefined;
   }
 
@@ -391,13 +443,22 @@ function createLabelSurface(
   texture.generateMipmaps = true;
   texture.needsUpdate = true;
 
-  const material = new MeshBasicMaterial({
-    color: "#ffffff",
+  const bumpTexture = new CanvasTexture(bumpCanvas);
+  bumpTexture.minFilter = LinearMipmapLinearFilter;
+  bumpTexture.magFilter = LinearFilter;
+  bumpTexture.generateMipmaps = true;
+  bumpTexture.needsUpdate = true;
+
+  const material = new MeshStandardMaterial({
+    color,
     map: texture,
+    bumpMap: bumpTexture,
+    bumpScale: ENGRAVED_BUMP_SCALE,
+    metalness: 0,
+    roughness: ENGRAVED_ROUGHNESS,
     transparent: true,
     depthWrite: false
   });
-  material.toneMapped = false;
   material.polygonOffset = true;
   material.polygonOffsetFactor = -2;
   material.polygonOffsetUnits = -2;
@@ -420,7 +481,9 @@ function createLabelSurface(
     geometry,
     material,
     texture,
+    bumpTexture,
     canvas,
+    bumpCanvas,
     value: face.value
   };
 }
@@ -485,8 +548,12 @@ export function applyDiceFaceLabels(
       }
 
       for (const surface of surfaces) {
-        if (drawLabel(surface.canvas, surface.value, resolved.markingsColor, loadedFont)) {
+        if (
+          drawLabel(surface.canvas, surface.value, loadedFont) &&
+          syncBumpCanvas(surface.canvas, surface.bumpCanvas)
+        ) {
           surface.texture.needsUpdate = true;
+          surface.bumpTexture.needsUpdate = true;
         }
       }
     })
@@ -510,6 +577,7 @@ export function applyDiceFaceLabels(
         surface.geometry.dispose();
         surface.material.dispose();
         surface.texture.dispose();
+        surface.bumpTexture.dispose();
       }
 
       baseDispose();

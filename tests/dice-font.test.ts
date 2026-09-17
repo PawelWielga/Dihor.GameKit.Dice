@@ -12,6 +12,7 @@ import {
 import {
   getDiceFaceLabelBaseFontSize,
   getDiceFaceLabelBaseline,
+  getDiceFaceLabelBumpScale,
   getDiceFaceLabelCanvasSize,
   getDiceFaceLabelPlaneScale,
   getDiceOrientationMarkerIndices,
@@ -129,16 +130,24 @@ describe("numeric face label rules", () => {
     expect(getDiceOrientationMarkerIndices("20")).toEqual([]);
   });
 
-  it("uses larger high-resolution face labels", () => {
+  it("uses slightly larger high-resolution face labels", () => {
     expect(getDiceFaceLabelCanvasSize()).toBe(1024);
-    expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(384);
-    expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(310);
-    expect(getDiceFaceLabelPlaneScale(4)).toBeGreaterThan(0.46);
-    expect(getDiceFaceLabelPlaneScale(6)).toBeGreaterThan(0.72);
-    expect(getDiceFaceLabelPlaneScale(20)).toBeGreaterThan(0.53);
+    expect(getDiceFaceLabelBaseFontSize("6")).toBeGreaterThan(820);
+    expect(getDiceFaceLabelBaseFontSize("20")).toBeGreaterThan(660);
+    expect(getDiceFaceLabelPlaneScale(4)).toBeCloseTo(0.57);
+    expect(getDiceFaceLabelPlaneScale(6)).toBeCloseTo(0.84);
+    expect(getDiceFaceLabelPlaneScale(8)).toBeCloseTo(0.65);
+    expect(getDiceFaceLabelPlaneScale(10)).toBeCloseTo(0.59);
+    expect(getDiceFaceLabelPlaneScale(12)).toBeCloseTo(0.7);
+    expect(getDiceFaceLabelPlaneScale(20)).toBeCloseTo(0.65);
   });
 
-  it("centers the numeral bounds without reserving space for an orientation dot", () => {
+  it("uses a negative bump scale so numeric markings read as recessed", () => {
+    expect(getDiceFaceLabelBumpScale()).toBeLessThan(0);
+    expect(getDiceFaceLabelBumpScale()).toBeGreaterThan(-0.2);
+  });
+
+  it("centers numeral bounds independently of orientation dots", () => {
     const canvasSize = getDiceFaceLabelCanvasSize();
     const ascent = 500;
     const descent = 36;
