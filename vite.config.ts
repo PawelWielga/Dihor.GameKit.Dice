@@ -9,7 +9,7 @@ export default defineConfig({
       fileName: "partybeam-dice-kit"
     },
     rollupOptions: {
-      external: ["three", "cannon-es"]
+      external: [/^three(?:\/.*)?$/, "cannon-es"]
     },
     sourcemap: true,
     emptyOutDir: true
