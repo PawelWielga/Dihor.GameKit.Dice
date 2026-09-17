@@ -27,4 +27,4 @@ export type {
   RollPlanDie,
   StabilityConfig
 } from "./RollModels.js";
-export { createD6Collider } from "./dice/index.js";
+export { createD6Collider, createDiceCollider } from "./dice/index.js";
