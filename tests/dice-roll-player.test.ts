@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DiceMeshFactory,
   DiceRollPlaybackError,
   DiceRollPlayer,
   DiceScene,
@@ -101,6 +102,36 @@ describe("DiceRollPlayer", () => {
 
     player.clear();
     expect(diceScene.content.children).toHaveLength(0);
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("passes independent appearance settings to each die in one playback", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const meshFactory = new DiceMeshFactory();
+    const createD6 = vi.spyOn(meshFactory, "createD6");
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const plan = createPlan();
+    const appearances = [
+      { color: "#7b1e1e", markingsColor: "#f5e6c8" },
+      { color: "#183153", markingsColor: "#f8fafc", roughness: 0.4, metalness: 0.2 }
+    ] as const;
+
+    const playback = player.play(plan, { appearances });
+
+    expect(createD6).toHaveBeenNthCalledWith(1, {
+      size: plan.physics.diceSize,
+      appearance: appearances[0]
+    });
+    expect(createD6).toHaveBeenNthCalledWith(2, {
+      size: plan.physics.diceSize,
+      appearance: appearances[1]
+    });
+
+    scheduler.runFrames(20);
+    await playback;
+
     player.dispose();
     diceScene.dispose();
   });
