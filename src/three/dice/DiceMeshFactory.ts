@@ -106,15 +106,33 @@ function faceBasis(face: DiceTopologyFace, size: number): FaceBasis {
   return { normal, horizontal, vertical, center };
 }
 
+function createSoftenedVertexNormals(topology: DiceTopology): readonly Vector3[] {
+  const normals = topology.vertices.map(() => new Vector3());
+
+  for (const face of topology.faces) {
+    const faceNormal = new Vector3(face.normal.x, face.normal.y, face.normal.z).normalize();
+
+    for (const vertexIndex of face.vertexIndices) {
+      normals[vertexIndex]?.add(faceNormal);
+    }
+  }
+
+  return normals.map((normal) => normal.normalize());
+}
+
 function createTopologyGeometry(
   topology: DiceTopology,
   size: number,
   values?: ReadonlySet<number>,
-  surfaceOffset = 0
+  surfaceOffset = 0,
+  edgeSoftness = 0
 ): BufferGeometry {
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
+  const softenedVertexNormals = edgeSoftness > 0
+    ? createSoftenedVertexNormals(topology)
+    : undefined;
 
   for (const face of topology.faces) {
     if (values && !values.has(face.value)) {
@@ -150,8 +168,13 @@ function createTopologyGeometry(
       for (const localIndex of [0, triangle, triangle + 1]) {
         const vertex = vertices[localIndex]!;
         const point = projected[localIndex]!;
+        const topologyVertexIndex = face.vertexIndices[localIndex]!;
+        const softenedNormal = softenedVertexNormals?.[topologyVertexIndex];
+        const renderNormal = softenedNormal
+          ? basis.normal.clone().lerp(softenedNormal, edgeSoftness).normalize()
+          : basis.normal;
         positions.push(vertex.x, vertex.y, vertex.z);
-        normals.push(basis.normal.x, basis.normal.y, basis.normal.z);
+        normals.push(renderNormal.x, renderNormal.y, renderNormal.z);
         uvs.push((point.x - minX) / width, (point.y - minY) / height);
       }
     }
@@ -528,7 +551,7 @@ export class DiceMeshFactory {
     textures?: DiceTextureResources
   ): DiceMesh {
     const topology = getDiceTopology(sides);
-    const bodyGeometry = createTopologyGeometry(topology, size);
+    const bodyGeometry = createTopologyGeometry(topology, size, undefined, 0, 0.72);
     const bodyMaterial = new MeshStandardMaterial({
       color:
         textures?.body && requestedAppearance?.color === undefined
@@ -539,7 +562,7 @@ export class DiceMeshFactory {
       roughnessMap: textures?.roughness?.texture,
       metalness: appearance.metalness,
       roughness: appearance.roughness,
-      flatShading: true
+      flatShading: false
     });
     const object = new Group();
     object.name = `PartyBeam.DiceKit D${sides}`;
