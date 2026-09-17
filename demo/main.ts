@@ -8,6 +8,8 @@ import {
   type RollPlan
 } from "../src/index.js";
 
+const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
+
 function requireElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
 
@@ -37,6 +39,7 @@ const markingsColor = requireElement<HTMLInputElement>("#markings-color");
 const bodyColorValue = requireElement<HTMLOutputElement>("#body-color-value");
 const markingsColorValue = requireElement<HTMLOutputElement>("#markings-color-value");
 const globalTexture = requireElement<HTMLInputElement>("#global-texture");
+const sampleTextureButton = requireElement<HTMLButtonElement>("#sample-texture-button");
 const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
   requireElement<HTMLInputElement>(`#face-${face}`)
 );
@@ -201,6 +204,10 @@ function resetOutput(): void {
 
 bodyColor.addEventListener("input", updateColorOutputs);
 markingsColor.addEventListener("input", updateColorOutputs);
+sampleTextureButton.addEventListener("click", () => {
+  globalTexture.value = SAMPLE_TEXTURE_URL;
+  globalTexture.focus();
+});
 debugMode.addEventListener("change", updateDebugPanel);
 resetButton.addEventListener("click", resetOutput);
 
