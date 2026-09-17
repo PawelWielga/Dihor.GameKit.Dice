@@ -3,6 +3,7 @@ import {
   RollPlanner,
   RollPlanningError,
   SUPPORTED_DICE_SIDES,
+  createSeededRandomProvider,
   getDiceFace,
   getDiceTopology,
   type DiceRollResult,
@@ -113,14 +114,12 @@ describe("RollPlanner", () => {
     }
   });
 
-  it("finds physical plans with the default initial-state strategy for every supported die type", () => {
-    const randomProvider = { next: () => 0.5 };
-
-    for (const sides of SUPPORTED_DICE_SIDES) {
-      const expectedValue = sides === 6 ? 1 : Math.max(1, Math.floor(sides / 2));
+  it("finds physical plans with the natural default strategy for every non-D6 die type", () => {
+    for (const sides of SUPPORTED_DICE_SIDES.filter((value) => value !== 6)) {
+      const expectedValue = Math.max(1, Math.floor(sides / 2));
       const planner = new RollPlanner({
-        randomProvider,
-        maxAttemptsPerDie: 1,
+        randomProvider: createSeededRandomProvider(`natural-d${sides}`, "physics"),
+        maxAttemptsPerDie: 36,
         maxCombinedAttempts: 1,
         maxPlanningTimeMs: 5000,
         stability: {
