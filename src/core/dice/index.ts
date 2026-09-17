@@ -9,3 +9,14 @@ export type {
   D6FaceValue,
   QuaternionLike
 } from "./D6Faces.js";
+export {
+  getDiceFace,
+  getDiceTopology,
+  getDiceValueFromOrientation
+} from "./DiceTopology.js";
+export type {
+  DiceResultDirection,
+  DiceTopology,
+  DiceTopologyFace,
+  DiceVector3
+} from "./DiceTopology.js";
