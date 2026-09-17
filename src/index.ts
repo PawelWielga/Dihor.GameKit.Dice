@@ -35,6 +35,18 @@ export {
   type RollIdProvider
 } from "./core/index.js";
 export {
+  DICE_ROLL_EVENT_TYPE,
+  DICE_ROLL_EVENT_VERSION,
+  DICE_ROLL_REPLAY_VERSION,
+  createDiceRollEvent,
+  diceRollResultFromEvent,
+  validateDiceRollEvent,
+  type CreateDiceRollEventOptions,
+  type DiceRollEvent,
+  type DiceRollEventDie,
+  type DiceRollReplayV1
+} from "./events/index.js";
+export {
   DiceOverlay,
   DiceOverlayError,
   type DiceOverlayErrorPhase,

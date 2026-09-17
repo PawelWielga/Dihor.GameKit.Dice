@@ -4,7 +4,7 @@ Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Thr
 
 ## Status
 
-The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported, together with opt-in seeded random streams and replayable `RollPlan` inputs.
+The reusable MVP pipeline is implemented: logical dice results, predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12, D20 and D100 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
 
 ## Goals
 
@@ -24,9 +24,8 @@ The library supports:
 - multiple dice in a single roll,
 - opt-in deterministic random streams for tests and replays,
 - JSON-serializable `RollPlan` replay inputs without stored animation frames,
+- versioned host-authoritative `DiceRollEvent` payloads for multiplayer integration,
 - an interactive browser demo hosted on GitHub Pages.
-
-PartyBeam multiplayer event contracts remain follow-up work.
 
 ## Requirements
 
@@ -109,6 +108,7 @@ src/
 ├── physics/     # cannon-es integration and predetermined roll planning
 ├── three/       # Three.js scene, renderer and dice meshes
 ├── appearance/  # Colors, materials, textures and themes
+├── events/      # Versioned transport-neutral event contracts
 ├── overlay/     # Framework-agnostic user-facing overlay
 └── index.ts     # Public package entry point
 ```
@@ -193,6 +193,25 @@ The same seed and stream reproduce the same random sequence and therefore the sa
 
 See [`docs/replay-and-determinism.md`](./docs/replay-and-determinism.md) for the replay contract and determinism guarantees.
 
+## Multiplayer event contract
+
+A host can package the authoritative result and optional replay plan into a JSON-friendly `DiceRollEvent`:
+
+```ts
+import { createDiceRollEvent } from "@partybeam/dice-kit";
+
+const event = createDiceRollEvent(result, {
+  definitions: request.dice,
+  plan
+});
+
+const payload = JSON.stringify(event);
+```
+
+DiceKit deliberately does not send the payload. PartyGameKit, WebSockets, WebRTC or another application transport can carry it. Clients reconstruct the logical result with `diceRollResultFromEvent(event)` and must not roll a replacement result locally. `event.replay` is optional presentation data; clients that cannot or do not want to run full physics can display the authoritative values directly.
+
+See [`docs/multiplayer-events.md`](./docs/multiplayer-events.md) for host/client flow, versioning and fallback behavior.
+
 ## Demo
 
 The interactive development application lives in `demo/` and is published automatically from `main` through GitHub Pages.
@@ -209,6 +228,7 @@ The Pages workflow builds the demo with `npm run build:demo`, uploads `dist-demo
 - Keep rendering and physics as separate concerns.
 - The game or host is authoritative for the logical result.
 - Physics presents a result; it does not decide game logic.
+- Keep multiplayer contracts transport-neutral and versioned.
 - Do not assume bit-for-bit deterministic physics across browsers or devices.
 - Prefer simple, testable abstractions over game-specific behavior.
 - Avoid paid commercial dependencies.
