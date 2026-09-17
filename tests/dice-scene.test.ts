@@ -1,4 +1,4 @@
-import { Object3D, Vector3, type Mesh, type MeshStandardMaterial } from "three";
+import { AmbientLight, DirectionalLight, Object3D, PointLight, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
 import { DiceScene } from "../src/index.js";
 
@@ -8,6 +8,77 @@ describe("DiceScene", () => {
     const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor");
 
     expect(floor?.position.y).toBe(0);
+    scene.dispose();
+  });
+
+  it("preserves the existing neutral lighting as the default", () => {
+    const scene = new DiceScene({ showFloor: false });
+    const ambient = scene.scene.getObjectByName("PartyBeam.DiceKit ambient light") as AmbientLight;
+    const key = scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1") as DirectionalLight;
+
+    expect(ambient).toBeInstanceOf(AmbientLight);
+    expect(ambient.color.getHex()).toBe(0xffffff);
+    expect(ambient.intensity).toBeCloseTo(1.4);
+    expect(key).toBeInstanceOf(DirectionalLight);
+    expect(key.color.getHex()).toBe(0xffffff);
+    expect(key.intensity).toBeCloseTo(2.2);
+    expect(key.position.toArray()).toEqual([4, 8, 5]);
+    expect(key.castShadow).toBe(false);
+    expect(scene.hasShadowCastingLights).toBe(false);
+    scene.dispose();
+  });
+
+  it("configures ambient, directional and point lights without rebuilding scene state", () => {
+    const scene = new DiceScene({
+      showFloor: false,
+      lighting: {
+        ambient: {
+          color: "#223344",
+          intensity: 0.35
+        },
+        lights: [
+          {
+            type: "directional",
+            color: "#ffcc88",
+            intensity: 2.8,
+            position: { x: -3, y: 7, z: 2 },
+            castShadow: true
+          },
+          {
+            type: "point",
+            color: "#6699ff",
+            intensity: 1.6,
+            position: { x: 1, y: 4, z: -2 },
+            distance: 12,
+            decay: 1.5
+          }
+        ]
+      }
+    });
+    const ambient = scene.scene.getObjectByName("PartyBeam.DiceKit ambient light") as AmbientLight;
+    const directional = scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1") as DirectionalLight;
+    const point = scene.scene.getObjectByName("PartyBeam.DiceKit point light 2") as PointLight;
+
+    expect(ambient.color.getHexString()).toBe("223344");
+    expect(ambient.intensity).toBeCloseTo(0.35);
+    expect(directional.position.toArray()).toEqual([-3, 7, 2]);
+    expect(directional.castShadow).toBe(true);
+    expect(point).toBeInstanceOf(PointLight);
+    expect(point.color.getHexString()).toBe("6699ff");
+    expect(point.intensity).toBeCloseTo(1.6);
+    expect(point.position.toArray()).toEqual([1, 4, -2]);
+    expect(point.distance).toBeCloseTo(12);
+    expect(point.decay).toBeCloseTo(1.5);
+    expect(scene.hasShadowCastingLights).toBe(true);
+
+    scene.setLighting({
+      ambient: { intensity: 0.2 },
+      lights: []
+    });
+
+    expect(scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1")).toBeUndefined();
+    expect(scene.scene.getObjectByName("PartyBeam.DiceKit point light 2")).toBeUndefined();
+    expect(scene.hasShadowCastingLights).toBe(false);
     scene.dispose();
   });
 
