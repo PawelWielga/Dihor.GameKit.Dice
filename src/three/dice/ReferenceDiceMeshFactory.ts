@@ -1,11 +1,8 @@
 import {
-  Float32BufferAttribute,
   Mesh,
   Vector3,
   type BufferGeometry
 } from "three";
-import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
-import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   getDiceTopology,
   type DiceSides,
@@ -18,6 +15,7 @@ import {
   type DiceMeshFactoryOptions,
   type DiceMeshOptions
 } from "./DiceMeshFactory.js";
+import { createSmoothConvexProfileGeometry } from "./ReferenceGeometryUtils.js";
 
 const D8_REFERENCE_APEX = 0.5;
 const D8_REFERENCE_RING_AXIS = 0.488692;
@@ -93,33 +91,8 @@ function appendD8TipProfile(points: Vector3[], profile: AxisProfile, sign: numbe
   points.push(profile.axis.clone().multiplyScalar(sign * D8_REFERENCE_APEX));
 }
 
-function addSphericalUvs(geometry: BufferGeometry): void {
-  const positions = geometry.getAttribute("position");
-  const uvs: number[] = [];
-
-  for (let index = 0; index < positions.count; index += 1) {
-    const x = positions.getX(index);
-    const y = positions.getY(index);
-    const z = positions.getZ(index);
-    const radius = Math.max(Math.hypot(x, y, z), Number.EPSILON);
-    const normalizedY = Math.max(-1, Math.min(1, y / radius));
-    const u = 0.5 + Math.atan2(z, x) / (Math.PI * 2);
-    const v = 0.5 - Math.asin(normalizedY) / Math.PI;
-    uvs.push(u, v);
-  }
-
-  geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
-}
-
 function createConvexProfileGeometry(points: Vector3[]): BufferGeometry {
-  const hull = new ConvexGeometry(points);
-  const geometry = mergeVertices(hull, 1e-6);
-  hull.dispose();
-  geometry.computeVertexNormals();
-  addSphericalUvs(geometry);
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  return geometry;
+  return createSmoothConvexProfileGeometry(points);
 }
 
 function createReferenceD8BodyGeometry(size: number): BufferGeometry {
@@ -333,7 +306,9 @@ function replaceReferenceBody(
   size: number
 ): DiceMesh {
   const replacement = createReferenceBodyGeometry(sides, size);
+  const previousGeometry = mesh.body.geometry;
   mesh.body.geometry = replacement.geometry;
+  previousGeometry.dispose();
 
   // The visual hull extends slightly beyond the original mathematical face planes. Move numeric
   // markings and optional per-face textures with those planes while keeping their face identity.
