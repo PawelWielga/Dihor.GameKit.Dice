@@ -11,6 +11,8 @@ export {
   D6_FACE_VALUES,
   D6_OPPOSITE_FACE,
   SUPPORTED_DICE_SIDES,
+  SeededRandomProvider,
+  createSeededRandomProvider,
   getD6TopValue,
   getDiceFace,
   getDiceTopology,
@@ -29,6 +31,7 @@ export {
   type DieResult,
   type QuaternionLike,
   type RandomProvider,
+  type RandomSeed,
   type RollIdProvider
 } from "./core/index.js";
 export {
