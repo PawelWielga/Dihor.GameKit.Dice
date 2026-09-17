@@ -11,6 +11,7 @@ export type {
 } from "./DicePhysicsWorld.js";
 export {
   DEFAULT_THROW_FORCE,
+  MAX_DICE_PER_ROLL,
   MAX_THROW_FORCE,
   MIN_THROW_FORCE,
   RollPlanner,

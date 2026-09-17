@@ -30,6 +30,8 @@ interface Polyhedron {
 }
 
 const EPSILON = 1e-9;
+/** Physical reference baseline used when comparing the rendered RPG set proportions. */
+export const D6_REFERENCE_EDGE_MM = 16;
 const DEFAULT_POLYHEDRAL_SIZE_SCALE = 1.15;
 // Approved visual/physical baselines. Keep these independent from the generic polyhedral scale.
 const D4_SIZE_SCALE = 1.14264;

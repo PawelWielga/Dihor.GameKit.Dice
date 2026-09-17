@@ -25,6 +25,7 @@ import type {
 export const MIN_THROW_FORCE = 0.5;
 export const DEFAULT_THROW_FORCE = 1;
 export const MAX_THROW_FORCE = 1.5;
+export const MAX_DICE_PER_ROLL = 6;
 
 export interface RollPlanningOptions {
   /** Multiplier applied to initial linear and angular velocity. Defaults to 1. */
@@ -351,8 +352,10 @@ export class RollPlanner {
   }
 
   private validateResult(result: DiceRollResult): readonly DieResult[] {
-    if (result.dice.length < 1 || result.dice.length > 3) {
-      throw new RangeError("RollPlanner currently supports between one and three dice.");
+    if (result.dice.length < 1 || result.dice.length > MAX_DICE_PER_ROLL) {
+      throw new RangeError(
+        `RollPlanner currently supports between one and ${MAX_DICE_PER_ROLL} dice.`
+      );
     }
 
     for (let index = 0; index < result.dice.length; index += 1) {

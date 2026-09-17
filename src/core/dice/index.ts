@@ -10,6 +10,7 @@ export type {
   QuaternionLike
 } from "./D6Faces.js";
 export {
+  D6_REFERENCE_EDGE_MM,
   getDiceFace,
   getDiceTopology,
   getDiceValueFromOrientation
