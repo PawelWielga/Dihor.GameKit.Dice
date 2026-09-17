@@ -2,6 +2,7 @@ import { Mesh, MeshStandardMaterial, Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
+  SUPPORTED_DICE_SIDES,
   type DiceTextureLoader
 } from "../src/index.js";
 
@@ -40,6 +41,29 @@ describe("DiceMeshFactory", () => {
     expect(bounds?.max.x).toBeCloseTo(1);
 
     mesh.dispose();
+    factory.dispose();
+  });
+
+  it("creates independently generated geometry and markings for every supported die", () => {
+    const factory = new DiceMeshFactory();
+
+    for (const sides of SUPPORTED_DICE_SIDES) {
+      const mesh = factory.create(sides, { size: 1.5 });
+      mesh.body.geometry.computeBoundingBox();
+      const bounds = mesh.body.geometry.boundingBox;
+
+      expect(mesh.sides).toBe(sides);
+      expect(mesh.body.name).toBe(`D${sides} body`);
+      expect(bounds).not.toBeNull();
+      expect((bounds?.max.x ?? 0) - (bounds?.min.x ?? 0)).toBeGreaterThan(0);
+
+      if (sides !== 6) {
+        expect(mesh.object.getObjectByName(`D${sides} numeric markings`)).toBeDefined();
+      }
+
+      mesh.dispose();
+    }
+
     factory.dispose();
   });
 
@@ -103,6 +127,23 @@ describe("DiceMeshFactory", () => {
     expect(disposeTexture).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps per-face textures bound to the same physical face on polyhedral dice", async () => {
+    const loader = new FakeTextureLoader();
+    const factory = new DiceMeshFactory({ textureLoader: loader });
+    const mesh = await factory.createAsync(20, {
+      appearance: {
+        color: "#264653",
+        faces: { 13: "/d20-face-13.png" }
+      }
+    });
+
+    expect(mesh.object.getObjectByName("D20 face texture 13")).toBeDefined();
+    expect(loader.calls).toContain("/d20-face-13.png");
+
+    mesh.dispose();
+    factory.dispose();
+  });
+
   it("reuses cached textures across sequential meshes from one factory", async () => {
     const loader = new FakeTextureLoader();
     const factory = new DiceMeshFactory({ textureLoader: loader });
@@ -135,15 +176,10 @@ describe("DiceMeshFactory", () => {
     factory.dispose();
   });
 
-  it("rejects unsupported dice until their geometry is implemented", () => {
-    const factory = new DiceMeshFactory();
-    expect(() => factory.create(20)).toThrowError(RangeError);
-    factory.dispose();
-  });
-
-  it("validates D6 size and disposes owned render resources once", () => {
+  it("validates dice size and disposes owned render resources once", () => {
     const factory = new DiceMeshFactory();
     expect(() => factory.createD6({ size: 0 })).toThrowError(RangeError);
+    expect(() => factory.create(20, { size: Number.NaN })).toThrowError(RangeError);
 
     const mesh = factory.createD6();
     const bodyDispose = vi.spyOn(mesh.body.geometry, "dispose");
