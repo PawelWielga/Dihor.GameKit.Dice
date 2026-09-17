@@ -6,6 +6,7 @@ import {
 import type { DiceSides } from "../core/index.js";
 import {
   DicePhysicsWorld,
+  MAX_DICE_PER_ROLL,
   resolveStabilityConfig,
   type RollPlan,
   type StabilityConfig
@@ -440,8 +441,10 @@ export class DiceRollPlayer {
   }
 
   private validatePlan(plan: RollPlan): void {
-    if (plan.dice.length < 1 || plan.dice.length > 3) {
-      throw new RangeError("DiceRollPlayer currently supports between one and three dice.");
+    if (plan.dice.length < 1 || plan.dice.length > MAX_DICE_PER_ROLL) {
+      throw new RangeError(
+        `DiceRollPlayer currently supports between one and ${MAX_DICE_PER_ROLL} dice.`
+      );
     }
 
     requirePositiveInteger("simulationSteps", plan.simulationSteps);
