@@ -6,13 +6,43 @@ import {
 import { ConvexGeometry } from "three/addons/geometries/ConvexGeometry.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
-function sphericalUv(position: Vector3): readonly [number, number] {
+function sphericalUv(position: Vector3): [number, number] {
   const radius = Math.max(position.length(), Number.EPSILON);
   const normalizedY = Math.max(-1, Math.min(1, position.y / radius));
   return [
     0.5 + Math.atan2(position.z, position.x) / (Math.PI * 2),
     0.5 - Math.asin(normalizedY) / Math.PI
   ];
+}
+
+function unwrapTriangleU(uvs: [number, number][]): void {
+  const sorted = uvs.map(([u]) => u).sort((left, right) => left - right);
+
+  if (sorted.length < 2) {
+    return;
+  }
+
+  let largestGap = sorted[0]! + 1 - sorted[sorted.length - 1]!;
+  let shiftThreshold: number | undefined;
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const gap = sorted[index]! - sorted[index - 1]!;
+
+    if (gap > largestGap) {
+      largestGap = gap;
+      shiftThreshold = sorted[index]!;
+    }
+  }
+
+  if (shiftThreshold === undefined) {
+    return;
+  }
+
+  for (const uv of uvs) {
+    if (uv[0] < shiftThreshold) {
+      uv[0] += 1;
+    }
+  }
 }
 
 function addUnwrappedSphericalUvs(geometry: BufferGeometry): BufferGeometry {
@@ -30,27 +60,18 @@ function addUnwrappedSphericalUvs(geometry: BufferGeometry): BufferGeometry {
 
     for (let corner = 0; corner < 3; corner += 1) {
       const vertexIndex = index + corner;
-      triangleUvs.push([
-        ...sphericalUv(
+      triangleUvs.push(
+        sphericalUv(
           new Vector3(
             positions.getX(vertexIndex),
             positions.getY(vertexIndex),
             positions.getZ(vertexIndex)
           )
         )
-      ]);
+      );
     }
 
-    const minU = Math.min(...triangleUvs.map(([u]) => u));
-    const maxU = Math.max(...triangleUvs.map(([u]) => u));
-
-    if (maxU - minU > 0.5) {
-      for (const uv of triangleUvs) {
-        if (uv[0] < 0.5) {
-          uv[0] += 1;
-        }
-      }
-    }
+    unwrapTriangleU(triangleUvs);
 
     for (const [u, v] of triangleUvs) {
       uvs.push(u, v);
