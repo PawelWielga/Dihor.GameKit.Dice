@@ -30,8 +30,21 @@ interface Polyhedron {
 }
 
 const EPSILON = 1e-9;
-const POLYHEDRAL_SIZE_SCALE = 1.15;
+const BASE_POLYHEDRAL_SIZE_SCALE = 1.15;
 const topologyCache = new Map<DiceSides, DiceTopology>();
+
+function topologySizeScale(sides: DiceSides): number {
+  switch (sides) {
+    case 4:
+      return BASE_POLYHEDRAL_SIZE_SCALE * 1.2;
+    case 6:
+      return 1;
+    case 8:
+      return BASE_POLYHEDRAL_SIZE_SCALE * 1.5;
+    default:
+      return BASE_POLYHEDRAL_SIZE_SCALE;
+  }
+}
 
 function add(a: DiceVector3, b: DiceVector3): DiceVector3 {
   return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
@@ -151,9 +164,10 @@ function createTopology(
     );
   }
 
-  const vertices = sides === 6
+  const sizeScale = topologySizeScale(sides);
+  const vertices = sizeScale === 1
     ? polyhedron.vertices
-    : polyhedron.vertices.map((vertex) => scale(vertex, POLYHEDRAL_SIZE_SCALE));
+    : polyhedron.vertices.map((vertex) => scale(vertex, sizeScale));
   const faces = polyhedron.faces.map((indices, index) => {
     const oriented = orientFace(vertices, indices);
     return {
