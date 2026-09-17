@@ -3,7 +3,7 @@ import {
   hasDiceTextureSources,
   type DiceAppearance
 } from "../appearance/index.js";
-import type { D6FaceValue } from "../core/dice/index.js";
+import type { DiceSides } from "../core/index.js";
 import {
   DicePhysicsWorld,
   resolveStabilityConfig,
@@ -38,8 +38,8 @@ export interface DiceRollPlaybackOptions {
 }
 
 export interface DiceRollPlaybackDieResult {
-  readonly sides: 6;
-  readonly value: D6FaceValue;
+  readonly sides: DiceSides;
+  readonly value: number;
 }
 
 export interface DiceRollPlaybackResult {
@@ -111,7 +111,7 @@ function toPlaybackError(error: unknown): DiceRollPlaybackError {
   return new DiceRollPlaybackError(`Dice roll playback failed: ${String(error)}.`);
 }
 
-/** Replays a RollPlan with real cannon-es physics and synchronizes D6 meshes into a DiceScene. */
+/** Replays a RollPlan with cannon-es physics and synchronizes all supported meshes into DiceScene. */
 export class DiceRollPlayer {
   private readonly target: DiceRenderTarget;
   private readonly meshFactory: DiceMeshFactory;
@@ -163,14 +163,20 @@ export class DiceRollPlayer {
 
     try {
       for (let index = 0; index < plan.dice.length; index += 1) {
+        const die = plan.dice[index];
+
+        if (!die) {
+          throw new DiceRollPlaybackError(`Roll plan contains no die at index ${index}.`);
+        }
+
         const appearance = options.appearances?.[index];
         const meshOptions = {
           size: plan.physics.diceSize,
           appearance
         };
         const mesh = hasDiceTextureSources(appearance)
-          ? await this.meshFactory.createD6Async(meshOptions)
-          : this.meshFactory.createD6(meshOptions);
+          ? await this.meshFactory.createAsync(die.sides, meshOptions)
+          : this.meshFactory.create(die.sides, meshOptions);
 
         if (preparation.cancelled || this.disposed) {
           mesh.dispose();
@@ -186,7 +192,7 @@ export class DiceRollPlayer {
 
       this.activePreparation = undefined;
       world = new DicePhysicsWorld(plan.physics);
-      const bodies = plan.dice.map((die) => world!.addD6(die.initialState));
+      const bodies = plan.dice.map((die) => world!.addDie(die.sides, die.initialState));
 
       for (const mesh of meshes) {
         this.target.diceScene.add(mesh.object);
@@ -345,7 +351,15 @@ export class DiceRollPlayer {
   }
 
   private finishSession(session: PlaybackSession): void {
-    const observed = session.bodies.map((body) => session.world.getD6Value(body));
+    const observed = session.bodies.map((body, index) => {
+      const expectedDie = session.plan.dice[index];
+
+      if (!expectedDie) {
+        throw new DiceRollPlaybackError(`Roll plan contains no die at index ${index}.`);
+      }
+
+      return session.world.getDieValue(expectedDie.sides, body);
+    });
 
     for (let index = 0; index < observed.length; index += 1) {
       const actualValue = observed[index];
@@ -355,7 +369,7 @@ export class DiceRollPlayer {
         this.failSession(
           session,
           new DiceRollPlaybackError(
-            `Visible D6 result mismatch at index ${index}: expected ${expectedDie?.expectedValue ?? "unknown"}, received ${actualValue ?? "unknown"}.`
+            `Visible D${expectedDie?.sides ?? "?"} result mismatch at index ${index}: expected ${expectedDie?.expectedValue ?? "unknown"}, received ${actualValue ?? "unknown"}.`
           )
         );
         return;
@@ -367,7 +381,10 @@ export class DiceRollPlayer {
     this.activeSession = undefined;
     session.resolve({
       rollId: session.plan.rollId,
-      dice: observed.map((value) => ({ sides: 6, value })),
+      dice: observed.map((value, index) => ({
+        sides: session.plan.dice[index]!.sides,
+        value
+      })),
       simulationSteps: session.simulationSteps
     });
   }
@@ -433,12 +450,11 @@ export class DiceRollPlayer {
       }
 
       if (
-        die.sides !== 6 ||
         !Number.isInteger(die.expectedValue) ||
         die.expectedValue < 1 ||
-        die.expectedValue > 6
+        die.expectedValue > die.sides
       ) {
-        throw new RangeError(`Unsupported or invalid D6 plan at index ${index}.`);
+        throw new RangeError(`Unsupported or invalid D${die.sides} plan at index ${index}.`);
       }
     }
   }
