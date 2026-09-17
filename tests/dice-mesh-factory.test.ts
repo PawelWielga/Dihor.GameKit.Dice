@@ -26,7 +26,8 @@ class FakeTextureLoader implements DiceTextureLoader {
 
 describe("DiceMeshFactory", () => {
   it("creates a rounded D6 with all 21 classic pips", () => {
-    const mesh = new DiceMeshFactory().createD6({ size: 2 });
+    const factory = new DiceMeshFactory();
+    const mesh = factory.createD6({ size: 2 });
     const pipMeshes = mesh.object.children.filter((child) => child.name.startsWith("D6 pip "));
 
     expect(mesh.sides).toBe(6);
@@ -39,10 +40,12 @@ describe("DiceMeshFactory", () => {
     expect(bounds?.max.x).toBeCloseTo(1);
 
     mesh.dispose();
+    factory.dispose();
   });
 
   it("applies custom body, markings and material appearance", () => {
-    const mesh = new DiceMeshFactory().createD6({
+    const factory = new DiceMeshFactory();
+    const mesh = factory.createD6({
       appearance: {
         color: "#7b1e1e",
         markingsColor: "#f5e6c8",
@@ -60,6 +63,7 @@ describe("DiceMeshFactory", () => {
     expect(pipMaterial.color.getHexString()).toBe("f5e6c8");
 
     mesh.dispose();
+    factory.dispose();
   });
 
   it("loads global maps and replaces only successfully textured faces", async () => {
@@ -92,12 +96,31 @@ describe("DiceMeshFactory", () => {
     const disposeTexture = vi.spyOn(bodyTexture, "dispose");
     mesh.dispose();
     mesh.dispose();
+    expect(disposeTexture).not.toHaveBeenCalled();
+
+    factory.dispose();
+    factory.dispose();
     expect(disposeTexture).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses cached textures across sequential meshes from one factory", async () => {
+    const loader = new FakeTextureLoader();
+    const factory = new DiceMeshFactory({ textureLoader: loader });
+
+    const first = await factory.createD6Async({ appearance: { texture: "/shared.png" } });
+    first.dispose();
+    const second = await factory.createD6Async({ appearance: { texture: "/shared.png" } });
+
+    expect(loader.calls.filter((url) => url === "/shared.png")).toHaveLength(1);
+
+    second.dispose();
+    factory.dispose();
   });
 
   it("keeps explicit body color as a tint when a global texture is present", async () => {
     const loader = new FakeTextureLoader();
-    const mesh = await new DiceMeshFactory({ textureLoader: loader }).createD6Async({
+    const factory = new DiceMeshFactory({ textureLoader: loader });
+    const mesh = await factory.createD6Async({
       appearance: {
         color: "#7b1e1e",
         texture: "/body.png"
@@ -109,11 +132,13 @@ describe("DiceMeshFactory", () => {
     expect(bodyMaterial.map?.name).toBe("/body.png");
 
     mesh.dispose();
+    factory.dispose();
   });
 
   it("rejects unsupported dice until their geometry is implemented", () => {
     const factory = new DiceMeshFactory();
     expect(() => factory.create(20)).toThrowError(RangeError);
+    factory.dispose();
   });
 
   it("validates D6 size and disposes owned render resources once", () => {
@@ -127,5 +152,7 @@ describe("DiceMeshFactory", () => {
     mesh.dispose();
 
     expect(bodyDispose).toHaveBeenCalledTimes(1);
+    factory.dispose();
+    expect(() => factory.createD6()).toThrowError("DiceMeshFactory has been disposed.");
   });
 });
