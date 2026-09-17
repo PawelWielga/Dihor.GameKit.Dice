@@ -1,6 +1,8 @@
 export {
   DEFAULT_DICE_PHYSICS_CONFIG,
-  DicePhysicsWorld
+  DEFAULT_STABILITY_CONFIG,
+  DicePhysicsWorld,
+  resolveStabilityConfig
 } from "./DicePhysicsWorld.js";
 export type {
   DicePhysicsWorldOptions,
@@ -22,6 +24,7 @@ export type {
   PhysicsVector3,
   RollInitialState,
   RollPlan,
-  RollPlanDie
+  RollPlanDie,
+  StabilityConfig
 } from "./RollModels.js";
 export { createD6Collider } from "./dice/index.js";

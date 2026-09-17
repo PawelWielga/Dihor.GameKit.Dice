@@ -28,6 +28,14 @@ export interface DicePhysicsConfig {
   readonly linearDamping: number;
   readonly angularDamping: number;
   readonly diceSize: number;
+  readonly arenaHalfExtent: number;
+}
+
+export interface StabilityConfig {
+  readonly linearThreshold: number;
+  readonly angularThreshold: number;
+  readonly consecutiveSteps: number;
+  readonly maxSteps: number;
 }
 
 export interface RollPlanDie {
@@ -40,5 +48,6 @@ export interface RollPlan {
   readonly rollId: string;
   readonly dice: readonly RollPlanDie[];
   readonly physics: DicePhysicsConfig;
+  readonly stability: StabilityConfig;
   readonly simulationSteps: number;
 }

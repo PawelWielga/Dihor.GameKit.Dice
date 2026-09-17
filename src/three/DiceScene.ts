@@ -66,7 +66,8 @@ export class DiceScene {
       const floor = new Mesh(this.floorGeometry, this.floorMaterial);
       floor.name = "PartyBeam.DiceKit floor";
       floor.rotation.x = -Math.PI / 2;
-      floor.position.y = -0.5;
+      floor.position.y = 0;
+      floor.receiveShadow = true;
       this.scene.add(floor);
     }
   }

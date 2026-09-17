@@ -9,6 +9,12 @@ const stableState = {
 } as const;
 
 describe("DicePhysicsWorld", () => {
+  it("creates a floor and four physical arena walls", () => {
+    const world = new DicePhysicsWorld();
+    expect(world.world.bodies).toHaveLength(5);
+    world.dispose();
+  });
+
   it("detects stable and moving D6 bodies from velocities", () => {
     const world = new DicePhysicsWorld();
     const body = world.addD6(stableState);

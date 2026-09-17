@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { DiceScene } from "../src/index.js";
 
 describe("DiceScene", () => {
+  it("aligns the visible floor with the physics plane at world y=0", () => {
+    const scene = new DiceScene();
+    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor");
+
+    expect(floor?.position.y).toBe(0);
+    scene.dispose();
+  });
+
   it("updates camera aspect ratio when its viewport changes", () => {
     const scene = new DiceScene({ showFloor: false });
 

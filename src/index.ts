@@ -20,10 +20,12 @@ export {
 } from "./core/index.js";
 export {
   DEFAULT_DICE_PHYSICS_CONFIG,
+  DEFAULT_STABILITY_CONFIG,
   DicePhysicsWorld,
   RollPlanner,
   RollPlanningError,
   createD6Collider,
+  resolveStabilityConfig,
   type DicePhysicsConfig,
   type DicePhysicsWorldOptions,
   type PhysicsQuaternion,
@@ -34,9 +36,19 @@ export {
   type RollPlan,
   type RollPlanDie,
   type RollPlannerOptions,
+  type StabilityConfig,
   type StabilityOptions,
   type StabilityResult
 } from "./physics/index.js";
+export {
+  DiceRollPlaybackError,
+  DiceRollPlayer,
+  type DiceAnimationScheduler,
+  type DiceRenderTarget,
+  type DiceRollPlaybackDieResult,
+  type DiceRollPlaybackResult,
+  type DiceRollPlayerOptions
+} from "./player/index.js";
 export {
   DiceMeshFactory,
   DiceRenderer,

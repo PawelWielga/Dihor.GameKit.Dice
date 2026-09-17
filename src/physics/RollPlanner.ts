@@ -3,6 +3,7 @@ import type { D6FaceValue } from "../core/dice/index.js";
 import {
   DEFAULT_DICE_PHYSICS_CONFIG,
   DicePhysicsWorld,
+  resolveStabilityConfig,
   type DicePhysicsWorldOptions,
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
@@ -11,7 +12,8 @@ import type {
   PhysicsQuaternion,
   RollInitialState,
   RollPlan,
-  RollPlanDie
+  RollPlanDie,
+  StabilityConfig
 } from "./RollModels.js";
 
 export interface RollInitialStateContext {
@@ -69,7 +71,7 @@ export class RollPlanner {
   private readonly randomProvider: RandomProvider;
   private readonly initialStateProvider: RollInitialStateProvider;
   private readonly physicsOptions: DicePhysicsWorldOptions;
-  private readonly stabilityOptions: StabilityOptions;
+  private readonly stabilityConfig: StabilityConfig;
   private readonly maxAttemptsPerDie: number;
   private readonly maxCombinedAttempts: number;
   private readonly maxPlanningTimeMs: number;
@@ -81,7 +83,7 @@ export class RollPlanner {
     this.initialStateProvider =
       options.initialStateProvider ?? ((context) => this.createRandomInitialState(context));
     this.physicsOptions = options.physics ?? {};
-    this.stabilityOptions = options.stability ?? {};
+    this.stabilityConfig = resolveStabilityConfig(options.stability);
     this.maxAttemptsPerDie = requirePositiveInteger(
       "maxAttemptsPerDie",
       options.maxAttemptsPerDie ?? 36
@@ -142,6 +144,7 @@ export class RollPlanner {
           rollId: result.rollId,
           dice: plannedDice,
           physics: verification.physics,
+          stability: this.stabilityConfig,
           simulationSteps: verification.steps
         };
       }
@@ -173,7 +176,7 @@ export class RollPlanner {
           diceSize: probeWorld.config.diceSize
         });
         const body = probeWorld.addD6(state);
-        const simulation = probeWorld.simulateUntilStable([body], this.stabilityOptions);
+        const simulation = probeWorld.simulateUntilStable([body], this.stabilityConfig);
 
         if (simulation.stable && probeWorld.getD6Value(body) === expectedValue) {
           return state;
@@ -198,7 +201,7 @@ export class RollPlanner {
 
     try {
       const bodies = plannedDice.map((die) => world.addD6(die.initialState));
-      const simulation = world.simulateUntilStable(bodies, this.stabilityOptions);
+      const simulation = world.simulateUntilStable(bodies, this.stabilityConfig);
 
       if (!simulation.stable) {
         return {
