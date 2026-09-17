@@ -387,14 +387,14 @@ export class RollPlanner {
     // with cross-axis spin so the visible replay behaves like a throw instead of a tiny final drop.
     // Later attempts progressively reduce tumble energy, giving high-sided dice a reliable path
     // to the authoritative result without snapping or changing face identities after simulation.
-    const attemptEnergy = Math.max(0.28, 1 - (context.attempt - 1) * 0.055);
+    const attemptEnergy = Math.max(0.04, 1 - (context.attempt - 1) * 0.08);
     const percentileDie = context.sides === 100;
-    const tumbleLimit = (percentileDie ? 0.18 : context.sides >= 20 ? 4.0 : 5.8) * attemptEnergy;
+    const tumbleLimit = (percentileDie ? 0.1 : context.sides >= 20 ? 4.0 : 5.8) * attemptEnergy;
     const yawLimit = percentileDie ? 9 : 5.5;
-    const lateralLimit = size * (percentileDie ? 0.28 : 0.58);
+    const lateralLimit = size * (percentileDie ? 0.12 : 0.58) * attemptEnergy;
     const dropHeight = size * (
       percentileDie
-        ? this.randomRange(1.15, 1.75)
+        ? this.randomRange(0.25, 0.4)
         : this.randomRange(1.65, 2.75)
     );
 
@@ -407,12 +407,12 @@ export class RollPlanner {
       quaternion,
       velocity: {
         x: this.randomRange(-lateralLimit, lateralLimit),
-        y: size * (percentileDie ? this.randomRange(0.05, 0.35) : this.randomRange(0.15, 0.85)),
+        y: size * (percentileDie ? this.randomRange(0.02, 0.12) : this.randomRange(0.15, 0.85)),
         z: this.randomRange(-lateralLimit, lateralLimit)
       },
       angularVelocity: {
         x: this.randomRange(-tumbleLimit, tumbleLimit),
-        y: this.randomRange(-yawLimit, yawLimit),
+        y: percentileDie ? this.randomRange(4, yawLimit) : this.randomRange(-yawLimit, yawLimit),
         z: this.randomRange(-tumbleLimit, tumbleLimit)
       }
     };
