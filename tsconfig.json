@@ -13,5 +13,6 @@
     "noEmit": true,
     "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts", "demo/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "demo/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["tests/consumer-nodenext.ts"]
 }
