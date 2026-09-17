@@ -136,6 +136,16 @@ function quaternionFromDirections(
   });
 }
 
+function rotatedY(
+  vector: { readonly x: number; readonly y: number; readonly z: number },
+  quaternion: PhysicsQuaternion
+): number {
+  const tx = 2 * (quaternion.y * vector.z - quaternion.z * vector.y);
+  const ty = 2 * (quaternion.z * vector.x - quaternion.x * vector.z);
+  const tz = 2 * (quaternion.x * vector.y - quaternion.y * vector.x);
+  return vector.y + quaternion.w * ty + (quaternion.z * tx - quaternion.x * tz);
+}
+
 /** Finds replayable physical initial states for authoritative logical dice results. */
 export class RollPlanner {
   private readonly randomProvider: RandomProvider;
@@ -370,14 +380,21 @@ export class RollPlanner {
       z: 0,
       w: Math.cos(yaw / 2)
     };
+    const quaternion = multiplyQuaternions(yawQuaternion, aligned);
+    const supportY = -Math.min(...topology.vertices.map((vertex) => rotatedY(vertex, quaternion))) * size;
+    const dropHeight = size * (
+      context.sides === 100
+        ? this.randomRange(0.02, 0.06)
+        : this.randomRange(0.18, 0.4)
+    );
 
     return {
       position: {
         x: context.slotX,
-        y: size * this.randomRange(1.6, 2.2),
+        y: supportY + dropHeight,
         z: 0
       },
-      quaternion: multiplyQuaternions(yawQuaternion, aligned),
+      quaternion,
       velocity: {
         x: 0,
         y: 0,
