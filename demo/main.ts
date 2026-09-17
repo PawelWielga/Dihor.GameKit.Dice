@@ -11,6 +11,7 @@ import {
 } from "../src/index.js";
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
+const COMPARISON_SIDES = [4, 6, 8] as const satisfies readonly DiceSides[];
 
 function requireElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -46,6 +47,7 @@ const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
   requireElement<HTMLInputElement>(`#face-${face}`)
 );
 const debugMode = requireElement<HTMLInputElement>("#debug-mode");
+const compareButton = requireElement<HTMLButtonElement>("#compare-button");
 const rollButton = requireElement<HTMLButtonElement>("#roll-button");
 const resetButton = requireElement<HTMLButtonElement>("#reset-button");
 const stage = requireElement<HTMLElement>("#stage");
@@ -62,6 +64,7 @@ const planner = new RollPlanner();
 let debugLogicalResult: DiceRollResult | undefined;
 let debugPlan: RollPlan | undefined;
 let debugFinalResult: DiceRollResult | undefined;
+let rolling = false;
 
 const overlay = new DiceOverlay({
   container: stage,
@@ -155,22 +158,33 @@ function createRequest(): DiceRollRequest {
   };
 }
 
+function createComparisonRequest(): DiceRollRequest {
+  return {
+    dice: COMPARISON_SIDES.map((sides) => ({
+      sides,
+      appearance: createAppearance(sides)
+    })),
+    modifier: 0,
+    reason: "D4 / D6 / D8 size comparison"
+  };
+}
+
 function formatDiceExpression(result: DiceRollResult): string {
-  const values = result.dice.map((die) => String(die.value));
-  let expression = values.join(" + ");
+  const diceLabels = result.dice.map((die) => `D${die.sides} → ${die.value}`);
+
+  if (diceLabels.length === 1 && result.modifier === 0) {
+    return diceLabels[0] ?? `Result → ${result.total}`;
+  }
+
+  let expression = diceLabels.join(" · ");
 
   if (result.modifier > 0) {
-    expression += ` + ${result.modifier}`;
+    expression += ` · +${result.modifier}`;
   } else if (result.modifier < 0) {
-    expression += ` - ${Math.abs(result.modifier)}`;
+    expression += ` · -${Math.abs(result.modifier)}`;
   }
 
-  if (values.length > 1 || result.modifier !== 0) {
-    return `${expression} = ${result.total}`;
-  }
-
-  const singleDie = result.dice[0];
-  return singleDie ? `D${singleDie.sides} → ${result.total}` : `Result → ${result.total}`;
+  return `${expression} · total ${result.total}`;
 }
 
 function showResult(result: DiceRollResult): void {
@@ -197,6 +211,50 @@ function updateDebugPanel(): void {
   );
 }
 
+function setRollingState(isRolling: boolean, comparison = false): void {
+  rolling = isRolling;
+  rollButton.disabled = isRolling;
+  compareButton.disabled = isRolling;
+  resetButton.disabled = isRolling;
+  rollButton.textContent = isRolling && !comparison ? "Rolling…" : "Roll dice";
+  compareButton.textContent = isRolling && comparison
+    ? "Rolling D4 + D6 + D8…"
+    : "Roll D4 + D6 + D8 together";
+}
+
+async function runRequest(request: DiceRollRequest, comparison = false): Promise<void> {
+  if (rolling) {
+    return;
+  }
+
+  debugLogicalResult = undefined;
+  debugPlan = undefined;
+  debugFinalResult = undefined;
+  updateDebugPanel();
+  setRollingState(true, comparison);
+  setStatus(comparison ? "Rolling D4, D6 and D8…" : "Planning and rolling…", "busy");
+  stagePlaceholder.hidden = true;
+
+  try {
+    await nextPaint();
+    const result = await overlay.roll(request);
+    debugFinalResult = result;
+    showResult(result);
+    updateDebugPanel();
+    setStatus(comparison ? "Size comparison complete" : "Roll complete");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resultValue.textContent = "!";
+    resultDice.textContent = "Roll failed";
+    resultJson.textContent = JSON.stringify({ error: message }, null, 2);
+    updateDebugPanel();
+    setStatus("Roll failed", "error");
+    console.error("PartyBeam.DiceKit demo roll failed", error);
+  } finally {
+    setRollingState(false);
+  }
+}
+
 function resetOutput(): void {
   overlay.close();
   stagePlaceholder.hidden = false;
@@ -218,46 +276,13 @@ sampleTextureButton.addEventListener("click", () => {
 });
 debugMode.addEventListener("change", updateDebugPanel);
 resetButton.addEventListener("click", resetOutput);
+compareButton.addEventListener("click", () => {
+  void runRequest(createComparisonRequest(), true);
+});
 
-form.addEventListener("submit", async (event) => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
-
-  if (rollButton.disabled) {
-    return;
-  }
-
-  debugLogicalResult = undefined;
-  debugPlan = undefined;
-  debugFinalResult = undefined;
-  updateDebugPanel();
-
-  rollButton.disabled = true;
-  resetButton.disabled = true;
-  rollButton.textContent = "Rolling…";
-  setStatus("Planning and rolling…", "busy");
-  stagePlaceholder.hidden = true;
-
-  try {
-    const request = createRequest();
-    await nextPaint();
-    const result = await overlay.roll(request);
-    debugFinalResult = result;
-    showResult(result);
-    updateDebugPanel();
-    setStatus("Roll complete");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    resultValue.textContent = "!";
-    resultDice.textContent = "Roll failed";
-    resultJson.textContent = JSON.stringify({ error: message }, null, 2);
-    updateDebugPanel();
-    setStatus("Roll failed", "error");
-    console.error("PartyBeam.DiceKit demo roll failed", error);
-  } finally {
-    rollButton.disabled = false;
-    resetButton.disabled = false;
-    rollButton.textContent = "Roll dice";
-  }
+  void runRequest(createRequest());
 });
 
 window.addEventListener(
