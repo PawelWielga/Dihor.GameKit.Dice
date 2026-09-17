@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DiceRoller,
   RollPlanner,
@@ -10,6 +10,10 @@ import {
 function samples(provider: SeededRandomProvider, count: number): number[] {
   return Array.from({ length: count }, () => provider.next());
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("SeededRandomProvider", () => {
   it("produces the same normalized sequence for the same seed and stream", () => {
@@ -74,5 +78,23 @@ describe("seeded dice pipeline", () => {
     expect(first.dice).toEqual(second.dice);
     expect(first.physics).toEqual(second.physics);
     expect(first.stability).toEqual(second.stability);
+  });
+
+  it("does not read global Math.random when seeded providers are injected", () => {
+    vi.spyOn(Math, "random").mockImplementation(() => {
+      throw new Error("global Math.random must not be used");
+    });
+
+    const roller = new DiceRoller({
+      randomProvider: createSeededRandomProvider("isolated", "logic"),
+      rollIdProvider: () => "isolated-roll"
+    });
+    const result = roller.roll({ dice: [{ sides: 8 }, { sides: 20 }] });
+    const planner = new RollPlanner({
+      randomProvider: createSeededRandomProvider("isolated", "physics"),
+      maxPlanningTimeMs: 5000
+    });
+
+    expect(() => planner.plan(result)).not.toThrow();
   });
 });
