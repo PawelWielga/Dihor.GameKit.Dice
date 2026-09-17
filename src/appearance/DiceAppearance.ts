@@ -42,6 +42,26 @@ export const DEFAULT_DICE_APPEARANCE: ResolvedDiceAppearance = Object.freeze({
   metalness: 0
 });
 
+function hasAssetUrl(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length > 0;
+}
+
+export function hasDiceTextureSources(appearance: DiceAppearance | undefined): boolean {
+  if (!appearance) {
+    return false;
+  }
+
+  if (
+    hasAssetUrl(appearance.texture) ||
+    hasAssetUrl(appearance.normalMap) ||
+    hasAssetUrl(appearance.roughnessMap)
+  ) {
+    return true;
+  }
+
+  return Object.values(appearance.faces ?? {}).some(hasAssetUrl);
+}
+
 function resolveColor(name: string, value: string | undefined, fallback: string): string {
   if (value === undefined) {
     return fallback;

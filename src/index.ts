@@ -1,5 +1,6 @@
 export {
   DEFAULT_DICE_APPEARANCE,
+  hasDiceTextureSources,
   resolveDiceAppearance,
   type DiceAppearance,
   type ResolvedDiceAppearance
@@ -61,9 +62,11 @@ export {
   DiceScene,
   type D6MeshOptions,
   type DiceMesh,
+  type DiceMeshFactoryOptions,
   type DiceQuaternion,
   type DiceRendererOptions,
   type DiceSceneOptions,
+  type DiceTextureLoader,
   type DiceTransform,
   type DiceVector3,
   type DiceWebGLRendererFactory

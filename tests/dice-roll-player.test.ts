@@ -1,3 +1,4 @@
+import { Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
@@ -7,6 +8,7 @@ import {
   RollPlanner,
   type DiceAnimationScheduler,
   type DiceRenderTarget,
+  type DiceTextureLoader,
   type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
@@ -41,6 +43,20 @@ class ManualScheduler implements DiceAnimationScheduler {
       this.timestampMs += frameMs;
       callback(this.timestampMs);
     }
+  }
+}
+
+class ImmediateTextureLoader implements DiceTextureLoader {
+  async load(url: string): Promise<Texture> {
+    const texture = new Texture();
+    texture.name = url;
+    return texture;
+  }
+}
+
+async function flushMicrotasks(count = 12): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await Promise.resolve();
   }
 }
 
@@ -128,6 +144,39 @@ describe("DiceRollPlayer", () => {
       size: plan.physics.diceSize,
       appearance: appearances[1]
     });
+
+    scheduler.runFrames(20);
+    await playback;
+
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("uses the async mesh path only for dice that need texture assets", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const meshFactory = new DiceMeshFactory({ textureLoader: new ImmediateTextureLoader() });
+    const createD6 = vi.spyOn(meshFactory, "createD6");
+    const createD6Async = vi.spyOn(meshFactory, "createD6Async");
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const plan = createPlan();
+    const appearances = [
+      { texture: "/body.png", faces: { 1: "/one.png" } },
+      { color: "#183153" }
+    ] as const;
+
+    const playback = player.play(plan, { appearances });
+    await flushMicrotasks();
+
+    expect(createD6Async).toHaveBeenCalledWith({
+      size: plan.physics.diceSize,
+      appearance: appearances[0]
+    });
+    expect(createD6).toHaveBeenCalledWith({
+      size: plan.physics.diceSize,
+      appearance: appearances[1]
+    });
+    expect(diceScene.content.children).toHaveLength(2);
 
     scheduler.runFrames(20);
     await playback;
