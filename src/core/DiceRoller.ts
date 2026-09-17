@@ -53,28 +53,80 @@ export class DiceRoller {
     this.rollIdProvider = options.rollIdProvider ?? createDefaultRollId;
   }
 
+  createRollId(): string {
+    return this.rollIdProvider();
+  }
+
   roll(request: DiceRollRequest): DiceRollResult {
     this.validateDice(request.dice);
-
-    const modifier = request.modifier ?? 0;
-
-    if (!Number.isFinite(modifier)) {
-      throw new RangeError(`Dice roll modifier must be finite; received ${String(modifier)}.`);
-    }
-
+    const modifier = this.resolveModifier(request.modifier);
     const dice = request.dice.map(({ sides }) => ({
       sides,
       value: this.rollDie(sides)
     }));
+
+    return this.createResult(request, dice, modifier);
+  }
+
+  /**
+   * Produces an authoritative result whose dice sum matches the requested value.
+   * The modifier is applied afterwards and is not part of expectedDiceTotal.
+   */
+  rollToDiceTotal(request: DiceRollRequest, expectedDiceTotal: number): DiceRollResult {
+    this.validateDice(request.dice);
+    const modifier = this.resolveModifier(request.modifier);
+    const minTotal = request.dice.length;
+    const maxTotal = request.dice.reduce((sum, die) => sum + die.sides, 0);
+
+    if (
+      !Number.isInteger(expectedDiceTotal) ||
+      expectedDiceTotal < minTotal ||
+      expectedDiceTotal > maxTotal
+    ) {
+      throw new RangeError(
+        `expectedDiceTotal must be an integer in the ${minTotal}..${maxTotal} range; received ${String(expectedDiceTotal)}.`
+      );
+    }
+
+    let remaining = expectedDiceTotal;
+    const dice = request.dice.map(({ sides }, index) => {
+      const remainingDice = request.dice.slice(index + 1);
+      const remainingMin = remainingDice.length;
+      const remainingMax = remainingDice.reduce((sum, die) => sum + die.sides, 0);
+      const minValue = Math.max(1, remaining - remainingMax);
+      const maxValue = Math.min(sides, remaining - remainingMin);
+      const value = this.rollRange(minValue, maxValue);
+      remaining -= value;
+      return { sides, value };
+    });
+
+    return this.createResult(request, dice, modifier);
+  }
+
+  private createResult(
+    request: DiceRollRequest,
+    dice: DiceRollResult["dice"],
+    modifier: number
+  ): DiceRollResult {
     const total = dice.reduce((sum, die) => sum + die.value, 0) + modifier;
 
     return {
-      rollId: this.rollIdProvider(),
+      rollId: this.createRollId(),
       dice,
       modifier,
       total,
       ...(request.reason === undefined ? {} : { reason: request.reason })
     };
+  }
+
+  private resolveModifier(modifier: number | undefined): number {
+    const resolved = modifier ?? 0;
+
+    if (!Number.isFinite(resolved)) {
+      throw new RangeError(`Dice roll modifier must be finite; received ${String(resolved)}.`);
+    }
+
+    return resolved;
   }
 
   private validateDice(dice: DiceRollRequest["dice"]): void {
@@ -90,6 +142,14 @@ export class DiceRoller {
   }
 
   private rollDie(sides: DiceSides): number {
+    return this.rollRange(1, sides);
+  }
+
+  private rollRange(min: number, max: number): number {
+    if (min === max) {
+      return min;
+    }
+
     const sample = this.randomProvider.next();
 
     if (!Number.isFinite(sample) || sample < 0 || sample >= 1) {
@@ -98,6 +158,6 @@ export class DiceRoller {
       );
     }
 
-    return Math.floor(sample * sides) + 1;
+    return min + Math.floor(sample * (max - min + 1));
   }
 }
