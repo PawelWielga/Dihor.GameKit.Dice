@@ -1,4 +1,4 @@
-import type { DiceDefinition } from "./DiceDefinition";
+import type { DiceDefinition } from "./DiceDefinition.js";
 
 /** Input accepted by the logical dice rolling pipeline. */
 export interface DiceRollRequest {
