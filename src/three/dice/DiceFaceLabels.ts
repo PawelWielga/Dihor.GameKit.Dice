@@ -29,11 +29,57 @@ interface LabelSurface {
   readonly mesh: Mesh;
   readonly geometry: PlaneGeometry;
   readonly material: MeshStandardMaterial;
+}
+
+interface CachedLabelResource {
   readonly texture: CanvasTexture;
   readonly bumpTexture: CanvasTexture;
-  readonly canvas: HTMLCanvasElement;
-  readonly bumpCanvas: HTMLCanvasElement;
-  readonly value: number;
+  dispose(): void;
+}
+
+/**
+ * Factory-owned cache for generated numeric label and bump textures.
+ * Meshes own only their geometry/material; cached textures stay valid until the cache is disposed.
+ */
+export class DiceFaceLabelCache {
+  private readonly entries = new Map<string, CachedLabelResource>();
+  private disposed = false;
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  getOrCreate(
+    key: string,
+    create: () => CachedLabelResource | undefined
+  ): CachedLabelResource | undefined {
+    if (this.disposed) {
+      throw new Error("DiceFaceLabelCache has been disposed.");
+    }
+
+    const existing = this.entries.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const resource = create();
+    if (resource) {
+      this.entries.set(key, resource);
+    }
+    return resource;
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    for (const resource of this.entries.values()) {
+      resource.dispose();
+    }
+    this.entries.clear();
+  }
 }
 
 interface FaceBasis {
@@ -411,32 +457,41 @@ function hideLegacyMarkings(mesh: DiceMesh, sides: DiceSides): void {
   }
 }
 
-function createLabelSurface(
+function labelCacheKey(
   sides: DiceSides,
-  face: DiceTopologyFace,
-  size: number,
-  overlayScale: number,
+  value: number,
   color: string,
   font: ResolvedDiceFontAppearance,
   engravingDepth: number
-): LabelSurface | undefined {
+): string {
+  return JSON.stringify([
+    sides,
+    value,
+    font.family,
+    font.weight,
+    font.size,
+    font.url ?? "",
+    color,
+    engravingDepth
+  ]);
+}
+
+function createLabelResource(
+  value: number,
+  font: ResolvedDiceFontAppearance
+): CachedLabelResource | undefined {
   const canvas = createCanvas();
   const bumpCanvas = createCanvas(BUMP_CANVAS_SIZE);
 
   if (
     !canvas ||
     !bumpCanvas ||
-    !drawLabel(canvas, face.value, font) ||
+    !drawLabel(canvas, value, font) ||
     !syncBumpCanvas(canvas, bumpCanvas)
   ) {
     return undefined;
   }
 
-  const topology = getDiceTopology(sides);
-  const basis = faceBasis(topology, face, size);
-  const planeSize =
-    Math.min(basis.width, basis.height) * getDiceFaceLabelPlaneScale(sides) * overlayScale;
-  const geometry = new PlaneGeometry(planeSize, planeSize);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.minFilter = LinearMipmapLinearFilter;
@@ -450,10 +505,66 @@ function createLabelSurface(
   bumpTexture.generateMipmaps = true;
   bumpTexture.needsUpdate = true;
 
+  let disposed = false;
+
+  void loadDiceFont(font)
+    .then((loadedFont) => {
+      if (
+        !disposed &&
+        drawLabel(canvas, value, loadedFont) &&
+        syncBumpCanvas(canvas, bumpCanvas)
+      ) {
+        texture.needsUpdate = true;
+        bumpTexture.needsUpdate = true;
+      }
+    })
+    .catch(() => {
+      // loadDiceFont already handles URL failures; this is only a final safety net.
+    });
+
+  return {
+    texture,
+    bumpTexture,
+    dispose(): void {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      texture.dispose();
+      bumpTexture.dispose();
+    }
+  };
+}
+
+function createLabelSurface(
+  sides: DiceSides,
+  face: DiceTopologyFace,
+  size: number,
+  overlayScale: number,
+  color: string,
+  font: ResolvedDiceFontAppearance,
+  engravingDepth: number,
+  cache: DiceFaceLabelCache
+): LabelSurface | undefined {
+  const resource = cache.getOrCreate(
+    labelCacheKey(sides, face.value, color, font, engravingDepth),
+    () => createLabelResource(face.value, font)
+  );
+
+  if (!resource) {
+    return undefined;
+  }
+
+  const topology = getDiceTopology(sides);
+  const basis = faceBasis(topology, face, size);
+  const planeSize =
+    Math.min(basis.width, basis.height) * getDiceFaceLabelPlaneScale(sides) * overlayScale;
+  const geometry = new PlaneGeometry(planeSize, planeSize);
+
   const material = new MeshStandardMaterial({
     color,
-    map: texture,
-    bumpMap: bumpTexture,
+    map: resource.texture,
+    bumpMap: resource.bumpTexture,
     bumpScale: getDiceFaceLabelBumpScale(engravingDepth),
     metalness: 0,
     roughness: ENGRAVED_ROUGHNESS,
@@ -480,12 +591,7 @@ function createLabelSurface(
   return {
     mesh,
     geometry,
-    material,
-    texture,
-    bumpTexture,
-    canvas,
-    bumpCanvas,
-    value: face.value
+    material
   };
 }
 
@@ -497,11 +603,14 @@ export function applyDiceFaceLabels(
   mesh: DiceMesh,
   sides: DiceSides,
   size: number,
-  appearance: DiceAppearance | undefined
+  appearance: DiceAppearance | undefined,
+  sharedCache?: DiceFaceLabelCache
 ): DiceMesh {
   if (!usesNumericFaceLabels(sides, appearance)) {
     return mesh;
   }
+
+  const cache = sharedCache ?? new DiceFaceLabelCache();
 
   const resolved = resolveDiceAppearance(appearance);
   const resolvedFont = resolveDiceFontAppearance(appearance?.font);
@@ -522,7 +631,8 @@ export function applyDiceFaceLabels(
       overlayScale,
       resolved.markingsColor,
       resolvedFont,
-      resolved.engravingDepth
+      resolved.engravingDepth,
+      cache
     );
 
     if (surface) {
@@ -531,6 +641,9 @@ export function applyDiceFaceLabels(
   }
 
   if (surfaces.length === 0) {
+    if (!sharedCache) {
+      cache.dispose();
+    }
     return mesh;
   }
 
@@ -542,26 +655,6 @@ export function applyDiceFaceLabels(
 
   let disposed = false;
   const baseDispose = mesh.dispose.bind(mesh);
-
-  void loadDiceFont(resolvedFont)
-    .then((loadedFont) => {
-      if (disposed) {
-        return;
-      }
-
-      for (const surface of surfaces) {
-        if (
-          drawLabel(surface.canvas, surface.value, loadedFont) &&
-          syncBumpCanvas(surface.canvas, surface.bumpCanvas)
-        ) {
-          surface.texture.needsUpdate = true;
-          surface.bumpTexture.needsUpdate = true;
-        }
-      }
-    })
-    .catch(() => {
-      // loadDiceFont already handles URL failures; this is only a final safety net.
-    });
 
   return {
     sides: mesh.sides,
@@ -578,8 +671,10 @@ export function applyDiceFaceLabels(
         mesh.object.remove(surface.mesh);
         surface.geometry.dispose();
         surface.material.dispose();
-        surface.texture.dispose();
-        surface.bumpTexture.dispose();
+      }
+
+      if (!sharedCache) {
+        cache.dispose();
       }
 
       baseDispose();

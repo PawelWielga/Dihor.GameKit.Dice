@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { Mesh, MeshStandardMaterial } from "three";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { DiceMeshFactory } from "../src/index.js";
 import {
   DEFAULT_DICE_FONT_APPEARANCE,
   mergeDiceAppearances,
@@ -190,5 +192,104 @@ describe("numeric face label rules", () => {
     expect((top + bottom) / 2).toBe(canvasSize / 2);
     expect(getDiceOrientationMarkerIndices("6")).toEqual([0]);
     expect(getDiceOrientationMarkerIndices("8")).toEqual([]);
+  });
+});
+
+
+describe("numeric face label resource cache", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function installCanvasStub() {
+    let created = 0;
+    const createCanvas = () => {
+      created += 1;
+      const canvas: Record<string, unknown> = { width: 0, height: 0 };
+      const context = {
+        font: "",
+        textAlign: "left",
+        textBaseline: "alphabetic",
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: "high",
+        fillStyle: "#ffffff",
+        measureText(character: string) {
+          return {
+            width: character.length * 500,
+            actualBoundingBoxLeft: 0,
+            actualBoundingBoxRight: character.length * 500,
+            actualBoundingBoxAscent: 650,
+            actualBoundingBoxDescent: 120
+          };
+        },
+        clearRect() {},
+        fillRect() {},
+        fillText() {},
+        beginPath() {},
+        arc() {},
+        fill() {},
+        drawImage() {}
+      };
+      canvas.getContext = () => context;
+      return canvas;
+    };
+
+    vi.stubGlobal("document", {
+      createElement(tag: string) {
+        if (tag !== "canvas") {
+          throw new Error(`Unexpected element: ${tag}`);
+        }
+        return createCanvas();
+      }
+    });
+
+    return { created: () => created };
+  }
+
+  it("reuses identical D10 label and bump textures until the factory is disposed", () => {
+    const canvases = installCanvasStub();
+    const factory = new DiceMeshFactory();
+    const first = factory.create(10);
+    const firstCanvasCount = canvases.created();
+    const second = factory.create(10);
+    const third = factory.create(10);
+
+    expect(firstCanvasCount).toBe(20);
+    expect(canvases.created()).toBe(firstCanvasCount);
+
+    const firstLabel = first.object.getObjectByName("D10 font label 1") as Mesh;
+    const secondLabel = second.object.getObjectByName("D10 font label 1") as Mesh;
+    const firstTexture = (firstLabel.material as MeshStandardMaterial).map!;
+    const secondTexture = (secondLabel.material as MeshStandardMaterial).map!;
+    const disposeTexture = vi.spyOn(firstTexture, "dispose");
+
+    expect(secondTexture).toBe(firstTexture);
+
+    first.dispose();
+    expect(disposeTexture).not.toHaveBeenCalled();
+
+    second.dispose();
+    third.dispose();
+    factory.dispose();
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects a separate cache entry when effective appearance changes", () => {
+    const canvases = installCanvasStub();
+    const factory = new DiceMeshFactory();
+
+    const first = factory.create(10, {
+      appearance: { markingsColor: "#111111", engravingDepth: 1 }
+    });
+    const firstCanvasCount = canvases.created();
+    const second = factory.create(10, {
+      appearance: { markingsColor: "#eeeeee", engravingDepth: 1.5 }
+    });
+
+    expect(canvases.created()).toBe(firstCanvasCount * 2);
+
+    first.dispose();
+    second.dispose();
+    factory.dispose();
   });
 });

@@ -6,7 +6,7 @@ import type { DiceSides } from "../../core/index.js";
 import {
   DiceMeshFactory as VisualDiceMeshFactory
 } from "./UnifiedDiceMeshFactory.js";
-import { applyDiceFaceLabels } from "./DiceFaceLabels.js";
+import { applyDiceFaceLabels, DiceFaceLabelCache } from "./DiceFaceLabels.js";
 import type {
   DiceMesh,
   DiceMeshFactoryOptions as BaseDiceMeshFactoryOptions,
@@ -27,6 +27,7 @@ export interface DiceMeshFactoryOptions extends BaseDiceMeshFactoryOptions {
  */
 export class DiceMeshFactory extends VisualDiceMeshFactory {
   private readonly defaultAppearance?: DiceAppearance;
+  private readonly faceLabelCache = new DiceFaceLabelCache();
 
   constructor(options: DiceMeshFactoryOptions = {}) {
     super({ textureLoader: options.textureLoader });
@@ -41,7 +42,8 @@ export class DiceMeshFactory extends VisualDiceMeshFactory {
       mesh,
       sides,
       resolvedOptions.size ?? 1,
-      resolvedOptions.appearance
+      resolvedOptions.appearance,
+      this.faceLabelCache
     );
   }
 
@@ -55,9 +57,15 @@ export class DiceMeshFactory extends VisualDiceMeshFactory {
           mesh,
           sides,
           resolvedOptions.size ?? 1,
-          resolvedOptions.appearance
+          resolvedOptions.appearance,
+          this.faceLabelCache
         )
       );
+  }
+
+  override dispose(): void {
+    this.faceLabelCache.dispose();
+    super.dispose();
   }
 
   private resolveOptions(options: DiceMeshOptions): DiceMeshOptions {
