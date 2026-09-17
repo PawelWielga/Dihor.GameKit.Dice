@@ -1,4 +1,4 @@
-export type { DiceAppearance } from "./appearance";
+export type { DiceAppearance } from "./appearance/index.js";
 export {
   SUPPORTED_DICE_SIDES,
   type DiceDefinition,
@@ -6,4 +6,4 @@ export {
   type DiceRollResult,
   type DiceSides,
   type DieResult
-} from "./core";
+} from "./core/index.js";
