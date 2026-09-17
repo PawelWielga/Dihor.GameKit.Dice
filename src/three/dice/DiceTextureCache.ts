@@ -32,18 +32,23 @@ class ThreeDiceTextureLoader implements DiceTextureLoader {
 }
 
 /**
- * Shares in-flight/active texture loads and disposes the Three.js texture after the last mesh
- * releases it. Failed assets are not retained so a later roll may retry the URL.
+ * Caches successful texture loads for the lifetime of the cache. Leases track active mesh use,
+ * while `dispose()` owns the final GPU cleanup. Failed assets are not retained so later rolls can retry.
  */
 export class DiceTextureCache {
   private readonly loader: DiceTextureLoader;
   private readonly entries = new Map<string, TextureCacheEntry>();
+  private disposed = false;
 
   constructor(loader: DiceTextureLoader = new ThreeDiceTextureLoader()) {
     this.loader = loader;
   }
 
   async acquire(url: string | undefined, role: DiceTextureRole): Promise<DiceTextureLease | undefined> {
+    if (this.disposed) {
+      throw new Error("DiceTextureCache has been disposed.");
+    }
+
     const normalizedUrl = url?.trim();
 
     if (!normalizedUrl) {
@@ -55,11 +60,16 @@ export class DiceTextureCache {
 
     if (!entry) {
       let createdEntry!: TextureCacheEntry;
-      const promise = this.loader
-        .load(normalizedUrl)
+      const promise = Promise.resolve()
+        .then(() => this.loader.load(normalizedUrl))
         .then((texture) => {
           if (role === "color") {
             texture.colorSpace = SRGBColorSpace;
+          }
+
+          if (this.disposed) {
+            texture.dispose();
+            return undefined;
           }
 
           createdEntry.texture = texture;
@@ -84,7 +94,7 @@ export class DiceTextureCache {
 
     const texture = await entry.promise;
 
-    if (!texture || this.entries.get(key) !== entry) {
+    if (!texture || this.disposed || this.entries.get(key) !== entry) {
       return undefined;
     }
 
@@ -99,13 +109,22 @@ export class DiceTextureCache {
         }
 
         released = true;
-        entry.references -= 1;
-
-        if (entry.references <= 0 && this.entries.get(entry.key) === entry) {
-          this.entries.delete(entry.key);
-          entry.texture?.dispose();
-        }
+        entry.references = Math.max(0, entry.references - 1);
       }
     };
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+
+    for (const entry of this.entries.values()) {
+      entry.texture?.dispose();
+    }
+
+    this.entries.clear();
   }
 }
