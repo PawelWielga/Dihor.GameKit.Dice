@@ -151,7 +151,7 @@ export function getDiceFaceLabelBaseline(
 }
 
 export function getDiceFaceLabelBumpScale(engravingDepth = 1): number {
-  return ENGRAVED_BUMP_SCALE * engravingDepth;
+  return engravingDepth === 0 ? 0 : ENGRAVED_BUMP_SCALE * engravingDepth;
 }
 
 function quoteFontFamily(family: string): string {
