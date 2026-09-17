@@ -16,6 +16,7 @@ export {
   D6_FACE_NORMALS,
   D6_FACE_VALUES,
   D6_OPPOSITE_FACE,
+  D6_REFERENCE_EDGE_MM,
   getD6TopValue,
   getDiceFace,
   getDiceTopology,
