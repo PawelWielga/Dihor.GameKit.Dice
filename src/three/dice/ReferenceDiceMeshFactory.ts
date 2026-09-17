@@ -111,7 +111,7 @@ function addSphericalUvs(geometry: BufferGeometry): void {
   geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
 }
 
-function createConvexProfileGeometry(points: readonly Vector3[]): BufferGeometry {
+function createConvexProfileGeometry(points: Vector3[]): BufferGeometry {
   const hull = new ConvexGeometry(points);
   const geometry = mergeVertices(hull, 1e-6);
   hull.dispose();
