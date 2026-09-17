@@ -486,7 +486,13 @@ function createRoundedPolyhedralBodyGeometry(
     }
 
     const original = new Vector3(topologyVertex.x * size, topologyVertex.y * size, topologyVertex.z * size);
-    const center = original.clone().multiplyScalar(1 - bevelRatio * 0.42);
+    const originalProjection = original.dot(vertexNormal);
+    const ringPeakProjection = Math.max(...ring.map((sample) => sample.position.dot(vertexNormal)));
+    const centerProjection = ringPeakProjection + (originalProjection - ringPeakProjection) * 0.55;
+    const centerScale = Math.abs(originalProjection) > Number.EPSILON
+      ? centerProjection / originalProjection
+      : 1;
+    const center = original.clone().multiplyScalar(centerScale);
 
     for (let index = 0; index < ring.length; index += 1) {
       const first = ring[index]!;
