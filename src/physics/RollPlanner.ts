@@ -26,11 +26,16 @@ import type {
 export const MIN_THROW_FORCE = 0.5;
 export const DEFAULT_THROW_FORCE = 1;
 export const MAX_THROW_FORCE = 1.5;
+export const MIN_DICE_SCALE = 0.5;
+export const DEFAULT_DICE_SCALE = 1;
+export const MAX_DICE_SCALE = 1.5;
 export const MAX_DICE_PER_ROLL = 6;
 
 export interface RollPlanningOptions {
   /** Multiplier applied to initial linear and angular velocity. Defaults to 1. */
   readonly throwForce?: number;
+  /** Relative visual + physical size multiplier. Defaults to 1. */
+  readonly diceScale?: number;
   /** Camera/table viewport polygon used as invisible physical walls for this roll. */
   readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
 }
@@ -92,6 +97,18 @@ function resolveThrowForce(value: number | undefined): number {
   if (!Number.isFinite(resolved) || resolved < MIN_THROW_FORCE || resolved > MAX_THROW_FORCE) {
     throw new RangeError(
       `throwForce must be between ${MIN_THROW_FORCE} and ${MAX_THROW_FORCE}; received ${String(resolved)}.`
+    );
+  }
+
+  return resolved;
+}
+
+function resolveDiceScale(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_DICE_SCALE;
+
+  if (!Number.isFinite(resolved) || resolved < MIN_DICE_SCALE || resolved > MAX_DICE_SCALE) {
+    throw new RangeError(
+      `diceScale must be between ${MIN_DICE_SCALE} and ${MAX_DICE_SCALE}; received ${String(resolved)}.`
     );
   }
 
@@ -211,8 +228,11 @@ export class RollPlanner {
 
   plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
     const throwForce = resolveThrowForce(options.throwForce);
+    const diceScale = resolveDiceScale(options.diceScale);
+    const baseDiceSize = this.physicsOptions.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
     const physicsOptions: DicePhysicsWorldOptions = {
       ...this.physicsOptions,
+      diceSize: baseDiceSize * diceScale,
       ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
     };
     const expectedDice = this.validateResult(result);
@@ -230,7 +250,7 @@ export class RollPlanner {
           throw new RollPlanningError(`Missing die result at index ${dieIndex}.`);
         }
 
-        const slotX = this.slotX(dieIndex, expectedDice.length);
+        const slotX = this.slotX(dieIndex, expectedDice.length, diceScale);
         const initialState = this.findInitialState(
           expectedDie.sides,
           expectedDie.value,
@@ -514,8 +534,8 @@ export class RollPlanner {
     return sample;
   }
 
-  private slotX(index: number, count: number): number {
-    return (index - (count - 1) / 2) * this.slotSpacing;
+  private slotX(index: number, count: number, diceScale: number): number {
+    return (index - (count - 1) / 2) * this.slotSpacing * diceScale;
   }
 
   private assertWithinDeadline(startedAt: number): void {

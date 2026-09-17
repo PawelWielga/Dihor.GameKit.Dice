@@ -19,9 +19,12 @@ export type {
   RollPlanningWorkerLike
 } from "./BackgroundRollPlanner.js";
 export {
+  DEFAULT_DICE_SCALE,
   DEFAULT_THROW_FORCE,
   MAX_DICE_PER_ROLL,
+  MAX_DICE_SCALE,
   MAX_THROW_FORCE,
+  MIN_DICE_SCALE,
   MIN_THROW_FORCE,
   RollPlanner,
   RollPlanningError

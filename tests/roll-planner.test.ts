@@ -160,6 +160,32 @@ describe("RollPlanner", () => {
     expect(plan.physics.arenaBoundary).toEqual(boundary);
   });
 
+  it("applies diceScale consistently to physics size and default slot spacing", () => {
+    const slots: number[] = [];
+    const planner = new RollPlanner({
+      initialStateProvider(context) {
+        slots.push(context.slotX);
+        return settledState(context);
+      },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    });
+
+    const plan = planner.plan(
+      result([{ sides: 6, value: 1 }, { sides: 6, value: 1 }]),
+      { diceScale: 1.5 }
+    );
+
+    expect(plan.physics.diceSize).toBeCloseTo(DEFAULT_DICE_PHYSICS_CONFIG.diceSize * 1.5);
+    expect(Math.abs(slots[1]! - slots[0]!)).toBeCloseTo(
+      DEFAULT_DICE_PHYSICS_CONFIG.diceSize * 2.5 * 1.5
+    );
+    expect(() => planner.plan(result([{ sides: 6, value: 1 }]), { diceScale: 1.51 }))
+      .toThrowError(RangeError);
+  });
+
   it("supports mixed dice in the same planned roll", () => {
     const planner = new RollPlanner({
       initialStateProvider: settledState,

@@ -6,8 +6,11 @@ import {
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
 import {
+  DEFAULT_DICE_SCALE,
   DEFAULT_THROW_FORCE,
   MAX_DICE_PER_ROLL,
+  MAX_DICE_SCALE,
+  MIN_DICE_SCALE,
   MAX_THROW_FORCE,
   MIN_THROW_FORCE,
   type RollPlanningOptions
@@ -35,6 +38,16 @@ function requireThrowForce(value: number | undefined): number {
   if (!Number.isFinite(resolved) || resolved < MIN_THROW_FORCE || resolved > MAX_THROW_FORCE) {
     throw new RangeError(
       `throwForce must be between ${MIN_THROW_FORCE} and ${MAX_THROW_FORCE}; received ${String(resolved)}.`
+    );
+  }
+  return resolved;
+}
+
+function requireDiceScale(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_DICE_SCALE;
+  if (!Number.isFinite(resolved) || resolved < MIN_DICE_SCALE || resolved > MAX_DICE_SCALE) {
+    throw new RangeError(
+      `diceScale must be between ${MIN_DICE_SCALE} and ${MAX_DICE_SCALE}; received ${String(resolved)}.`
     );
   }
   return resolved;
@@ -79,14 +92,19 @@ export class DirectRollPlanner {
     }
 
     const throwForce = requireThrowForce(options.throwForce);
+    const diceScale = requireDiceScale(options.diceScale);
+    const baseDiceSize = this.physicsOptions.diceSize ?? 1;
     const world = new DicePhysicsWorld({
       ...this.physicsOptions,
+      diceSize: baseDiceSize * diceScale,
       ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
     });
     const physics = world.config;
     world.dispose();
 
-    const spacing = this.configuredSlotSpacing ?? physics.diceSize * 2.5;
+    const spacing = this.configuredSlotSpacing === undefined
+      ? physics.diceSize * 2.5
+      : this.configuredSlotSpacing * diceScale;
     const dice = request.dice.map((definition, index) => ({
       sides: definition.sides,
       expectedValue: 0,
