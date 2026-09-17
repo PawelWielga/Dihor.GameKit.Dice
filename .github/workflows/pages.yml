@@ -1,33 +1,101 @@
 name: Deploy demo to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    branches: [main, dev]
+    types: [completed]
   workflow_dispatch:
 
-permissions:
-  actions: read
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build and deploy demo
+  gate:
+    name: Verify main and dev CI
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      ready: ${{ steps.validation.outputs.ready }}
+      main_sha: ${{ steps.validation.outputs.main_sha }}
+      dev_sha: ${{ steps.validation.outputs.dev_sha }}
+    steps:
+      - name: Verify latest main and dev commits
+        id: validation
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branches = ['main', 'dev'];
+            const shas = {};
+
+            for (const branch of branches) {
+              const { data: branchData } = await github.rest.repos.getBranch({ owner, repo, branch });
+              const sha = branchData.commit.sha;
+              shas[branch] = sha;
+
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'ci.yml',
+                branch,
+                event: 'push',
+                head_sha: sha,
+                per_page: 10,
+              });
+
+              const run = data.workflow_runs
+                .filter(candidate =>
+                  candidate.head_sha === sha &&
+                  candidate.head_branch === branch &&
+                  candidate.event === 'push'
+                )
+                .sort((left, right) => new Date(right.updated_at) - new Date(left.updated_at))[0];
+
+              if (!run || run.status !== 'completed' || run.conclusion !== 'success') {
+                core.info(`${branch}@${sha}: CI is not green yet.`);
+                core.setOutput('ready', 'false');
+                return;
+              }
+
+              core.info(`${branch}@${sha}: CI succeeded in run ${run.id}.`);
+            }
+
+            core.setOutput('main_sha', shas.main);
+            core.setOutput('dev_sha', shas.dev);
+            core.setOutput('ready', 'true');
+
+  deploy:
+    name: Build and deploy main + dev demos
+    needs: gate
+    if: needs.gate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout
+      - name: Checkout validated main
         uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.gate.outputs.main_sha }}
+          path: main-source
+
+      - name: Checkout validated dev
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.gate.outputs.dev_sha }}
+          path: dev-source
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -38,16 +106,33 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Install dependencies
+      - name: Install main dependencies
+        working-directory: main-source
         run: npm install --no-audit --no-fund
 
-      - name: Build demo
+      - name: Build main demo
+        working-directory: main-source
         run: npm run build:demo
+
+      - name: Install dev dependencies
+        working-directory: dev-source
+        run: npm install --no-audit --no-fund
+
+      - name: Build dev demo
+        working-directory: dev-source
+        run: npm run build:demo -- --base=/PartyBeam.DiceKit/dev/
+
+      - name: Assemble Pages artifact
+        shell: bash
+        run: |
+          mkdir -p pages-root/dev
+          cp -a main-source/dist-demo/. pages-root/
+          cp -a dev-source/dist-demo/. pages-root/dev/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: dist-demo
+          path: pages-root
 
       - name: Deploy to GitHub Pages
         id: deployment
