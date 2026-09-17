@@ -18,7 +18,25 @@ export {
   type RandomProvider,
   type RollIdProvider
 } from "./core/index.js";
-export { createD6Collider } from "./physics/index.js";
+export {
+  DEFAULT_DICE_PHYSICS_CONFIG,
+  DicePhysicsWorld,
+  RollPlanner,
+  RollPlanningError,
+  createD6Collider,
+  type DicePhysicsConfig,
+  type DicePhysicsWorldOptions,
+  type PhysicsQuaternion,
+  type PhysicsVector3,
+  type RollInitialState,
+  type RollInitialStateContext,
+  type RollInitialStateProvider,
+  type RollPlan,
+  type RollPlanDie,
+  type RollPlannerOptions,
+  type StabilityOptions,
+  type StabilityResult
+} from "./physics/index.js";
 export {
   DiceMeshFactory,
   DiceRenderer,
