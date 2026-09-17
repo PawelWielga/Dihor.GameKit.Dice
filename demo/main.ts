@@ -24,8 +24,9 @@ import {
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";
 const SAMPLE_TABLE_TEXTURE_URL = SAMPLE_TEXTURE_URL;
-const COMPARISON_SIDES = [4, 6, 8] as const satisfies readonly DiceSides[];
+const COMPARISON_SIDES = SUPPORTED_DICE_SIDES;
 const COMPARISON_SLOT_SPACING = 2.6;
+const COMPARISON_LABEL = COMPARISON_SIDES.map((sides) => `D${sides}`).join(" + ");
 
 function requireElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -196,7 +197,10 @@ const comparisonPlanner = new RollPlanner({
   initialStateProvider: createComparisonInitialState,
   slotSpacing: COMPARISON_SLOT_SPACING,
   maxAttemptsPerDie: 6,
+  maxCombinedAttempts: 1,
+  maxPlanningTimeMs: 5000,
   physics: {
+    arenaHalfExtent: 9,
     friction: 0.6,
     restitution: 0.06,
     linearDamping: 0.25,
@@ -233,13 +237,12 @@ function configureCamera(comparison: boolean): void {
   }
 
   if (comparison) {
-    // Keep roughly the same framing while moving the camera ~10x farther away.
-    // The narrow FOV makes perspective scaling differences between the three slots negligible.
-    camera.position.set(0, 55, 75);
+    // Use a distant narrow-FOV view so all six dice can be compared with minimal perspective bias.
+    camera.position.set(0, 70, 95);
     camera.up.set(0, 1, 0);
-    camera.fov = 4.8;
-    camera.far = 200;
-    camera.lookAt(0, 0.55, 0);
+    camera.fov = 7.5;
+    camera.far = 250;
+    camera.lookAt(0, 0.65, 0);
   } else {
     camera.fov = 45;
     camera.far = 100;
@@ -521,8 +524,8 @@ function setRollingState(isRolling: boolean, comparison = false): void {
   rollButton.textContent = rollLabel;
   mobileRollButton.textContent = rollLabel;
   compareButton.textContent = isRolling && comparison
-    ? "Aligning D4 + D6 + D8…"
-    : "Roll D4 + D6 + D8 together";
+    ? `Aligning ${COMPARISON_LABEL}…`
+    : `Roll ${COMPARISON_LABEL} together`;
 }
 
 async function runRequest(request: DiceRollRequest, comparison = false): Promise<void> {
@@ -537,7 +540,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
   debugFinalResult = undefined;
   updateDebugPanel();
   setRollingState(true, comparison);
-  setStatus(comparison ? "Rolling aligned D4, D6 and D8…" : "Planning and rolling…", "busy");
+  setStatus(comparison ? `Rolling aligned ${COMPARISON_LABEL}…` : "Planning and rolling…", "busy");
   stagePlaceholder.hidden = true;
 
   try {
