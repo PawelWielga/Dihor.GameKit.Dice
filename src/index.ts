@@ -40,6 +40,7 @@ export {
   DICE_ROLL_REPLAY_VERSION,
   createDiceRollEvent,
   diceRollResultFromEvent,
+  validateDiceRollEvent,
   type CreateDiceRollEventOptions,
   type DiceRollEvent,
   type DiceRollEventDie,
