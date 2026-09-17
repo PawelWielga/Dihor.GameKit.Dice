@@ -11,3 +11,13 @@ export {
   type RandomProvider,
   type RollIdProvider
 } from "./core/index.js";
+export {
+  DiceRenderer,
+  DiceScene,
+  type DiceQuaternion,
+  type DiceRendererOptions,
+  type DiceSceneOptions,
+  type DiceTransform,
+  type DiceVector3,
+  type DiceWebGLRendererFactory
+} from "./three/index.js";
