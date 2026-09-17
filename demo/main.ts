@@ -2,9 +2,11 @@ import {
   DiceOverlay,
   DiceRoller,
   RollPlanner,
+  SUPPORTED_DICE_SIDES,
   type DiceAppearance,
   type DiceRollRequest,
   type DiceRollResult,
+  type DiceSides,
   type RollPlan
 } from "../src/index.js";
 
@@ -99,10 +101,10 @@ function updateColorOutputs(): void {
   markingsColorValue.value = markingsColor.value.toUpperCase();
 }
 
-function createAppearance(): DiceAppearance {
+function createAppearance(sides: DiceSides): DiceAppearance {
   const faces: Partial<Record<number, string>> = {};
 
-  for (let index = 0; index < faceTextureInputs.length; index += 1) {
+  for (let index = 0; index < faceTextureInputs.length && index < sides; index += 1) {
     const value = optionalValue(faceTextureInputs[index]!);
 
     if (value) {
@@ -121,10 +123,13 @@ function createAppearance(): DiceAppearance {
 }
 
 function createRequest(): DiceRollRequest {
-  if (diceType.value !== "6") {
-    throw new Error(`The demo currently supports only D6; received D${diceType.value}.`);
+  const numericSides = Number.parseInt(diceType.value, 10);
+
+  if (!SUPPORTED_DICE_SIDES.includes(numericSides as DiceSides)) {
+    throw new Error(`Unsupported dice type D${diceType.value}.`);
   }
 
+  const sides = numericSides as DiceSides;
   const count = Number.parseInt(diceCount.value, 10);
 
   if (!Number.isInteger(count) || count < 1 || count > 3) {
@@ -137,12 +142,12 @@ function createRequest(): DiceRollRequest {
     throw new Error("Modifier must be a finite number.");
   }
 
-  const appearance = createAppearance();
+  const appearance = createAppearance(sides);
   const rollReason = reason.value.trim();
 
   return {
     dice: Array.from({ length: count }, () => ({
-      sides: 6 as const,
+      sides,
       appearance
     })),
     modifier: numericModifier,
@@ -160,9 +165,12 @@ function formatDiceExpression(result: DiceRollResult): string {
     expression += ` - ${Math.abs(result.modifier)}`;
   }
 
-  return values.length > 1 || result.modifier !== 0
-    ? `${expression} = ${result.total}`
-    : `D6 → ${result.total}`;
+  if (values.length > 1 || result.modifier !== 0) {
+    return `${expression} = ${result.total}`;
+  }
+
+  const singleDie = result.dice[0];
+  return singleDie ? `D${singleDie.sides} → ${result.total}` : `Result → ${result.total}`;
 }
 
 function showResult(result: DiceRollResult): void {
