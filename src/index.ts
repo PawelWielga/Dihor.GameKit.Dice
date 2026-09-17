@@ -1,6 +1,9 @@
-/**
- * Public entry point for PartyBeam.DiceKit.
- *
- * Concrete public domain types and APIs are introduced by the follow-up issues.
- */
-export {};
+export type { DiceAppearance } from "./appearance/index.js";
+export {
+  SUPPORTED_DICE_SIDES,
+  type DiceDefinition,
+  type DiceRollRequest,
+  type DiceRollResult,
+  type DiceSides,
+  type DieResult
+} from "./core/index.js";

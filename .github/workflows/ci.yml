@@ -41,5 +41,8 @@ jobs:
       - name: Build library
         run: npm run build
 
+      - name: Validate NodeNext consumer
+        run: npm run test:consumer
+
       - name: Build demo
         run: npm run build:demo

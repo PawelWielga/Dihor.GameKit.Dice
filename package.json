@@ -25,6 +25,7 @@
     "build": "vite build && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:consumer": "tsc -p tsconfig.consumer.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:demo": "vite --config vite.demo.config.ts",
     "build:demo": "vite build --config vite.demo.config.ts",
