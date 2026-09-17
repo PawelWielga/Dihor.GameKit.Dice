@@ -46,6 +46,11 @@ function quaternionFromDirections(
   };
 }
 
+function xSpan(sides: 4 | 8): number {
+  const xs = getDiceTopology(sides).vertices.map((vertex) => vertex.x);
+  return Math.max(...xs) - Math.min(...xs);
+}
+
 describe("polyhedral dice topologies", () => {
   it("defines one physical face for every value of every supported die", () => {
     for (const sides of SUPPORTED_DICE_SIDES) {
@@ -58,6 +63,11 @@ describe("polyhedral dice topologies", () => {
       );
       expect(topology.faces.every((face) => face.vertexIndices.length >= 3)).toBe(true);
     }
+  });
+
+  it("pins the approved D4 and D8 physical size baselines", () => {
+    expect(xSpan(4)).toBeCloseTo(1.242, 6);
+    expect(xSpan(8)).toBeCloseTo(1.725, 6);
   });
 
   it("reads every possible value from the corresponding physical orientation", () => {
