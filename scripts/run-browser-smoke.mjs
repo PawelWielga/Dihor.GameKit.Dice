@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,9 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const host = "127.0.0.1";
 const port = 4174;
-const debugPort = 9223;
 const pageUrl = `http://${host}:${port}/Dihor.GameKit.Dice/browser-smoke.html`;
-const debugBaseUrl = `http://${host}:${debugPort}`;
 
 function findBrowser() {
   const explicit = process.env.CHROME_BIN?.trim();
@@ -82,7 +80,48 @@ async function waitForHttp(url, attempts = 80, delayMs = 125) {
   throw new Error(`Endpoint did not become ready: ${url}. ${String(lastError)}`);
 }
 
-async function findPageTarget() {
+async function waitForDevToolsPort(userDataDir, browserProcess, getSpawnError) {
+  const activePortFile = join(userDataDir, "DevToolsActivePort");
+  let lastError;
+
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const spawnError = getSpawnError();
+    if (spawnError) {
+      throw new Error(`Chrome failed to start: ${spawnError.message}`);
+    }
+
+    if (browserProcess.exitCode !== null) {
+      throw new Error(
+        `Chrome exited before DevTools became ready with code ${String(browserProcess.exitCode)}.`
+      );
+    }
+
+    if (existsSync(activePortFile)) {
+      try {
+        const [portLine] = readFileSync(activePortFile, "utf8").split(/\r?\n/);
+        const selectedPort = Number(portLine);
+
+        if (Number.isInteger(selectedPort) && selectedPort > 0 && selectedPort <= 65_535) {
+          return selectedPort;
+        }
+
+        lastError = new Error(
+          `DevToolsActivePort contained invalid port: ${String(portLine)}`
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 125));
+  }
+
+  throw new Error(
+    `Chrome did not publish DevToolsActivePort at ${activePortFile}. ${String(lastError ?? "")}`
+  );
+}
+
+async function findPageTarget(debugBaseUrl) {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
       const response = await fetch(`${debugBaseUrl}/json/list`);
@@ -233,6 +272,7 @@ server.stderr?.on("data", (chunk) => {
 
 let browserLog = "";
 let browserProcess;
+let browserSpawnError;
 let client;
 
 try {
@@ -249,7 +289,7 @@ try {
       "--enable-unsafe-swiftshader",
       "--use-gl=angle",
       "--use-angle=swiftshader",
-      `--remote-debugging-port=${debugPort}`,
+      "--remote-debugging-port=0",
       `--user-data-dir=${userDataDir}`,
       pageUrl
     ],
@@ -265,9 +305,19 @@ try {
   browserProcess.stderr?.on("data", (chunk) => {
     browserLog += chunk.toString();
   });
+  browserProcess.once("error", (error) => {
+    browserSpawnError = error;
+    browserLog += `Chrome process error: ${error.message}\n`;
+  });
 
-  await waitForHttp(`${debugBaseUrl}/json/version`, 120, 125);
-  const webSocketUrl = await findPageTarget();
+  const selectedDebugPort = await waitForDevToolsPort(
+    userDataDir,
+    browserProcess,
+    () => browserSpawnError
+  );
+  const debugBaseUrl = `http://${host}:${selectedDebugPort}`;
+  await waitForHttp(`${debugBaseUrl}/json/version`, 80, 125);
+  const webSocketUrl = await findPageTarget(debugBaseUrl);
   client = new CdpClient(webSocketUrl);
   await client.send("Runtime.enable");
 
