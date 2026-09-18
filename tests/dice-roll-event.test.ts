@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  DICE_ROLL_EVENT_LIMITS,
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
   DICE_ROLL_REPLAY_VERSION,
+  MAX_DICE_PER_ROLL,
   RollPlanner,
   createDiceRollEvent,
   createSeededRandomProvider,
@@ -304,4 +306,266 @@ describe("DiceRollEvent", () => {
     expect(validated.replay.plan.untrustedExtra).toBeUndefined();
     expect(validated.dice[0].appearance.untrustedExtra).toBeUndefined();
   });
+  it("keeps the event dice limit aligned with the runtime planner limit", () => {
+    expect(DICE_ROLL_EVENT_LIMITS.maxDiceCount).toBe(MAX_DICE_PER_ROLL);
+  });
+
+  it("enforces rollId, reason and dice-count boundaries", () => {
+    const base = JSON.parse(JSON.stringify(createDiceRollEvent(logicalResult())));
+
+    const maxRollId = {
+      ...base,
+      rollId: "r".repeat(DICE_ROLL_EVENT_LIMITS.maxRollIdLength)
+    };
+    expect(validateDiceRollEvent(maxRollId).rollId).toHaveLength(
+      DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+    );
+
+    expect(() =>
+      validateDiceRollEvent({
+        ...base,
+        rollId: "r".repeat(DICE_ROLL_EVENT_LIMITS.maxRollIdLength + 1)
+      })
+    ).toThrowError(/at most/i);
+
+    expect(
+      validateDiceRollEvent({
+        ...base,
+        reason: "x".repeat(DICE_ROLL_EVENT_LIMITS.maxReasonLength)
+      }).reason
+    ).toHaveLength(DICE_ROLL_EVENT_LIMITS.maxReasonLength);
+
+    expect(() =>
+      validateDiceRollEvent({
+        ...base,
+        reason: "x".repeat(DICE_ROLL_EVENT_LIMITS.maxReasonLength + 1)
+      })
+    ).toThrowError(/at most/i);
+
+    const dice = Array.from(
+      { length: DICE_ROLL_EVENT_LIMITS.maxDiceCount },
+      () => ({ sides: 6, value: 1 })
+    );
+    const maxDicePayload = {
+      ...base,
+      dice,
+      modifier: 0,
+      total: dice.length,
+      reason: undefined
+    };
+    expect(validateDiceRollEvent(maxDicePayload).dice).toHaveLength(
+      DICE_ROLL_EVENT_LIMITS.maxDiceCount
+    );
+
+    const tooManyDice = [...dice, { sides: 6, value: 1 }];
+    expect(() =>
+      validateDiceRollEvent({
+        ...maxDicePayload,
+        dice: tooManyDice,
+        total: tooManyDice.length
+      })
+    ).toThrowError(/at most/i);
+  });
+
+  it("bounds appearance strings and asset references", () => {
+    const payload = JSON.parse(JSON.stringify(createDiceRollEvent({
+      rollId: "appearance-limits",
+      dice: [{ sides: 6, value: 1 }],
+      modifier: 0,
+      total: 1
+    })));
+
+    payload.dice[0].appearance = {
+      color: "c".repeat(DICE_ROLL_EVENT_LIMITS.maxStyleStringLength),
+      markingsColor: "m".repeat(DICE_ROLL_EVENT_LIMITS.maxStyleStringLength),
+      texture: "t".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength),
+      normalMap: "n".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength),
+      roughnessMap: "r".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength),
+      font: {
+        family: "f".repeat(DICE_ROLL_EVENT_LIMITS.maxStyleStringLength),
+        url: "u".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength)
+      },
+      faces: {
+        1: "p".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength)
+      }
+    };
+
+    expect(validateDiceRollEvent(payload).dice[0]?.appearance).toBeDefined();
+
+    for (const mutate of [
+      (candidate: Record<string, any>) => {
+        candidate.dice[0].appearance.color =
+          "c".repeat(DICE_ROLL_EVENT_LIMITS.maxStyleStringLength + 1);
+      },
+      (candidate: Record<string, any>) => {
+        candidate.dice[0].appearance.texture =
+          "t".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength + 1);
+      },
+      (candidate: Record<string, any>) => {
+        candidate.dice[0].appearance.font.url =
+          "u".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength + 1);
+      },
+      (candidate: Record<string, any>) => {
+        candidate.dice[0].appearance.faces[1] =
+          "p".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength + 1);
+      }
+    ]) {
+      const invalid = JSON.parse(JSON.stringify(payload));
+      mutate(invalid);
+      expect(() => validateDiceRollEvent(invalid)).toThrowError(/at most/i);
+    }
+  });
+
+  it("bounds replay arena complexity and physical scale", () => {
+    const createBoundary = (count: number, radius = 5) =>
+      Array.from({ length: count }, (_, index) => {
+        const angle = (index / count) * Math.PI * 2;
+        return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius };
+      });
+
+    const payload = replayPayload();
+    payload.replay.plan.physics.arenaBoundary = createBoundary(
+      DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints
+    );
+    payload.replay.plan.physics.diceSize = DICE_ROLL_EVENT_LIMITS.minDiceSize;
+    payload.replay.plan.physics.arenaHalfExtent = DICE_ROLL_EVENT_LIMITS.maxArenaHalfExtent;
+    expect(validateDiceRollEvent(payload).replay).toBeDefined();
+
+    const maxSize = replayPayload();
+    maxSize.replay.plan.physics.diceSize = DICE_ROLL_EVENT_LIMITS.maxDiceSize;
+    expect(validateDiceRollEvent(maxSize).replay).toBeDefined();
+
+    const tooManyPoints = replayPayload();
+    tooManyPoints.replay.plan.physics.arenaBoundary = createBoundary(
+      DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints + 1
+    );
+    expect(() => validateDiceRollEvent(tooManyPoints)).toThrowError(/at most/i);
+
+    const boundaryTooFar = replayPayload();
+    boundaryTooFar.replay.plan.physics.arenaBoundary = [
+      { x: DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryCoordinateMagnitude + 1, z: 0 },
+      { x: 0, z: 1 },
+      { x: -1, z: 0 }
+    ];
+    expect(() => validateDiceRollEvent(boundaryTooFar)).toThrowError(/magnitude/i);
+
+    const tooSmall = replayPayload();
+    tooSmall.replay.plan.physics.diceSize = DICE_ROLL_EVENT_LIMITS.minDiceSize / 2;
+    expect(() => validateDiceRollEvent(tooSmall)).toThrowError(/range/i);
+
+    const tooLarge = replayPayload();
+    tooLarge.replay.plan.physics.diceSize = DICE_ROLL_EVENT_LIMITS.maxDiceSize + 1;
+    expect(() => validateDiceRollEvent(tooLarge)).toThrowError(/range/i);
+
+    const arenaTooLarge = replayPayload();
+    arenaTooLarge.replay.plan.physics.arenaHalfExtent =
+      DICE_ROLL_EVENT_LIMITS.maxArenaHalfExtent + 1;
+    expect(() => validateDiceRollEvent(arenaTooLarge)).toThrowError(/range/i);
+  });
+
+  it("bounds replay vector magnitudes", () => {
+    const fields = [
+      {
+        apply: (payload: Record<string, any>, value: number) => {
+          payload.replay.plan.physics.gravity = { x: value, y: 0, z: 0 };
+        },
+        maximum: DICE_ROLL_EVENT_LIMITS.maxGravityMagnitude
+      },
+      {
+        apply: (payload: Record<string, any>, value: number) => {
+          payload.replay.plan.dice[0].initialState.position = { x: value, y: 0, z: 0 };
+        },
+        maximum: DICE_ROLL_EVENT_LIMITS.maxPositionMagnitude
+      },
+      {
+        apply: (payload: Record<string, any>, value: number) => {
+          payload.replay.plan.dice[0].initialState.velocity = { x: value, y: 0, z: 0 };
+        },
+        maximum: DICE_ROLL_EVENT_LIMITS.maxVelocityMagnitude
+      },
+      {
+        apply: (payload: Record<string, any>, value: number) => {
+          payload.replay.plan.dice[0].initialState.angularVelocity = {
+            x: value,
+            y: 0,
+            z: 0
+          };
+        },
+        maximum: DICE_ROLL_EVENT_LIMITS.maxAngularVelocityMagnitude
+      }
+    ];
+
+    for (const field of fields) {
+      const boundary = replayPayload();
+      field.apply(boundary, field.maximum);
+      expect(validateDiceRollEvent(boundary).replay).toBeDefined();
+
+      const invalid = replayPayload();
+      field.apply(invalid, field.maximum + 1);
+      expect(() => validateDiceRollEvent(invalid)).toThrowError(/magnitude/i);
+    }
+  });
+
+  it("bounds replay stability and simulation step counts", () => {
+    const boundary = replayPayload();
+    boundary.replay.plan.stability.consecutiveSteps =
+      DICE_ROLL_EVENT_LIMITS.maxStabilityConsecutiveSteps;
+    boundary.replay.plan.stability.maxSteps = DICE_ROLL_EVENT_LIMITS.maxStabilitySteps;
+    boundary.replay.plan.simulationSteps = DICE_ROLL_EVENT_LIMITS.maxSimulationSteps;
+    expect(validateDiceRollEvent(boundary).replay).toBeDefined();
+
+    const tooManyConsecutive = replayPayload();
+    tooManyConsecutive.replay.plan.stability.consecutiveSteps =
+      DICE_ROLL_EVENT_LIMITS.maxStabilityConsecutiveSteps + 1;
+    expect(() => validateDiceRollEvent(tooManyConsecutive)).toThrowError(/at most/i);
+
+    const tooManyStabilitySteps = replayPayload();
+    tooManyStabilitySteps.replay.plan.stability.maxSteps =
+      DICE_ROLL_EVENT_LIMITS.maxStabilitySteps + 1;
+    expect(() => validateDiceRollEvent(tooManyStabilitySteps)).toThrowError(/at most/i);
+
+    const tooManySimulationSteps = replayPayload();
+    tooManySimulationSteps.replay.plan.simulationSteps =
+      DICE_ROLL_EVENT_LIMITS.maxSimulationSteps + 1;
+    expect(() => validateDiceRollEvent(tooManySimulationSteps)).toThrowError(/1\.\.3600/i);
+  });
+
+  it("applies the same resource limits when a host creates an event", () => {
+    const result = logicalResult();
+
+    expect(() =>
+      createDiceRollEvent({
+        ...result,
+        rollId: "r".repeat(DICE_ROLL_EVENT_LIMITS.maxRollIdLength + 1)
+      })
+    ).toThrowError(/at most/i);
+
+    expect(() =>
+      createDiceRollEvent(result, {
+        definitions: [
+          {
+            sides: 8,
+            appearance: {
+              texture: "t".repeat(DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength + 1)
+            }
+          },
+          { sides: 20 }
+        ]
+      })
+    ).toThrowError(/at most/i);
+
+    const invalidPlan = replayPlan(result);
+    expect(() =>
+      createDiceRollEvent(result, {
+        plan: {
+          ...invalidPlan,
+          stability: {
+            ...invalidPlan.stability,
+            maxSteps: DICE_ROLL_EVENT_LIMITS.maxStabilitySteps + 1
+          }
+        }
+      })
+    ).toThrowError(/at most/i);
+  });
+
 });
