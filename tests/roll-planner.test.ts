@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_DICE_PHYSICS_CONFIG,
   DirectRollPlanner,
   RollPlanner,
   RollPlanningError,
