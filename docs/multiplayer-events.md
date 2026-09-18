@@ -11,9 +11,9 @@ The host owns the logical result. It may also create a physical `PresimulatedRol
 ```ts
 import {
   DiceRoller,
-  RollPlanner,
   createDiceRollEvent
 } from "@dihor/gamekit-dice";
+import { RollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const request = {
   dice: [
@@ -49,7 +49,7 @@ import {
   DICE_ROLL_REPLAY_VERSION,
   diceRollResultFromEvent,
   validateDiceRollEvent
-} from "@dihor/gamekit-dice";
+} from "@dihor/gamekit-dice/events";
 
 const event = validateDiceRollEvent(JSON.parse(payload));
 const authoritativeResult = diceRollResultFromEvent(event);
@@ -70,6 +70,39 @@ if (event.replay?.version === DICE_ROLL_REPLAY_VERSION) {
 ```
 
 `validateDiceRollEvent` rejects unsupported event/replay versions, invalid die types or values, malformed appearance fields, mismatched totals and replay plans that disagree with the authoritative result.
+
+## Resource limits
+
+Transport payload validation also applies an operational envelope before playback work begins. The current limits are exported as `DICE_ROLL_EVENT_LIMITS` so hosts can reject or shape payloads consistently before sending them.
+
+The limits include the runtime dice cap (`MAX_DICE_PER_ROLL`, currently 6), bounded roll/reason strings, bounded appearance strings and asset URLs, a maximum arena polygon size, bounded stability/simulation step counts, supported dice-size and arena extents, and maximum replay position/velocity/angular-velocity magnitudes.
+
+These limits apply to event-driven/network playback. They do not change the direct local appearance API, where the application deliberately controls its own asset URLs and configuration.
+
+## Remote asset policy
+
+Treat appearance URLs received inside a multiplayer event as untrusted input. Before passing event appearances to `DiceRollPlayer`, call `resolveDiceRollEventAppearances()`.
+
+By default, local/relative paths are allowed, while external HTTP(S) origins and non-web schemes such as `data:` or `blob:` are blocked. Applications can explicitly allow known CDN origins, opt in to selected non-web schemes, disable relative paths, or map logical asset IDs to application-owned local assets.
+
+```ts
+const appearances = resolveDiceRollEventAppearances(event, {
+  allowedOrigins: ["https://cdn.example.com"],
+  resolve: (source) => {
+    if (source === "theme:marble") {
+      return "/assets/themes/marble/die.png";
+    }
+
+    return source;
+  }
+});
+
+await player.play(event.replay.plan, { appearances });
+```
+
+For the strictest setup, set `allowRelative: false` and provide a resolver that returns only assets selected by the host application. Returning `undefined` from the resolver rejects the asset.
+
+This policy affects only event-driven appearance resolution. Direct local calls that configure `DiceAppearance` continue to accept application-controlled URLs as before.
 
 The renderer is optional. A phone, server, test harness or low-power client can consume `rollId`, `dice`, `modifier`, `total` and `reason` without importing or constructing a Three.js renderer.
 

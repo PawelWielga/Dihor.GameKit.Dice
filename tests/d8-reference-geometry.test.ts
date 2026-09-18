@@ -1,6 +1,6 @@
 import { FrontSide, Mesh, MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
-import { DiceMeshFactory } from "../src/index.js";
+import { DiceMeshFactory } from "../src/advanced.js";
 
 describe("reference-rounded D8 geometry", () => {
   it("keeps the approved D8 extent while using a multi-vertex rounded tip profile", () => {

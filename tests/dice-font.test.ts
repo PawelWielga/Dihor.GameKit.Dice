@@ -1,6 +1,6 @@
 import { BufferGeometry, CanvasTexture, Material, Mesh, MeshStandardMaterial, Texture } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DiceMeshFactory } from "../src/index.js";
+import { DiceMeshFactory } from "../src/advanced.js";
 import {
   DEFAULT_DICE_FONT_APPEARANCE,
   mergeDiceAppearances,

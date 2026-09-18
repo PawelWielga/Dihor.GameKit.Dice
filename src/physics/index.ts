@@ -13,6 +13,7 @@ export { BackgroundRollPlanner } from "./BackgroundRollPlanner.js";
 export { DirectRollPlanner } from "./DirectRollPlanner.js";
 export type { DirectRollPlannerOptions } from "./DirectRollPlanner.js";
 export type {
+  BackgroundRollFallbackStrategy,
   BackgroundRollPlannerOptions,
   BackgroundRollPlanningTiming,
   RollPlanningWorkerFactory,

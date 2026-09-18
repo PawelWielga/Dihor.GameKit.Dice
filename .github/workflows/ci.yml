@@ -36,17 +36,39 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build library
         run: npm run build
+
+      - name: Performance baseline report
+        run: npm run benchmark:ci
+
+      - name: Upload performance baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline
+          path: performance-results.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Validate NodeNext consumer
         run: npm run test:consumer
 
       - name: Build demo
         run: npm run build:demo
+
+      - name: Browser smoke tests
+        run: npm run test:browser
 
       - name: Validate npm package
         shell: bash

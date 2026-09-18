@@ -14,7 +14,7 @@ import {
   type DirectRollPlan,
   type PresimulatedRollPlan,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class FakeDocument {
   readonly body: FakeElement;
@@ -116,6 +116,28 @@ function createPlan(result: ReturnType<DiceRoller["roll"]>): PresimulatedRollPla
     stability: DEFAULT_STABILITY_CONFIG,
     simulationSteps: 12,
     preSimulated: true
+  };
+}
+
+function createDirectFallbackPlan(result: ReturnType<DiceRoller["roll"]>): DirectRollPlan {
+  const zero = { x: 0, y: 0, z: 0 } as const;
+
+  return {
+    rollId: result.rollId,
+    dice: result.dice.map((die, index) => ({
+      sides: die.sides,
+      expectedValue: 0,
+      initialState: {
+        position: { x: index * 2, y: 1, z: 0 },
+        quaternion: { x: 0, y: 0, z: 0, w: 1 },
+        velocity: zero,
+        angularVelocity: zero
+      }
+    })),
+    physics: DEFAULT_DICE_PHYSICS_CONFIG,
+    stability: DEFAULT_STABILITY_CONFIG,
+    simulationSteps: 0,
+    preSimulated: false
   };
 }
 
@@ -269,6 +291,64 @@ describe("DiceOverlay", () => {
     expect(planningOptions[0]).toMatchObject({ throwForce: 1.35 });
     expect((planningOptions[0] as { arenaBoundary?: unknown[] }).arenaBoundary).toHaveLength(4);
     overlay.dispose();
+  });
+
+  it("uses visible playback values when presimulation falls back to direct physics", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    player.directValues = [4, 2];
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner: {
+        plan: (result) => createDirectFallbackPlan(result)
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const result = await overlay.roll({
+      dice: [{ sides: 6 }, { sides: 6 }],
+      modifier: 3,
+      reason: "Fallback"
+    });
+
+    expect(result).toEqual({
+      rollId: "overlay-roll",
+      dice: [{ sides: 6, value: 4 }, { sides: 6, value: 2 }],
+      modifier: 3,
+      total: 9,
+      reason: "Fallback"
+    });
+    expect(player.calls[0]?.plan.preSimulated).toBe(false);
+    overlay.dispose();
+  });
+
+  it("rejects forced totals when presimulation falls back to direct physics", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner: {
+        plan: (result) => createDirectFallbackPlan(result)
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    await expect(
+      overlay.roll(
+        { dice: [{ sides: 6 }, { sides: 6 }] },
+        { expectedDiceTotal: 7 }
+      )
+    ).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "planning"
+    } satisfies Partial<DiceOverlayError>);
+
+    expect(player.calls).toHaveLength(0);
+    expect(overlay.isOpen).toBe(false);
   });
 
   it("supports direct physical mode without creating an authoritative result first", async () => {

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   BackgroundRollPlanner,
+  DirectRollPlanner,
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   RollPlanningError,
   type PresimulatedRollPlan,
   type RollPlanningWorkerLike
-} from "../src/index.js";
+} from "../src/advanced.js";
 import type {
   RollPlanningWorkerRequest,
   RollPlanningWorkerResponse
@@ -96,4 +97,120 @@ describe("BackgroundRollPlanner", () => {
     expect(timings).toEqual([{ durationMs: 5, usedWorker: true }]);
     planner.dispose();
   });
+  it("uses direct physics by default when Worker creation is unavailable", async () => {
+    const planner = new BackgroundRollPlanner({
+      workerFactory: () => undefined,
+      directPlanner: new DirectRollPlanner({
+        randomProvider: { next: () => 0.5 }
+      })
+    });
+
+    const plan = await planner.plan(result);
+
+    expect(plan.preSimulated).toBe(false);
+    expect(plan.rollId).toBe(result.rollId);
+    expect(plan.dice).toHaveLength(result.dice.length);
+    expect(plan.dice[0]?.sides).toBe(10);
+    expect(plan.dice[0]?.expectedValue).toBe(0);
+    planner.dispose();
+  });
+
+  it("supports an explicit synchronous fallback", async () => {
+    const fallbackPlan: PresimulatedRollPlan = {
+      rollId: result.rollId,
+      dice: [{
+        sides: 10,
+        expectedValue: 7,
+        initialState: {
+          position: { x: 0, y: 1, z: 0 },
+          quaternion: { x: 0, y: 0, z: 0, w: 1 },
+          velocity: { x: 0, y: 0, z: 0 },
+          angularVelocity: { x: 0, y: 0, z: 0 }
+        }
+      }],
+      physics: DEFAULT_DICE_PHYSICS_CONFIG,
+      stability: DEFAULT_STABILITY_CONFIG,
+      simulationSteps: 1,
+      preSimulated: true
+    };
+    const fallbackPlanner = {
+      plan: vi.fn(() => fallbackPlan)
+    };
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "synchronous",
+      workerFactory: () => undefined,
+      fallbackPlanner: fallbackPlanner as never
+    });
+
+    const plan = await planner.plan(result);
+
+    expect(plan).toBe(fallbackPlan);
+    expect(fallbackPlanner.plan).toHaveBeenCalledTimes(1);
+    planner.dispose();
+  });
+
+  it("fails clearly with the explicit error fallback", async () => {
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "error",
+      workerFactory: () => undefined
+    });
+
+    await expect(planner.plan(result)).rejects.toThrowError(/requires a Web Worker/i);
+    planner.dispose();
+  });
+
+  it("applies fallback behavior when the Worker factory throws during creation", async () => {
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "error",
+      workerFactory: () => {
+        throw new Error("Worker construction failed");
+      }
+    });
+
+    await expect(planner.plan(result)).rejects.toThrowError(/requires a Web Worker/i);
+    planner.dispose();
+  });
+
+  it("can cancel deferred direct fallback before main-thread work starts", async () => {
+    vi.useFakeTimers();
+    try {
+      const planner = new BackgroundRollPlanner({
+        fallbackStrategy: "direct",
+        workerFactory: () => undefined,
+        directPlanner: new DirectRollPlanner({
+          randomProvider: { next: () => 0.5 }
+        })
+      });
+
+      const pending = planner.plan(result);
+      planner.cancel();
+      await expect(pending).rejects.toThrowError(/cancelled/i);
+      await vi.runAllTimersAsync();
+      planner.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("can cancel deferred synchronous fallback before it blocks the main thread", async () => {
+    vi.useFakeTimers();
+    try {
+      const fallbackPlanner = { plan: vi.fn() };
+      const planner = new BackgroundRollPlanner({
+        fallbackStrategy: "synchronous",
+        workerFactory: () => undefined,
+        fallbackPlanner: fallbackPlanner as never
+      });
+
+      const pending = planner.plan(result);
+      planner.cancel();
+      await expect(pending).rejects.toThrowError(/cancelled/i);
+      await vi.runAllTimersAsync();
+      expect(fallbackPlanner.plan).not.toHaveBeenCalled();
+      planner.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });

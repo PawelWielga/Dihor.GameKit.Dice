@@ -1,6 +1,6 @@
 import { AmbientLight, DirectionalLight, Object3D, PointLight, Vector3, type Mesh, type MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
-import { DiceScene } from "../src/index.js";
+import { DiceScene } from "../src/advanced.js";
 
 describe("DiceScene", () => {
   it("aligns the visible floor with the physics plane at world y=0", () => {

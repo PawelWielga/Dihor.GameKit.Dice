@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dihor.GameKit.Dice browser smoke</title>
+    <style>
+      html, body { margin: 0; background: #111318; color: #fff; font-family: system-ui, sans-serif; }
+      #fixtures { display: grid; gap: 12px; padding: 12px; }
+      .fixture { width: 640px; height: 420px; position: relative; overflow: hidden; }
+      #browser-smoke-result { white-space: pre-wrap; font-size: 12px; }
+    </style>
+  </head>
+  <body data-browser-smoke-status="running">
+    <div id="fixtures"></div>
+    <pre id="browser-smoke-result">Running browser smoke tests...</pre>
+    <script type="module" src="./browser-smoke.ts"></script>
+  </body>
+</html>

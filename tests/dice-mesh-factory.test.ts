@@ -5,7 +5,7 @@ import {
   SUPPORTED_DICE_SIDES,
   getDiceTopology,
   type DiceTextureLoader
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class FakeTextureLoader implements DiceTextureLoader {
   readonly calls: string[] = [];
@@ -27,6 +27,35 @@ class FakeTextureLoader implements DiceTextureLoader {
 }
 
 describe("DiceMeshFactory", () => {
+  it("does not pass undefined optional texture parameters to Three.js materials", async () => {
+    const warnings = vi.spyOn(console, "warn");
+    const loader = new FakeTextureLoader();
+    const factory = new DiceMeshFactory({ textureLoader: loader });
+
+    try {
+      const d6 = factory.createD6();
+      const d10 = factory.create(10);
+      const textured = await factory.createAsync(10, {
+        appearance: { texture: "/body.png" }
+      });
+
+      d6.dispose();
+      d10.dispose();
+      textured.dispose();
+
+      const materialWarnings = warnings.mock.calls
+        .flatMap((call) => call.map(String))
+        .filter((message) =>
+          /THREE\.Material: parameter '(map|normalMap|roughnessMap)' has value of undefined/.test(message)
+        );
+
+      expect(materialWarnings).toEqual([]);
+    } finally {
+      factory.dispose();
+      warnings.mockRestore();
+    }
+  });
+
   it("creates a rounded D6 with all 21 classic pips", () => {
     const factory = new DiceMeshFactory();
     const mesh = factory.createD6({ size: 2 });

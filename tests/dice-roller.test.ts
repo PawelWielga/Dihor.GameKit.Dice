@@ -5,7 +5,7 @@ import {
   type DiceDefinition,
   type DiceRollRequest,
   type RandomProvider
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class SequenceRandomProvider implements RandomProvider {
   private index = 0;

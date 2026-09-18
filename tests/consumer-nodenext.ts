@@ -1,17 +1,37 @@
 import {
-  BackgroundRollPlanner,
-  DirectRollPlanner,
-  DiceRollPlayer,
-  RollPlanner,
+  DiceOverlay,
+  DiceRoller,
   SUPPORTED_DICE_SIDES,
   createDiceRollEvent,
-  validateDiceRollEvent,
   type DiceAppearance,
   type DiceRollRequest,
   type DiceRollResult,
   type DirectRollPlan,
-  type PresimulatedRollPlan
+  type PresimulatedRollPlan,
+  type RollPlan
 } from "@dihor/gamekit-dice";
+import {
+  resolveDiceAppearance,
+  type ResolvedDiceAppearance
+} from "@dihor/gamekit-dice/appearance";
+import {
+  createSeededRandomProvider,
+  getDiceTopology
+} from "@dihor/gamekit-dice/core";
+import {
+  validateDiceRollEvent
+} from "@dihor/gamekit-dice/events";
+import {
+  DiceOverlay as OverlayDiceOverlay,
+  DiceOverlayError
+} from "@dihor/gamekit-dice/overlay";
+import {
+  BackgroundRollPlanner,
+  DirectRollPlanner,
+  DiceRenderer,
+  DiceRollPlayer,
+  RollPlanner
+} from "@dihor/gamekit-dice/advanced";
 
 const request: DiceRollRequest = {
   dice: [
@@ -35,8 +55,13 @@ const result: DiceRollResult = {
 
 const appearance: DiceAppearance = request.dice[0]?.appearance ?? {};
 const missingFaceTexture: string | undefined = appearance.faces?.[1];
+const resolvedAppearance: ResolvedDiceAppearance = resolveDiceAppearance(appearance);
 const event = createDiceRollEvent(result, { definitions: request.dice });
 const validatedEvent = validateDiceRollEvent(JSON.parse(JSON.stringify(event)));
+
+const roller = new DiceRoller({
+  randomProvider: createSeededRandomProvider("consumer-seed", "logic")
+});
 
 declare const directPlanner: DirectRollPlanner;
 declare const presimulatedPlanner: RollPlanner;
@@ -45,7 +70,7 @@ declare const player: DiceRollPlayer;
 
 const directPlan: DirectRollPlan = directPlanner.plan(request, "consumer-direct");
 const presimulatedPlan: PresimulatedRollPlan = presimulatedPlanner.plan(result);
-const backgroundPlan: Promise<PresimulatedRollPlan> = backgroundPlanner.plan(result);
+const backgroundPlan: Promise<RollPlan> = backgroundPlanner.plan(result);
 
 createDiceRollEvent(result, { plan: presimulatedPlan });
 // @ts-expect-error Direct physical plans are not authoritative replay data.
@@ -53,7 +78,14 @@ createDiceRollEvent(result, { plan: directPlan });
 
 void player.play(directPlan);
 void player.play(presimulatedPlan);
+void DiceOverlay;
+void OverlayDiceOverlay;
+void DiceOverlayError;
+void DiceRenderer;
 void SUPPORTED_DICE_SIDES;
+void getDiceTopology;
+void roller;
 void missingFaceTexture;
+void resolvedAppearance;
 void validatedEvent;
 void backgroundPlan;

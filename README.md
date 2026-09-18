@@ -81,11 +81,43 @@ Run tests:
 npm test
 ```
 
+Check only the public API compatibility contract:
+
+```bash
+npm run test:api-contract
+```
+
+When a public API change is intentional, update the reviewed snapshot with `npm run update:api-contract`. See [`docs/public-api-contract.md`](./docs/public-api-contract.md) for the compatibility and versioning workflow.
+
 Run TypeScript checks:
 
 ```bash
 npm run typecheck
 ```
+
+Run the focused coverage suite:
+
+```bash
+npm run test:coverage
+```
+
+Coverage intentionally protects runtime-heavy core, multiplayer events, physics/planning, playback lifecycle and texture-cache code rather than chasing 100% across rendering/demo files. CI prints the coverage table, enforces regression thresholds for those areas and uploads `coverage/coverage-summary.json` as an artifact.
+
+Run repeatable CPU/setup performance baselines:
+
+```bash
+npm run benchmark
+```
+
+Reference measurements, scenario definitions and intentionally loose CI regression budgets are documented in [docs/performance.md](docs/performance.md).
+
+Run the real-browser smoke suite:
+
+```bash
+npm run test:browser
+```
+
+The smoke suite starts the Vite demo server and drives a locally installed Chrome, Chromium or Edge in headless mode. Set `CHROME_BIN` when the browser executable is not discoverable automatically. It intentionally covers only a few high-value browser paths: WebGL rendering, Worker-backed D6 presimulation, a D20 direct roll with live resize, a mixed textured roll, and cancellation/cleanup. Unit tests remain the primary fast feedback loop.
 
 Build the static demo bundle locally:
 
@@ -127,7 +159,8 @@ src/
 ├── appearance/  # Colors, materials, textures and themes
 ├── events/      # Versioned transport-neutral event contracts
 ├── overlay/     # Framework-agnostic user-facing overlay
-└── index.ts     # Public package entry point
+├── advanced.ts  # Explicit opt-in advanced/legacy entry point
+└── index.ts     # Small recommended package root
 ```
 
 DiceOverlay supports two roll pipelines:
@@ -144,6 +177,37 @@ visible replay verifies result     top faces become the result
 ```
 
 Presimulated mode keeps the logical result authoritative and never snaps/remaps a physical face after simulation. Direct mode has no hidden full simulation: the rendered cannon-es run itself decides the returned values.
+
+## Package entry points
+
+The package root is intentionally limited to the APIs needed by normal game integrations: `DiceOverlay`, `DiceRoller`, request/result and appearance models, multiplayer event helpers, supported dice metadata and the public roll-plan union types.
+
+More specialized APIs use explicit subpath exports:
+
+| Entry point | Intended use |
+| --- | --- |
+| `@dihor/gamekit-dice` | Recommended game-facing API |
+| `@dihor/gamekit-dice/appearance` | Appearance defaults, resolvers and validation helpers |
+| `@dihor/gamekit-dice/core` | Logical dice helpers, seeded RNG and topology utilities |
+| `@dihor/gamekit-dice/events` | Transport-neutral multiplayer event contract |
+| `@dihor/gamekit-dice/overlay` | Full overlay API including dependency-injection hooks |
+| `@dihor/gamekit-dice/advanced` | Physics, player, renderer, mesh and other supported low-level APIs |
+
+### Preview migration
+
+Before this split, advanced symbols such as `RollPlanner`, `DiceRollPlayer`, `DiceRenderer`, `DiceScene` and `DiceMeshFactory` were imported from the package root. During the preview line, migrate those imports by changing the module path while keeping the symbol names unchanged:
+
+```ts
+// Before
+import { RollPlanner, DiceRenderer } from "@dihor/gamekit-dice";
+
+// Now
+import { RollPlanner, DiceRenderer } from "@dihor/gamekit-dice/advanced";
+```
+
+The `/advanced` entry intentionally preserves the previous full preview export surface. New normal game code should prefer the package root and use a specialized subpath only when it needs that layer directly.
+
+Every supported entry point is protected by a checked-in API compatibility contract. See [`docs/public-api-contract.md`](./docs/public-api-contract.md).
 
 ## Public API example
 
@@ -180,9 +244,25 @@ console.log(result.dice);
 console.log(result.total);
 ```
 
-The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In the default `preSimulation: true` mode the logical result remains authoritative and hidden planning runs in a Web Worker when available. Set `preSimulation: false` to skip hidden planning and return the values read from the visible dice after they settle.
+The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
 
-For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`.
+Advanced consumers can configure the Worker-unavailable policy explicitly:
+
+```ts
+import { BackgroundRollPlanner } from "@dihor/gamekit-dice/advanced";
+
+const planner = new BackgroundRollPlanner({
+  fallbackStrategy: "direct" // safe interactive default
+});
+
+// Other choices:
+// "synchronous" - preserves presimulation but may block the UI thread.
+// "error"       - fail clearly if off-thread presimulation is unavailable.
+```
+
+For desktop/mobile browsers and TV/WebView targets, prefer `"direct"` or `"error"` so a missing Worker never causes unexpected synchronous planning on the UI thread. Use `"synchronous"` only in environments where blocking is explicitly acceptable, such as controlled tests or non-interactive execution.
+
+For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`. If planning falls back to direct physics, a forced `expectedDiceTotal` cannot be guaranteed, so `DiceOverlay` reports a planning error instead of silently returning a different forced result.
 
 Per-roll `diceScale` accepts values from `0.5` to `1.5` and defaults to `1.0`. The scale is written into `RollPlan.physics.diceSize`, so the Three.js mesh and cannon-es collider always use the same effective size. Multiple dice in the roll also scale their default spacing together.
 
@@ -197,11 +277,9 @@ The same appearance model supports a global texture plus optional physical-face 
 Seeded behavior is opt-in through the existing `RandomProvider` abstraction. Use separate stream names so logical results do not depend on how many random samples physical planning consumes:
 
 ```ts
-import {
-  DiceRoller,
-  RollPlanner,
-  createSeededRandomProvider
-} from "@dihor/gamekit-dice";
+import { DiceRoller } from "@dihor/gamekit-dice";
+import { createSeededRandomProvider } from "@dihor/gamekit-dice/core";
+import { RollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const seed = "match-42";
 
