@@ -56,7 +56,9 @@
     "test:api-contract": "node scripts/check-public-api-contract.mjs",
     "update:api-contract": "node scripts/check-public-api-contract.mjs --write",
     "test:browser": "node scripts/run-browser-smoke.mjs",
-    "test:coverage": "vitest run --coverage && npm run test:api-contract"
+    "test:coverage": "vitest run --coverage && npm run test:api-contract",
+    "benchmark": "npm run build --silent && node scripts/run-performance-baseline.mjs",
+    "benchmark:ci": "node scripts/run-performance-baseline.mjs --json performance-results.json"
   },
   "dependencies": {
     "@fontsource/cinzel": "5.3.0",
