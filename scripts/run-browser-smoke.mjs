@@ -121,7 +121,6 @@ try {
       "--enable-unsafe-swiftshader",
       "--use-gl=angle",
       "--use-angle=swiftshader",
-      "--virtual-time-budget=60000",
       "--dump-dom",
       pageUrl
     ],
