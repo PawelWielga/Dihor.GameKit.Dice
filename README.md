@@ -36,12 +36,27 @@ The library supports:
 
 The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
 
+## Prerelease package
+
+DiceKit uses the same prerelease model as PartyGameKit. Release versions follow the `0.1.0-preview.N` convention and are packaged with `npm pack` as a `.tgz` artifact attached to a GitHub Prerelease.
+
+The first release line is:
+
+```text
+@partybeam/dice-kit 0.1.0-preview.1
+tag: v0.1.0-preview.1
+```
+
+The prerelease workflow validates the manifest and package version, runs the full test/build suite, verifies package contents and MIT license metadata, creates SHA-256 checksums, uploads the npm artifact and creates or updates the matching GitHub Prerelease.
+
+This does **not** publish the package to the public npm registry. The GitHub Release artifact is the distribution channel, matching PartyGameKit's current prerelease approach.
+
 ## Development
 
 Install dependencies:
 
 ```bash
-npm install
+npm ci
 ```
 
 Run the local demo:
@@ -91,7 +106,7 @@ The generated `dist-demo/` output is not committed to the repository.
 GitHub Actions are allowed for this repository. Pull requests and pushes to `main` should run the same validation that remains available locally:
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build
