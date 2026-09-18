@@ -18,8 +18,8 @@ import type {
   DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
+  PresimulatedRollPlan,
   RollInitialState,
-  RollPlan,
   RollPlanDie,
   StabilityConfig
 } from "./RollModels.js";
@@ -227,7 +227,7 @@ export class RollPlanner {
         : requirePositiveFinite("slotSpacing", options.slotSpacing);
   }
 
-  plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
+  plan(result: DiceRollResult, options: RollPlanningOptions = {}): PresimulatedRollPlan {
     const throwForce = resolveThrowForce(options.throwForce);
     const diceScale = resolveDiceScale(options.diceScale);
     const baseDiceSize = this.physicsOptions.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
@@ -297,7 +297,8 @@ export class RollPlanner {
           dice: plannedDice,
           physics: verification.physics,
           stability: this.stabilityConfig,
-          simulationSteps: verification.steps
+          simulationSteps: verification.steps,
+          preSimulated: true
         };
       }
 

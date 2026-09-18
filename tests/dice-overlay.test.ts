@@ -11,6 +11,8 @@ import {
   type DiceOverlayRenderer,
   type DiceRollPlaybackOptions,
   type DiceRollPlaybackResult,
+  type DirectRollPlan,
+  type PresimulatedRollPlan,
   type RollPlan
 } from "../src/index.js";
 
@@ -95,7 +97,7 @@ class FakePlayer implements DiceOverlayPlayer {
   }
 }
 
-function createPlan(result: ReturnType<DiceRoller["roll"]>): RollPlan {
+function createPlan(result: ReturnType<DiceRoller["roll"]>): PresimulatedRollPlan {
   const zero = { x: 0, y: 0, z: 0 } as const;
 
   return {
@@ -112,7 +114,8 @@ function createPlan(result: ReturnType<DiceRoller["roll"]>): RollPlan {
     })),
     physics: DEFAULT_DICE_PHYSICS_CONFIG,
     stability: DEFAULT_STABILITY_CONFIG,
-    simulationSteps: 12
+    simulationSteps: 12,
+    preSimulated: true
   };
 }
 
@@ -276,7 +279,7 @@ describe("DiceOverlay", () => {
       throw new Error("logical roller must not run in direct mode");
     });
     const plannerPlan = vi.fn();
-    const directPlans: RollPlan[] = [];
+    const directPlans: DirectRollPlan[] = [];
     const overlay = new DiceOverlay({
       document: documentRef as unknown as Document,
       roller: { roll, createRollId: () => "direct-roll" },
@@ -284,7 +287,7 @@ describe("DiceOverlay", () => {
       directPlanner: {
         plan(request, rollId) {
           const zero = { x: 0, y: 0, z: 0 } as const;
-          const plan: RollPlan = {
+          const plan: DirectRollPlan = {
             rollId,
             dice: request.dice.map((die, index) => ({
               sides: die.sides,
@@ -332,7 +335,7 @@ describe("DiceOverlay", () => {
     player.directValues = [4];
     const rendererFactory = vi.fn(() => new FakeRenderer());
     const playerFactory = vi.fn(() => player);
-    const directPlan = vi.fn((request: { dice: readonly { sides: 4 | 6 | 8 | 10 | 12 | 20 }[] }, rollId: string): RollPlan => {
+    const directPlan = vi.fn((request: { dice: readonly { sides: 4 | 6 | 8 | 10 | 12 | 20 }[] }, rollId: string): DirectRollPlan => {
       const zero = { x: 0, y: 0, z: 0 } as const;
 
       return {

@@ -16,8 +16,8 @@ import type {
   DicePhysicsConfig,
   PhysicsQuaternion,
   PhysicsVector3,
+  PresimulatedRollPlan,
   RollInitialState,
-  RollPlan,
   RollPlanDie,
   StabilityConfig
 } from "../physics/index.js";
@@ -34,7 +34,7 @@ export interface DiceRollEventDie {
 
 export interface DiceRollReplayV1 {
   readonly version: typeof DICE_ROLL_REPLAY_VERSION;
-  readonly plan: RollPlan;
+  readonly plan: PresimulatedRollPlan;
 }
 
 /**
@@ -59,7 +59,7 @@ export interface CreateDiceRollEventOptions {
   readonly definitions?: readonly DiceDefinition[];
 
   /** Optional successful host-side plan used by clients that want full physical playback. */
-  readonly plan?: RollPlan;
+  readonly plan?: PresimulatedRollPlan;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -436,7 +436,7 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
   };
 }
 
-function validateReplayPlanFromUnknown(value: unknown): RollPlan {
+function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
   const plan = requireRecord("DiceRollEvent replay plan", value);
 
   if (typeof plan.rollId !== "string" || plan.rollId.trim().length === 0) {
@@ -447,11 +447,12 @@ function validateReplayPlanFromUnknown(value: unknown): RollPlan {
     throw new RangeError("DiceRollEvent replay plan requires at least one die.");
   }
 
-  if (plan.preSimulated !== undefined && typeof plan.preSimulated !== "boolean") {
-    throw new RangeError("DiceRollEvent replay plan preSimulated must be a boolean when provided.");
+  // Replay v1 historically omitted this flag for presimulated plans, so absence stays valid.
+  // A direct physical plan is never authoritative replay data.
+  if (plan.preSimulated !== undefined && plan.preSimulated !== true) {
+    throw new RangeError("DiceRollEvent replay plan must be presimulated.");
   }
 
-  const preSimulated = plan.preSimulated as boolean | undefined;
   const dice: RollPlanDie[] = plan.dice.map((rawDie, index) => {
     const die = requireRecord(`DiceRollEvent replay plan die at index ${index}`, rawDie);
     const sides = die.sides;
@@ -469,9 +470,8 @@ function validateReplayPlanFromUnknown(value: unknown): RollPlan {
     if (
       typeof expectedValue !== "number" ||
       !Number.isInteger(expectedValue) ||
-      (preSimulated === false
-        ? expectedValue < 0 || expectedValue > sides
-        : expectedValue < 1 || expectedValue > sides)
+      expectedValue < 1 ||
+      expectedValue > sides
     ) {
       throw new RangeError(
         `DiceRollEvent replay plan contains an invalid expected value at index ${index}.`
@@ -490,12 +490,9 @@ function validateReplayPlanFromUnknown(value: unknown): RollPlan {
     plan.simulationSteps
   );
 
-  if (
-    !Number.isInteger(simulationSteps) ||
-    simulationSteps < (preSimulated === false ? 0 : 1)
-  ) {
+  if (!Number.isInteger(simulationSteps) || simulationSteps < 1) {
     throw new RangeError(
-      `DiceRollEvent replay plan simulationSteps must be ${preSimulated === false ? "a non-negative" : "a positive"} integer.`
+      "DiceRollEvent replay plan simulationSteps must be a positive integer."
     );
   }
 
@@ -505,7 +502,7 @@ function validateReplayPlanFromUnknown(value: unknown): RollPlan {
     physics: validatePhysicsFromUnknown(plan.physics),
     stability: validateStabilityFromUnknown(plan.stability),
     simulationSteps,
-    ...(preSimulated === undefined ? {} : { preSimulated })
+    preSimulated: true
   };
 }
 
@@ -571,7 +568,7 @@ function validateDefinitions(
   }
 }
 
-function validatePlan(result: DiceRollResult, plan: RollPlan | undefined): void {
+function validatePlan(result: DiceRollResult, plan: PresimulatedRollPlan | undefined): void {
   if (!plan) {
     return;
   }

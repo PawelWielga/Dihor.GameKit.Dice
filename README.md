@@ -203,7 +203,7 @@ const plan = planner.plan(result);
 const savedPlan = JSON.stringify(plan);
 ```
 
-The same seed and stream reproduce the same random sequence and therefore the same logical values or generated planning inputs. A saved `RollPlan` can be passed back to `DiceRollPlayer` without rolling or planning again. Bit-for-bit identical physics across different browsers, devices or engine versions is intentionally not guaranteed; the logical result remains authoritative.
+The same seed and stream reproduce the same random sequence and therefore the same logical values or generated planning inputs. `RollPlan` is a discriminated union of `PresimulatedRollPlan` (`preSimulated: true`) and `DirectRollPlan` (`preSimulated: false`). `DiceRollPlayer` accepts both variants, but only a `PresimulatedRollPlan` is authoritative replay data and can be attached to `createDiceRollEvent`. Bit-for-bit identical physics across different browsers, devices or engine versions is intentionally not guaranteed; the logical result remains authoritative.
 
 See [`docs/replay-and-determinism.md`](./docs/replay-and-determinism.md) for the replay contract and determinism guarantees.
 

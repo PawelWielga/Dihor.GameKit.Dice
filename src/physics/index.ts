@@ -38,8 +38,11 @@ export type {
 export type {
   DiceArenaBoundaryPoint,
   DicePhysicsConfig,
+  DirectRollPlan,
+  DirectRollPlanDie,
   PhysicsQuaternion,
   PhysicsVector3,
+  PresimulatedRollPlan,
   RollInitialState,
   RollPlan,
   RollPlanDie,

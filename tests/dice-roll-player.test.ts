@@ -10,6 +10,8 @@ import {
   type DiceAnimationScheduler,
   type DiceRenderTarget,
   type DiceTextureLoader,
+  type DirectRollPlan,
+  type PresimulatedRollPlan,
   type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
@@ -96,7 +98,7 @@ function settledState(context: RollInitialStateContext) {
   } as const;
 }
 
-function createPlan(diceScale = 1): RollPlan {
+function createPlan(diceScale = 1): PresimulatedRollPlan {
   const planner = new RollPlanner({
     initialStateProvider: settledState,
     maxAttemptsPerDie: 1,
@@ -316,7 +318,7 @@ describe("DiceRollPlayer", () => {
     const { diceScene, target } = createTarget();
     const player = new DiceRollPlayer(target, { scheduler });
     const presimulated = createPlan();
-    const directPlan: RollPlan = {
+    const directPlan: DirectRollPlan = {
       ...presimulated,
       dice: presimulated.dice.map((die) => ({ ...die, expectedValue: 0 })),
       simulationSteps: 0,
@@ -337,7 +339,7 @@ describe("DiceRollPlayer", () => {
     const { diceScene, target } = createTarget();
     const player = new DiceRollPlayer(target, { scheduler });
     const validPlan = createPlan();
-    const mismatchedPlan: RollPlan = {
+    const mismatchedPlan: PresimulatedRollPlan = {
       ...validPlan,
       dice: [
         {

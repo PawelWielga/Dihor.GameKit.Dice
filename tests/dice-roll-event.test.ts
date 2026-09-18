@@ -10,7 +10,7 @@ import {
   validateDiceRollEvent,
   type DiceDefinition,
   type DiceRollResult,
-  type RollPlan
+  type PresimulatedRollPlan
 } from "../src/index.js";
 
 function logicalResult(): DiceRollResult {
@@ -26,7 +26,7 @@ function logicalResult(): DiceRollResult {
   };
 }
 
-function replayPlan(result: DiceRollResult): RollPlan {
+function replayPlan(result: DiceRollResult): PresimulatedRollPlan {
   return new RollPlanner({
     randomProvider: createSeededRandomProvider("event-test", "physics"),
     maxPlanningTimeMs: 5000
@@ -105,7 +105,7 @@ describe("DiceRollEvent", () => {
   it("rejects replay plans that do not match the authoritative result", () => {
     const result = logicalResult();
     const validPlan = replayPlan(result);
-    const mismatchedPlan: RollPlan = {
+    const mismatchedPlan: PresimulatedRollPlan = {
       ...validPlan,
       dice: validPlan.dice.map((die, index) =>
         index === 0 ? { ...die, expectedValue: die.expectedValue === 1 ? 2 : 1 } : die
@@ -155,6 +155,26 @@ describe("DiceRollEvent", () => {
         replay: { version: DICE_ROLL_REPLAY_VERSION, plan: null }
       })
     ).toThrowError(RangeError);
+  });
+
+  it("accepts legacy presimulated replay payloads without the discriminator", () => {
+    const payload = replayPayload();
+    delete payload.replay.plan.preSimulated;
+
+    const validated = validateDiceRollEvent(payload);
+
+    expect(validated.replay?.plan.preSimulated).toBe(true);
+  });
+
+  it("rejects direct physical plans received as authoritative replay data", () => {
+    const payload = replayPayload();
+    payload.replay.plan.preSimulated = false;
+    payload.replay.plan.simulationSteps = 0;
+    for (const die of payload.replay.plan.dice) {
+      die.expectedValue = 0;
+    }
+
+    expect(() => validateDiceRollEvent(payload)).toThrowError(/presimulated/i);
   });
 
   it("rejects missing or malformed replay initial state data", () => {
