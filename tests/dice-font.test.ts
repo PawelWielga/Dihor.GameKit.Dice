@@ -1,4 +1,4 @@
-import { CanvasTexture, Mesh, MeshStandardMaterial } from "three";
+import { BufferGeometry, CanvasTexture, Material, Mesh, MeshStandardMaterial, Texture } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiceMeshFactory } from "../src/index.js";
 import {
@@ -196,6 +196,76 @@ describe("numeric face label rules", () => {
   });
 });
 
+
+describe("font-aware mesh creation failures", () => {
+  it("disposes the sync base mesh exactly once and preserves the font validation error", () => {
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const materialDispose = vi.spyOn(Material.prototype, "dispose");
+    const factory = new DiceMeshFactory();
+
+    expect(() =>
+      factory.create(10, {
+        appearance: {
+          font: { weight: 0 }
+        }
+      })
+    ).toThrowError(/font\.weight/);
+
+    const geometryCalls = geometryDispose.mock.calls.length;
+    const materialCalls = materialDispose.mock.calls.length;
+
+    expect(geometryCalls).toBeGreaterThan(0);
+    expect(materialCalls).toBeGreaterThan(0);
+
+    factory.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledTimes(geometryCalls);
+    expect(materialDispose).toHaveBeenCalledTimes(materialCalls);
+
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+
+  it("disposes the async base mesh, releases texture leases and preserves the error", async () => {
+    const texture = new Texture();
+    const textureDispose = vi.spyOn(texture, "dispose");
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const materialDispose = vi.spyOn(Material.prototype, "dispose");
+    const factory = new DiceMeshFactory({
+      textureLoader: {
+        async load() {
+          return texture;
+        }
+      }
+    });
+
+    await expect(
+      factory.createAsync(10, {
+        appearance: {
+          texture: "/body.png",
+          font: { weight: 0 }
+        }
+      })
+    ).rejects.toThrowError(/font\.weight/);
+
+    const geometryCalls = geometryDispose.mock.calls.length;
+    const materialCalls = materialDispose.mock.calls.length;
+
+    expect(geometryCalls).toBeGreaterThan(0);
+    expect(materialCalls).toBeGreaterThan(0);
+    expect(textureDispose).not.toHaveBeenCalled();
+
+    factory.dispose();
+
+    expect(textureDispose).toHaveBeenCalledTimes(1);
+    expect(geometryDispose).toHaveBeenCalledTimes(geometryCalls);
+    expect(materialDispose).toHaveBeenCalledTimes(materialCalls);
+
+    textureDispose.mockRestore();
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+});
 
 describe("numeric face label resource cache", () => {
   afterEach(() => {
