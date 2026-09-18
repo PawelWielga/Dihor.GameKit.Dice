@@ -1,3 +1,4 @@
+export { DICE_ROLL_EVENT_LIMITS } from "./DiceRollEventLimits.js";
 export {
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
