@@ -1,5 +1,5 @@
 import type { DiceRollResult } from "../core/index.js";
-import type { RollPlan } from "./RollModels.js";
+import type { PresimulatedRollPlan } from "./RollModels.js";
 import type { RollPlanningOptions } from "./RollPlanner.js";
 
 export interface RollPlanningWorkerRequest {
@@ -17,7 +17,7 @@ export type RollPlanningWorkerResponse =
   | {
       readonly id: number;
       readonly ok: true;
-      readonly plan: RollPlan;
+      readonly plan: PresimulatedRollPlan;
     }
   | {
       readonly id: number;

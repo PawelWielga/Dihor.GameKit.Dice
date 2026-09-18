@@ -1,6 +1,6 @@
 import type { DiceRollResult } from "../core/index.js";
 import { RollPlanner, RollPlanningError, type RollPlanningOptions } from "./RollPlanner.js";
-import type { RollPlan } from "./RollModels.js";
+import type { PresimulatedRollPlan } from "./RollModels.js";
 import type {
   RollPlanningWorkerRequest,
   RollPlanningWorkerResponse
@@ -72,7 +72,7 @@ export class BackgroundRollPlanner {
     this.onTiming = options.onTiming;
   }
 
-  plan(result: DiceRollResult, options: RollPlanningOptions = {}): Promise<RollPlan> {
+  plan(result: DiceRollResult, options: RollPlanningOptions = {}): Promise<PresimulatedRollPlan> {
     if (this.disposed) {
       return Promise.reject(new Error("BackgroundRollPlanner has been disposed."));
     }
@@ -85,11 +85,11 @@ export class BackgroundRollPlanner {
     const startedAt = this.nowProvider();
     const worker = this.workerFactory();
 
-    return new Promise<RollPlan>((resolve, reject) => {
+    return new Promise<PresimulatedRollPlan>((resolve, reject) => {
       const active: ActivePlanning = { id, reject, startedAt, ...(worker ? { worker } : {}) };
       this.active = active;
 
-      const finish = (plan: RollPlan, usedWorker: boolean): void => {
+      const finish = (plan: PresimulatedRollPlan, usedWorker: boolean): void => {
         if (this.active !== active) {
           return;
         }

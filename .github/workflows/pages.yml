@@ -108,7 +108,7 @@ jobs:
 
       - name: Install main dependencies
         working-directory: main-source
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build main demo
         working-directory: main-source
@@ -116,7 +116,7 @@ jobs:
 
       - name: Install dev dependencies
         working-directory: dev-source
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build dev demo
         working-directory: dev-source

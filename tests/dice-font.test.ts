@@ -1,4 +1,4 @@
-import { Mesh, MeshStandardMaterial } from "three";
+import { BufferGeometry, CanvasTexture, Material, Mesh, MeshStandardMaterial, Texture } from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiceMeshFactory } from "../src/index.js";
 import {
@@ -12,6 +12,7 @@ import {
   type DiceFontLoadEnvironment
 } from "../src/appearance/DiceFont.js";
 import {
+  DiceFaceLabelCache,
   getDiceFaceLabelBaseFontSize,
   getDiceFaceLabelBaseline,
   getDiceFaceLabelBumpScale,
@@ -196,6 +197,76 @@ describe("numeric face label rules", () => {
 });
 
 
+describe("font-aware mesh creation failures", () => {
+  it("disposes the sync base mesh exactly once and preserves the font validation error", () => {
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const materialDispose = vi.spyOn(Material.prototype, "dispose");
+    const factory = new DiceMeshFactory();
+
+    expect(() =>
+      factory.create(10, {
+        appearance: {
+          font: { weight: 0 }
+        }
+      })
+    ).toThrowError(/font\.weight/);
+
+    const geometryCalls = geometryDispose.mock.calls.length;
+    const materialCalls = materialDispose.mock.calls.length;
+
+    expect(geometryCalls).toBeGreaterThan(0);
+    expect(materialCalls).toBeGreaterThan(0);
+
+    factory.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledTimes(geometryCalls);
+    expect(materialDispose).toHaveBeenCalledTimes(materialCalls);
+
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+
+  it("disposes the async base mesh, releases texture leases and preserves the error", async () => {
+    const texture = new Texture();
+    const textureDispose = vi.spyOn(texture, "dispose");
+    const geometryDispose = vi.spyOn(BufferGeometry.prototype, "dispose");
+    const materialDispose = vi.spyOn(Material.prototype, "dispose");
+    const factory = new DiceMeshFactory({
+      textureLoader: {
+        async load() {
+          return texture;
+        }
+      }
+    });
+
+    await expect(
+      factory.createAsync(10, {
+        appearance: {
+          texture: "/body.png",
+          font: { weight: 0 }
+        }
+      })
+    ).rejects.toThrowError(/font\.weight/);
+
+    const geometryCalls = geometryDispose.mock.calls.length;
+    const materialCalls = materialDispose.mock.calls.length;
+
+    expect(geometryCalls).toBeGreaterThan(0);
+    expect(materialCalls).toBeGreaterThan(0);
+    expect(textureDispose).not.toHaveBeenCalled();
+
+    factory.dispose();
+
+    expect(textureDispose).toHaveBeenCalledTimes(1);
+    expect(geometryDispose).toHaveBeenCalledTimes(geometryCalls);
+    expect(materialDispose).toHaveBeenCalledTimes(materialCalls);
+
+    textureDispose.mockRestore();
+    geometryDispose.mockRestore();
+    materialDispose.mockRestore();
+  });
+});
+
 describe("numeric face label resource cache", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -274,22 +345,119 @@ describe("numeric face label resource cache", () => {
     expect(disposeTexture).toHaveBeenCalledTimes(1);
   });
 
-  it("selects a separate cache entry when effective appearance changes", () => {
+  it("reuses raster textures when only markings color or engraving depth changes", () => {
     const canvases = installCanvasStub();
     const factory = new DiceMeshFactory();
 
     const first = factory.create(10, {
-      appearance: { markingsColor: "#111111", engravingDepth: 1 }
+      appearance: { markingsColor: "#111111", engravingDepth: 0.5 }
     });
     const firstCanvasCount = canvases.created();
     const second = factory.create(10, {
-      appearance: { markingsColor: "#eeeeee", engravingDepth: 1.5 }
+      appearance: { markingsColor: "#eeeeee", engravingDepth: 1.75 }
     });
 
-    expect(canvases.created()).toBe(firstCanvasCount * 2);
+    expect(canvases.created()).toBe(firstCanvasCount);
+
+    const firstLabel = first.object.getObjectByName("D10 font label 1") as Mesh;
+    const secondLabel = second.object.getObjectByName("D10 font label 1") as Mesh;
+    const firstMaterial = firstLabel.material as MeshStandardMaterial;
+    const secondMaterial = secondLabel.material as MeshStandardMaterial;
+
+    expect(secondMaterial.map).toBe(firstMaterial.map);
+    expect(secondMaterial.bumpMap).toBe(firstMaterial.bumpMap);
+    expect(firstMaterial.color.getHexString()).toBe("111111");
+    expect(secondMaterial.color.getHexString()).toBe("eeeeee");
+    expect(firstMaterial.bumpScale).toBeCloseTo(getDiceFaceLabelBumpScale(0.5));
+    expect(secondMaterial.bumpScale).toBeCloseTo(getDiceFaceLabelBumpScale(1.75));
 
     first.dispose();
     second.dispose();
     factory.dispose();
+  });
+
+  it("shares the same value/font raster across different dice sides", () => {
+    const canvases = installCanvasStub();
+    const factory = new DiceMeshFactory();
+    const d10 = factory.create(10);
+    const afterD10 = canvases.created();
+    const d20 = factory.create(20);
+
+    const d10Label = d10.object.getObjectByName("D10 font label 1") as Mesh;
+    const d20Label = d20.object.getObjectByName("D20 font label 1") as Mesh;
+
+    expect((d20Label.material as MeshStandardMaterial).map).toBe(
+      (d10Label.material as MeshStandardMaterial).map
+    );
+    expect(canvases.created()).toBe(afterD10 + 20);
+
+    d10.dispose();
+    d20.dispose();
+    factory.dispose();
+  });
+
+  it("creates a new raster when font family or size changes", () => {
+    const canvases = installCanvasStub();
+    const factory = new DiceMeshFactory();
+
+    const base = factory.create(10);
+    const baseCanvasCount = canvases.created();
+    const family = factory.create(10, {
+      appearance: { font: { family: "Georgia" } }
+    });
+    const familyCanvasCount = canvases.created();
+    const size = factory.create(10, {
+      appearance: { font: { family: "Georgia", size: 1.2 } }
+    });
+
+    expect(familyCanvasCount).toBe(baseCanvasCount * 2);
+    expect(canvases.created()).toBe(baseCanvasCount * 3);
+
+    base.dispose();
+    family.dispose();
+    size.dispose();
+    factory.dispose();
+  });
+
+  it("evicts only unused LRU resources when the cache exceeds its limit", () => {
+    const cache = new DiceFaceLabelCache(2);
+
+    function resource() {
+      const texture = new CanvasTexture({} as HTMLCanvasElement);
+      const bumpTexture = new CanvasTexture({} as HTMLCanvasElement);
+      const dispose = vi.fn(() => {
+        texture.dispose();
+        bumpTexture.dispose();
+      });
+
+      return { texture, bumpTexture, dispose };
+    }
+
+    const a = resource();
+    const b = resource();
+    const c = resource();
+    const leaseA = cache.acquire("a", () => a)!;
+    const leaseB = cache.acquire("b", () => b)!;
+    const leaseC = cache.acquire("c", () => c)!;
+
+    expect(cache.size).toBe(3);
+    expect(a.dispose).not.toHaveBeenCalled();
+    expect(b.dispose).not.toHaveBeenCalled();
+    expect(c.dispose).not.toHaveBeenCalled();
+
+    leaseC.release();
+
+    expect(cache.size).toBe(2);
+    expect(c.dispose).toHaveBeenCalledTimes(1);
+    expect(a.dispose).not.toHaveBeenCalled();
+    expect(b.dispose).not.toHaveBeenCalled();
+
+    leaseA.release();
+    leaseB.release();
+    cache.dispose();
+
+    expect(a.dispose).toHaveBeenCalledTimes(1);
+    expect(b.dispose).toHaveBeenCalledTimes(1);
+    expect(c.dispose).toHaveBeenCalledTimes(1);
   });
 });

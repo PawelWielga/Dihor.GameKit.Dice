@@ -58,6 +58,8 @@ export class DiceRollPlaybackError extends Error {
 
 interface PlaybackPreparation {
   cancelled: boolean;
+  readonly cancellation: Promise<never>;
+  rejectCancellation(error: DiceRollPlaybackError): void;
 }
 
 interface PlaybackSession {
@@ -97,6 +99,19 @@ function createBrowserScheduler(): DiceAnimationScheduler {
   return {
     request: (callback) => globalThis.requestAnimationFrame(callback),
     cancel: (handle) => globalThis.cancelAnimationFrame(handle)
+  };
+}
+
+function createPlaybackPreparation(): PlaybackPreparation {
+  let rejectCancellation!: (error: DiceRollPlaybackError) => void;
+  const cancellation = new Promise<never>((_, reject) => {
+    rejectCancellation = reject;
+  });
+
+  return {
+    cancelled: false,
+    cancellation,
+    rejectCancellation
   };
 }
 
@@ -158,7 +173,7 @@ export class DiceRollPlayer {
 
     const scheduler = this.scheduler ?? createBrowserScheduler();
     const meshes: DiceMesh[] = [];
-    const preparation: PlaybackPreparation = { cancelled: false };
+    const preparation = createPlaybackPreparation();
     this.activePreparation = preparation;
     let world: DicePhysicsWorld | undefined;
 
@@ -176,12 +191,15 @@ export class DiceRollPlayer {
           appearance
         };
         const usesTextureAssets = hasDiceTextureSources(appearance);
-        const mesh = die.sides === 6
-          ? usesTextureAssets
-            ? await this.meshFactory.createD6Async(meshOptions)
-            : this.meshFactory.createD6(meshOptions)
-          : usesTextureAssets
-            ? await this.meshFactory.createAsync(die.sides, meshOptions)
+        const mesh = usesTextureAssets
+          ? await this.awaitPreparedMesh(
+              preparation,
+              die.sides === 6
+                ? this.meshFactory.createD6Async(meshOptions)
+                : this.meshFactory.createAsync(die.sides, meshOptions)
+            )
+          : die.sides === 6
+            ? this.meshFactory.createD6(meshOptions)
             : this.meshFactory.create(die.sides, meshOptions);
 
         if (preparation.cancelled || this.disposed) {
@@ -233,7 +251,6 @@ export class DiceRollPlayer {
 
       world?.dispose();
       this.removeAndDisposeMeshes(meshes);
-      this.visibleMeshes = [];
 
       if (preparation.cancelled || this.disposed) {
         throw new DiceRollPlaybackError("Dice roll playback was cancelled.", { cause: error });
@@ -245,7 +262,12 @@ export class DiceRollPlayer {
 
   cancel(): void {
     if (this.activePreparation) {
-      this.activePreparation.cancelled = true;
+      const preparation = this.activePreparation;
+      this.activePreparation = undefined;
+      preparation.cancelled = true;
+      preparation.rejectCancellation(
+        new DiceRollPlaybackError("Dice roll playback was cancelled.")
+      );
       return;
     }
 
@@ -275,6 +297,26 @@ export class DiceRollPlayer {
     this.disposed = true;
   }
 
+  private async awaitPreparedMesh(
+    preparation: PlaybackPreparation,
+    meshPromise: Promise<DiceMesh>
+  ): Promise<DiceMesh> {
+    const guardedMesh = meshPromise.then((mesh) => {
+      if (
+        preparation.cancelled ||
+        this.disposed ||
+        this.activePreparation !== preparation
+      ) {
+        mesh.dispose();
+        throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
+      }
+
+      return mesh;
+    });
+
+    return Promise.race([guardedMesh, preparation.cancellation]);
+  }
+
   private scheduleFrame(session: PlaybackSession): void {
     session.frameHandle = session.scheduler.request((timestampMs) => {
       try {
@@ -294,6 +336,8 @@ export class DiceRollPlayer {
       this.failSession(session, new DiceRollPlaybackError("Animation scheduler returned an invalid timestamp."));
       return;
     }
+
+    this.syncArenaBoundary(session);
 
     if (session.lastTimestampMs === undefined) {
       session.lastTimestampMs = timestampMs;
@@ -354,6 +398,14 @@ export class DiceRollPlayer {
     this.syncMeshes(session.bodies, session.meshes);
     this.target.render();
     this.scheduleFrame(session);
+  }
+
+  private syncArenaBoundary(session: PlaybackSession): void {
+    if (session.plan.physics.arenaBoundary === undefined) {
+      return;
+    }
+
+    session.world.updateArenaBoundary(this.target.diceScene.getTableBoundary());
   }
 
   private finishSession(session: PlaybackSession): void {

@@ -2,6 +2,7 @@ import { Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
+  DicePhysicsWorld,
   DiceRollPlaybackError,
   DiceRollPlayer,
   DiceScene,
@@ -9,6 +10,8 @@ import {
   type DiceAnimationScheduler,
   type DiceRenderTarget,
   type DiceTextureLoader,
+  type DirectRollPlan,
+  type PresimulatedRollPlan,
   type RollInitialStateContext,
   type RollPlan
 } from "../src/index.js";
@@ -54,6 +57,29 @@ class ImmediateTextureLoader implements DiceTextureLoader {
   }
 }
 
+class DeferredTextureLoader implements DiceTextureLoader {
+  readonly requestedUrls: string[] = [];
+  private resolvePending?: (texture: Texture) => void;
+
+  load(url: string): Promise<Texture> {
+    this.requestedUrls.push(url);
+
+    return new Promise<Texture>((resolve) => {
+      this.resolvePending = resolve;
+    });
+  }
+
+  resolve(texture: Texture): void {
+    if (!this.resolvePending) {
+      throw new Error("No deferred texture load is pending.");
+    }
+
+    const resolve = this.resolvePending;
+    this.resolvePending = undefined;
+    resolve(texture);
+  }
+}
+
 async function flushMicrotasks(count = 24): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve();
@@ -72,7 +98,7 @@ function settledState(context: RollInitialStateContext) {
   } as const;
 }
 
-function createPlan(diceScale = 1): RollPlan {
+function createPlan(diceScale = 1): PresimulatedRollPlan {
   const planner = new RollPlanner({
     initialStateProvider: settledState,
     maxAttemptsPerDie: 1,
@@ -118,6 +144,41 @@ describe("DiceRollPlayer", () => {
 
     player.clear();
     expect(diceScene.content.children).toHaveLength(0);
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("keeps the active physical arena synchronized with camera and viewport changes", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    diceScene.setSize(800, 800);
+    const player = new DiceRollPlayer(target, { scheduler });
+    const basePlan = createPlan();
+    const plan: RollPlan = {
+      ...basePlan,
+      physics: {
+        ...basePlan.physics,
+        arenaBoundary: diceScene.getTableBoundary()
+      }
+    };
+    const updateArenaBoundary = vi.spyOn(DicePhysicsWorld.prototype, "updateArenaBoundary");
+
+    const playback = player.play(plan);
+    scheduler.runFrames(1);
+    updateArenaBoundary.mockClear();
+
+    diceScene.setCamera({ x: 35, y: 42, z: 12 });
+    diceScene.setSize(1200, 700);
+    const expectedBoundary = diceScene.getTableBoundary();
+    scheduler.runFrames(1);
+
+    expect(updateArenaBoundary).toHaveBeenCalledTimes(1);
+    expect(updateArenaBoundary).toHaveBeenLastCalledWith(expectedBoundary);
+
+    scheduler.runFrames(20);
+    await playback;
+
+    updateArenaBoundary.mockRestore();
     player.dispose();
     diceScene.dispose();
   });
@@ -185,12 +246,79 @@ describe("DiceRollPlayer", () => {
     diceScene.dispose();
   });
 
+  it("rejects immediately when cancelled during deferred texture preparation", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const loader = new DeferredTextureLoader();
+    const meshFactory = new DiceMeshFactory({ textureLoader: loader });
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const plan = createPlan();
+
+    const playback = player.play(plan, {
+      appearances: [{ texture: "/slow-body.png" }]
+    });
+    await flushMicrotasks();
+
+    expect(loader.requestedUrls).toEqual(["/slow-body.png"]);
+
+    player.cancel();
+    await expect(playback).rejects.toBeInstanceOf(DiceRollPlaybackError);
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const nextPlayback = player.play(plan);
+    scheduler.runFrames(20);
+    await expect(nextPlayback).resolves.toMatchObject({ rollId: "visible-roll" });
+    player.clear();
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const lateTexture = new Texture();
+    const disposeTexture = vi.spyOn(lateTexture, "dispose");
+    loader.resolve(lateTexture);
+    await flushMicrotasks();
+
+    expect(diceScene.content.children).toHaveLength(0);
+
+    meshFactory.dispose();
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("rejects immediately when disposed during deferred texture preparation", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const loader = new DeferredTextureLoader();
+    const meshFactory = new DiceMeshFactory({ textureLoader: loader });
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+
+    const playback = player.play(createPlan(), {
+      appearances: [{ texture: "/slow-dispose.png" }]
+    });
+    await flushMicrotasks();
+
+    player.dispose();
+    await expect(playback).rejects.toBeInstanceOf(DiceRollPlaybackError);
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const lateTexture = new Texture();
+    const disposeTexture = vi.spyOn(lateTexture, "dispose");
+    loader.resolve(lateTexture);
+    await flushMicrotasks();
+
+    expect(diceScene.content.children).toHaveLength(0);
+    meshFactory.dispose();
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+
+    diceScene.dispose();
+  });
+
   it("returns observed face values for a direct non-presimulated plan", async () => {
     const scheduler = new ManualScheduler();
     const { diceScene, target } = createTarget();
     const player = new DiceRollPlayer(target, { scheduler });
     const presimulated = createPlan();
-    const directPlan: RollPlan = {
+    const directPlan: DirectRollPlan = {
       ...presimulated,
       dice: presimulated.dice.map((die) => ({ ...die, expectedValue: 0 })),
       simulationSteps: 0,
@@ -211,7 +339,7 @@ describe("DiceRollPlayer", () => {
     const { diceScene, target } = createTarget();
     const player = new DiceRollPlayer(target, { scheduler });
     const validPlan = createPlan();
-    const mismatchedPlan: RollPlan = {
+    const mismatchedPlan: PresimulatedRollPlan = {
       ...validPlan,
       dice: [
         {

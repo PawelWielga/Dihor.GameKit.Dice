@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DICE_PHYSICS_CONFIG,
+  MAX_DICE_PER_ROLL,
+  MAX_DICE_SCALE,
+  MIN_DICE_SCALE,
   DirectRollPlanner,
   RollPlanner,
   RollPlanningError,
@@ -10,7 +13,8 @@ import {
   type DiceRollResult,
   type DiceTopologyVector3,
   type PhysicsQuaternion,
-  type RollInitialStateContext
+  type RollInitialStateContext,
+  type RollPlan
 } from "../src/index.js";
 
 function normalize(vector: DiceTopologyVector3): DiceTopologyVector3 {
@@ -71,12 +75,46 @@ function settledState(context: RollInitialStateContext) {
     position: {
       x: context.slotX,
       y: -minY * context.diceSize + 0.001,
-      z: 0
+      z: context.slotZ
     },
     quaternion,
     velocity: { x: 0, y: 0, z: 0 },
     angularVelocity: { x: 0, y: 0, z: 0 }
   } as const;
+}
+
+function assertDefaultArenaSafety(plan: RollPlan): void {
+  const wallHalfThickness = plan.physics.diceSize * 0.125;
+  const radii = plan.dice.map((die) =>
+    Math.max(
+      ...getDiceTopology(die.sides).vertices.map((vertex) =>
+        Math.hypot(vertex.x, vertex.y, vertex.z)
+      )
+    ) * plan.physics.diceSize
+  );
+
+  plan.dice.forEach((die, index) => {
+    const radius = radii[index]!;
+    const clearance = radius + wallHalfThickness;
+
+    expect(Math.abs(die.initialState.position.x) + clearance)
+      .toBeLessThan(plan.physics.arenaHalfExtent);
+    expect(Math.abs(die.initialState.position.z) + clearance)
+      .toBeLessThan(plan.physics.arenaHalfExtent);
+  });
+
+  for (let left = 0; left < plan.dice.length; left += 1) {
+    for (let right = left + 1; right < plan.dice.length; right += 1) {
+      const leftPosition = plan.dice[left]!.initialState.position;
+      const rightPosition = plan.dice[right]!.initialState.position;
+      const centerDistance = Math.hypot(
+        leftPosition.x - rightPosition.x,
+        leftPosition.z - rightPosition.z
+      );
+
+      expect(centerDistance).toBeGreaterThan(radii[left]! + radii[right]!);
+    }
+  }
 }
 
 function result(
@@ -92,6 +130,53 @@ function result(
 }
 
 describe("DirectRollPlanner", () => {
+  it("keeps 1..MAX dice fully inside the default arena at min and max scale", () => {
+    const planner = new DirectRollPlanner({
+      randomProvider: { next: () => 0.5 }
+    });
+
+    for (const diceScale of [MIN_DICE_SCALE, MAX_DICE_SCALE]) {
+      for (let count = 1; count <= MAX_DICE_PER_ROLL; count += 1) {
+        const plan = planner.plan(
+          {
+            dice: Array.from({ length: count }, () => ({ sides: 4 as const }))
+          },
+          `direct-safe-${diceScale}-${count}`,
+          { diceScale }
+        );
+
+        assertDefaultArenaSafety(plan);
+      }
+    }
+  });
+
+  it("rejects direct layouts when a custom arena or spacing cannot contain the dice", () => {
+    const tooSmallBoundary = [
+      { x: -0.75, z: -0.75 },
+      { x: 0.75, z: -0.75 },
+      { x: 0.75, z: 0.75 },
+      { x: -0.75, z: 0.75 }
+    ] as const;
+
+    expect(() =>
+      new DirectRollPlanner({ randomProvider: { next: () => 0.5 } }).plan(
+        { dice: [{ sides: 4 }] },
+        "too-small",
+        { arenaBoundary: tooSmallBoundary }
+      )
+    ).toThrowError(/too small/i);
+
+    expect(() =>
+      new DirectRollPlanner({
+        randomProvider: { next: () => 0.5 },
+        slotSpacing: 8
+      }).plan(
+        { dice: [{ sides: 6 }, { sides: 6 }] },
+        "spacing-too-large"
+      )
+    ).toThrowError(/slotSpacing/);
+  });
+
   it("uses the same diceScale for direct physical size and spacing", () => {
     const planner = new DirectRollPlanner({
       randomProvider: { next: () => 0.5 }
@@ -115,6 +200,96 @@ describe("DirectRollPlanner", () => {
 });
 
 describe("RollPlanner", () => {
+  it("keeps 1..MAX planned dice fully inside the default arena at min and max scale", () => {
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: {
+        consecutiveSteps: 4,
+        maxSteps: 120
+      }
+    });
+
+    for (const diceScale of [MIN_DICE_SCALE, MAX_DICE_SCALE]) {
+      for (let count = 1; count <= MAX_DICE_PER_ROLL; count += 1) {
+        const dice = Array.from(
+          { length: count },
+          () => ({ sides: 4 as const, value: 1 })
+        );
+        const plan = planner.plan(
+          result(dice, `planned-safe-${diceScale}-${count}`),
+          { diceScale }
+        );
+
+        assertDefaultArenaSafety(plan);
+      }
+    }
+  });
+
+  it("uses placement compatible with DirectRollPlanner for the same dice and scale", () => {
+    const scale = MAX_DICE_SCALE;
+    const definitions = Array.from(
+      { length: MAX_DICE_PER_ROLL },
+      () => ({ sides: 4 as const })
+    );
+    const direct = new DirectRollPlanner({
+      randomProvider: { next: () => 0.5 }
+    }).plan(
+      { dice: definitions },
+      "compatible-direct",
+      { diceScale: scale }
+    );
+    const planned = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    }).plan(
+      result(
+        definitions.map((definition) => ({ ...definition, value: 1 })),
+        "compatible-planned"
+      ),
+      { diceScale: scale }
+    );
+
+    expect(
+      planned.dice.map((die) => ({
+        x: die.initialState.position.x,
+        z: die.initialState.position.z
+      }))
+    ).toEqual(
+      direct.dice.map((die) => ({
+        x: die.initialState.position.x,
+        z: die.initialState.position.z
+      }))
+    );
+  });
+
+  it("rejects a custom arena that is too small before hidden simulation starts", () => {
+    const tooSmallBoundary = [
+      { x: -0.75, z: -0.75 },
+      { x: 0.75, z: -0.75 },
+      { x: 0.75, z: 0.75 },
+      { x: -0.75, z: 0.75 }
+    ] as const;
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000
+    });
+
+    expect(() =>
+      planner.plan(
+        result([{ sides: 4, value: 1 }]),
+        { arenaBoundary: tooSmallBoundary }
+      )
+    ).toThrowError(/too small/i);
+  });
+
   it("finds and verifies replayable physical plans for every supported die type", () => {
     for (const sides of SUPPORTED_DICE_SIDES) {
       const expectedValue = Math.max(1, Math.floor(sides / 2));

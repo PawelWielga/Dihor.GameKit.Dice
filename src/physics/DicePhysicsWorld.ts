@@ -56,6 +56,8 @@ export const DEFAULT_STABILITY_CONFIG: StabilityConfig = {
   maxSteps: 480
 };
 
+const ARENA_BOUNDARY_EPSILON = 1e-4;
+
 function requireFinite(name: string, value: number): number {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${name} must be finite; received ${String(value)}.`);
@@ -125,6 +127,33 @@ function resolveArenaBoundary(
   }
 
   return resolved;
+}
+
+function arenaBoundariesEqual(
+  left: readonly DiceArenaBoundaryPoint[],
+  right: readonly DiceArenaBoundaryPoint[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((point, index) => {
+    const other = right[index];
+    return (
+      other !== undefined &&
+      Math.abs(point.x - other.x) <= ARENA_BOUNDARY_EPSILON &&
+      Math.abs(point.z - other.z) <= ARENA_BOUNDARY_EPSILON
+    );
+  });
+}
+
+function createSquareArenaBoundary(extent: number): readonly DiceArenaBoundaryPoint[] {
+  return [
+    { x: -extent, z: -extent },
+    { x: extent, z: -extent },
+    { x: extent, z: extent },
+    { x: -extent, z: extent }
+  ];
 }
 
 function validateQuaternion(name: string, quaternion: PhysicsQuaternion): void {
@@ -207,10 +236,14 @@ export class DicePhysicsWorld {
   readonly config: DicePhysicsConfig;
 
   private readonly staticBodies: Body[] = [];
+  private readonly arenaWallBodies: Body[] = [];
+  private activeArenaBoundary: readonly DiceArenaBoundaryPoint[];
   private disposed = false;
 
   constructor(options: DicePhysicsWorldOptions = {}) {
     this.config = resolveConfig(options);
+    this.activeArenaBoundary =
+      this.config.arenaBoundary ?? createSquareArenaBoundary(this.config.arenaHalfExtent);
     this.world = new World({
       gravity: new Vec3(this.config.gravity.x, this.config.gravity.y, this.config.gravity.z)
     });
@@ -218,7 +251,25 @@ export class DicePhysicsWorld {
     this.world.defaultContactMaterial.restitution = this.config.restitution;
 
     this.createFloor();
-    this.createArenaWalls();
+    this.createArenaWalls(this.activeArenaBoundary);
+  }
+
+  /**
+   * Rebuilds only the static arena walls while preserving every dynamic die body and its state.
+   * Returns false when the new polygon is meaningfully equivalent to the active boundary.
+   */
+  updateArenaBoundary(boundary: readonly DiceArenaBoundaryPoint[]): boolean {
+    this.assertActive();
+    const resolved = resolveArenaBoundary(boundary);
+
+    if (!resolved || arenaBoundariesEqual(this.activeArenaBoundary, resolved)) {
+      return false;
+    }
+
+    this.removeArenaWalls();
+    this.activeArenaBoundary = resolved;
+    this.createArenaWalls(resolved);
+    return true;
   }
 
   addDie(sides: DiceSides, initialState: RollInitialState): Body {
@@ -342,6 +393,7 @@ export class DicePhysicsWorld {
     }
 
     this.staticBodies.length = 0;
+    this.arenaWallBodies.length = 0;
     this.disposed = true;
   }
 
@@ -353,14 +405,7 @@ export class DicePhysicsWorld {
     this.staticBodies.push(floor);
   }
 
-  private createArenaWalls(): void {
-    const extent = this.config.arenaHalfExtent;
-    const boundary = this.config.arenaBoundary ?? [
-      { x: -extent, z: -extent },
-      { x: extent, z: -extent },
-      { x: extent, z: extent },
-      { x: -extent, z: extent }
-    ];
+  private createArenaWalls(boundary: readonly DiceArenaBoundaryPoint[]): void {
     const thickness = this.config.diceSize * 0.25;
     const wallHeight = this.config.diceSize * 10;
     const halfHeight = wallHeight / 2;
@@ -374,21 +419,36 @@ export class DicePhysicsWorld {
       const center = new Vec3((start.x + end.x) / 2, halfHeight, (start.z + end.z) / 2);
       const yaw = -Math.atan2(dz, dx);
 
-      this.addStaticBox(
+      const wall = this.addStaticBox(
         new Vec3(length / 2 + thickness / 2, halfHeight, thickness / 2),
         center,
         yaw
       );
+      this.arenaWallBodies.push(wall);
     }
   }
 
-  private addStaticBox(halfExtents: Vec3, position: Vec3, yaw = 0): void {
+  private removeArenaWalls(): void {
+    for (const wall of this.arenaWallBodies) {
+      this.world.removeBody(wall);
+      const staticIndex = this.staticBodies.indexOf(wall);
+
+      if (staticIndex >= 0) {
+        this.staticBodies.splice(staticIndex, 1);
+      }
+    }
+
+    this.arenaWallBodies.length = 0;
+  }
+
+  private addStaticBox(halfExtents: Vec3, position: Vec3, yaw = 0): Body {
     const body = new Body({ mass: 0 });
     body.addShape(new Box(halfExtents));
     body.position.copy(position);
     body.quaternion.setFromEuler(0, yaw, 0);
     this.world.addBody(body);
     this.staticBodies.push(body);
+    return body;
   }
 
   private assertActive(): void {

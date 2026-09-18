@@ -52,13 +52,29 @@ export interface RollPlanDie {
   readonly initialState: RollInitialState;
 }
 
-export interface RollPlan {
+/** Direct rolls do not have an authoritative result before visible physics finishes. */
+export interface DirectRollPlanDie extends RollPlanDie {
+  readonly expectedValue: 0;
+}
+
+interface RollPlanBase<TDie extends RollPlanDie> {
   readonly rollId: string;
-  readonly dice: readonly RollPlanDie[];
+  readonly dice: readonly TDie[];
   readonly physics: DicePhysicsConfig;
   readonly stability: StabilityConfig;
-  /** Hidden simulation steps. Direct physical rolls use zero. */
-  readonly simulationSteps: number;
-  /** False means the visible physics determines the result instead of verifying expectedValue. */
-  readonly preSimulated?: boolean;
 }
+
+/** Replayable plan whose authoritative face values were verified by hidden presimulation. */
+export interface PresimulatedRollPlan extends RollPlanBase<RollPlanDie> {
+  readonly simulationSteps: number;
+  readonly preSimulated: true;
+}
+
+/** Visible-physics plan whose result is observed only after playback stabilizes. */
+export interface DirectRollPlan extends RollPlanBase<DirectRollPlanDie> {
+  readonly simulationSteps: 0;
+  readonly preSimulated: false;
+}
+
+/** Any plan accepted by the visible player. */
+export type RollPlan = PresimulatedRollPlan | DirectRollPlan;
