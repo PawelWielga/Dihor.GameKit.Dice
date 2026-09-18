@@ -1,6 +1,7 @@
-import type { DiceRollResult } from "../core/index.js";
+import type { DiceRollRequest, DiceRollResult } from "../core/index.js";
+import { DirectRollPlanner } from "./DirectRollPlanner.js";
 import { RollPlanner, RollPlanningError, type RollPlanningOptions } from "./RollPlanner.js";
-import type { PresimulatedRollPlan } from "./RollModels.js";
+import type { RollPlan } from "./RollModels.js";
 import type {
   RollPlanningWorkerRequest,
   RollPlanningWorkerResponse
@@ -15,14 +16,23 @@ export interface RollPlanningWorkerLike {
 
 export type RollPlanningWorkerFactory = () => RollPlanningWorkerLike | undefined;
 
+export type BackgroundRollFallbackStrategy = "direct" | "synchronous" | "error";
+
 export interface BackgroundRollPlanningTiming {
   readonly durationMs: number;
   readonly usedWorker: boolean;
 }
 
 export interface BackgroundRollPlannerOptions {
-  /** Used only when Worker is unavailable. */
+  /**
+   * Behavior when a planning Worker cannot be created.
+   * Defaults to "direct" so interactive browser consumers never unexpectedly block the UI thread.
+   */
+  readonly fallbackStrategy?: BackgroundRollFallbackStrategy;
+  /** Used only by the explicit "synchronous" fallback. */
   readonly fallbackPlanner?: RollPlanner;
+  /** Used only by the "direct" fallback. */
+  readonly directPlanner?: DirectRollPlanner;
   /** Injection point for tests or non-browser Worker implementations. */
   readonly workerFactory?: RollPlanningWorkerFactory;
   readonly nowProvider?: () => number;
@@ -52,12 +62,22 @@ function createBrowserPlanningWorker(): RollPlanningWorkerLike | undefined {
   }
 }
 
+function toDirectRequest(result: DiceRollResult): DiceRollRequest {
+  return {
+    dice: result.dice.map((die) => ({ sides: die.sides })),
+    modifier: result.modifier,
+    ...(result.reason === undefined ? {} : { reason: result.reason })
+  };
+}
+
 /**
  * Runs hidden presimulation away from the browser main thread whenever Worker is available.
- * Environments without Worker retain a deferred synchronous fallback for compatibility.
+ * When Worker creation is unavailable, the fallback behavior is explicit and configurable.
  */
 export class BackgroundRollPlanner {
+  private readonly fallbackStrategy: BackgroundRollFallbackStrategy;
   private readonly fallbackPlanner: RollPlanner;
+  private readonly directPlanner: DirectRollPlanner;
   private readonly workerFactory: RollPlanningWorkerFactory;
   private readonly nowProvider: () => number;
   private readonly onTiming?: (timing: BackgroundRollPlanningTiming) => void;
@@ -66,13 +86,15 @@ export class BackgroundRollPlanner {
   private disposed = false;
 
   constructor(options: BackgroundRollPlannerOptions = {}) {
+    this.fallbackStrategy = options.fallbackStrategy ?? "direct";
     this.fallbackPlanner = options.fallbackPlanner ?? new RollPlanner();
+    this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.workerFactory = options.workerFactory ?? createBrowserPlanningWorker;
     this.nowProvider = options.nowProvider ?? (() => performance.now());
     this.onTiming = options.onTiming;
   }
 
-  plan(result: DiceRollResult, options: RollPlanningOptions = {}): Promise<PresimulatedRollPlan> {
+  plan(result: DiceRollResult, options: RollPlanningOptions = {}): Promise<RollPlan> {
     if (this.disposed) {
       return Promise.reject(new Error("BackgroundRollPlanner has been disposed."));
     }
@@ -83,13 +105,19 @@ export class BackgroundRollPlanner {
 
     const id = this.nextId++;
     const startedAt = this.nowProvider();
-    const worker = this.workerFactory();
+    let worker: RollPlanningWorkerLike | undefined;
 
-    return new Promise<PresimulatedRollPlan>((resolve, reject) => {
+    try {
+      worker = this.workerFactory();
+    } catch {
+      worker = undefined;
+    }
+
+    return new Promise<RollPlan>((resolve, reject) => {
       const active: ActivePlanning = { id, reject, startedAt, ...(worker ? { worker } : {}) };
       this.active = active;
 
-      const finish = (plan: PresimulatedRollPlan, usedWorker: boolean): void => {
+      const finish = (plan: RollPlan, usedWorker: boolean): void => {
         if (this.active !== active) {
           return;
         }
@@ -134,13 +162,29 @@ export class BackgroundRollPlanner {
         return;
       }
 
+      if (this.fallbackStrategy === "error") {
+        fail(
+          new RollPlanningError(
+            "Background roll planning requires a Web Worker; no Worker could be created."
+          )
+        );
+        return;
+      }
+
       active.fallbackHandle = setTimeout(() => {
         if (this.active !== active) {
           return;
         }
 
         try {
-          finish(this.fallbackPlanner.plan(result, options), false);
+          if (this.fallbackStrategy === "direct") {
+            finish(
+              this.directPlanner.plan(toDirectRequest(result), result.rollId, options),
+              false
+            );
+          } else {
+            finish(this.fallbackPlanner.plan(result, options), false);
+          }
         } catch (error) {
           fail(
             error instanceof Error
