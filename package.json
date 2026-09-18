@@ -46,13 +46,15 @@
   ],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:api-contract",
     "test:watch": "vitest",
     "test:consumer": "tsc -p tsconfig.consumer.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:demo": "vite --config vite.demo.config.ts",
     "build:demo": "vite build --config vite.demo.config.ts",
-    "preview:demo": "vite preview --config vite.demo.config.ts"
+    "preview:demo": "vite preview --config vite.demo.config.ts",
+    "test:api-contract": "node scripts/check-public-api-contract.mjs",
+    "update:api-contract": "node scripts/check-public-api-contract.mjs --write"
   },
   "dependencies": {
     "@fontsource/cinzel": "5.3.0",

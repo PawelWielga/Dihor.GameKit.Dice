@@ -81,6 +81,14 @@ Run tests:
 npm test
 ```
 
+Check only the public API compatibility contract:
+
+```bash
+npm run test:api-contract
+```
+
+When a public API change is intentional, update the reviewed snapshot with `npm run update:api-contract`. See [`docs/public-api-contract.md`](./docs/public-api-contract.md) for the compatibility and versioning workflow.
+
 Run TypeScript checks:
 
 ```bash
@@ -174,6 +182,8 @@ import { RollPlanner, DiceRenderer } from "@dihor/gamekit-dice/advanced";
 ```
 
 The `/advanced` entry intentionally preserves the previous full preview export surface. New normal game code should prefer the package root and use a specialized subpath only when it needs that layer directly.
+
+Every supported entry point is protected by a checked-in API compatibility contract. See [`docs/public-api-contract.md`](./docs/public-api-contract.md).
 
 ## Public API example
 
