@@ -47,6 +47,20 @@ interface ActivePlanning {
   fallbackHandle?: ReturnType<typeof setTimeout>;
 }
 
+function resolveFallbackStrategy(
+  value: BackgroundRollFallbackStrategy | undefined
+): BackgroundRollFallbackStrategy {
+  const resolved = value ?? "direct";
+
+  if (resolved !== "direct" && resolved !== "synchronous" && resolved !== "error") {
+    throw new RangeError(
+      `fallbackStrategy must be "direct", "synchronous" or "error"; received ${String(resolved)}.`
+    );
+  }
+
+  return resolved;
+}
+
 function createBrowserPlanningWorker(): RollPlanningWorkerLike | undefined {
   if (typeof Worker !== "function") {
     return undefined;
@@ -86,7 +100,7 @@ export class BackgroundRollPlanner {
   private disposed = false;
 
   constructor(options: BackgroundRollPlannerOptions = {}) {
-    this.fallbackStrategy = options.fallbackStrategy ?? "direct";
+    this.fallbackStrategy = resolveFallbackStrategy(options.fallbackStrategy);
     this.fallbackPlanner = options.fallbackPlanner ?? new RollPlanner();
     this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.workerFactory = options.workerFactory ?? createBrowserPlanningWorker;
