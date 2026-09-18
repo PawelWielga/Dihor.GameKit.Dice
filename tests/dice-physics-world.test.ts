@@ -37,6 +37,57 @@ describe("DicePhysicsWorld", () => {
     ).toThrowError(RangeError);
   });
 
+  it("updates arena walls without recreating or mutating existing dice bodies", () => {
+    const initialBoundary = [
+      { x: -5, z: -5 },
+      { x: 5, z: -5 },
+      { x: 5, z: 5 },
+      { x: -5, z: 5 }
+    ] as const;
+    const nextBoundary = [
+      { x: -6, z: -4 },
+      { x: 6, z: -4 },
+      { x: 5, z: 4 },
+      { x: -5, z: 4 }
+    ] as const;
+    const world = new DicePhysicsWorld({ arenaBoundary: initialBoundary });
+    const body = world.addD6({
+      ...stableState,
+      velocity: { x: 0.4, y: 0.2, z: -0.3 },
+      angularVelocity: { x: 0.1, y: -0.2, z: 0.3 }
+    });
+    const initialPosition = body.position.clone();
+    const initialQuaternion = body.quaternion.clone();
+    const initialVelocity = body.velocity.clone();
+    const initialAngularVelocity = body.angularVelocity.clone();
+    const staticBefore = world.world.bodies.filter((candidate) => candidate.mass === 0);
+
+    expect(world.updateArenaBoundary(nextBoundary)).toBe(true);
+
+    const staticAfter = world.world.bodies.filter((candidate) => candidate.mass === 0);
+    expect(world.world.bodies).toContain(body);
+    expect(world.world.bodies).toHaveLength(6);
+    expect(staticAfter).toHaveLength(5);
+    expect(staticAfter[0]).toBe(staticBefore[0]);
+    expect(staticAfter.slice(1)).not.toEqual(staticBefore.slice(1));
+    expect(body.position.almostEquals(initialPosition)).toBe(true);
+    expect(body.quaternion.almostEquals(initialQuaternion)).toBe(true);
+    expect(body.velocity.almostEquals(initialVelocity)).toBe(true);
+    expect(body.angularVelocity.almostEquals(initialAngularVelocity)).toBe(true);
+
+    const unchangedStaticBodies = [...staticAfter];
+    expect(
+      world.updateArenaBoundary(
+        nextBoundary.map((point) => ({ x: point.x + 1e-6, z: point.z - 1e-6 }))
+      )
+    ).toBe(false);
+    expect(world.world.bodies.filter((candidate) => candidate.mass === 0)).toEqual(
+      unchangedStaticBodies
+    );
+
+    world.dispose();
+  });
+
   it("detects stable and moving D6 bodies from velocities", () => {
     const world = new DicePhysicsWorld();
     const body = world.addD6(stableState);
