@@ -527,12 +527,23 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
 function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
   const plan = requireRecord("DiceRollEvent replay plan", value);
 
-  if (typeof plan.rollId !== "string" || plan.rollId.trim().length === 0) {
+  const rollId = requireBoundedString(
+    "DiceRollEvent replay plan rollId",
+    plan.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
+  if (rollId.trim().length === 0) {
     throw new RangeError("DiceRollEvent replay plan requires a non-empty rollId.");
   }
 
   if (!Array.isArray(plan.dice) || plan.dice.length === 0) {
     throw new RangeError("DiceRollEvent replay plan requires at least one die.");
+  }
+
+  if (plan.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent replay plan supports at most ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
   }
 
   // Replay v1 historically omitted this flag for presimulated plans, so absence stays valid.
@@ -578,14 +589,18 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
     plan.simulationSteps
   );
 
-  if (!Number.isInteger(simulationSteps) || simulationSteps < 1) {
+  if (
+    !Number.isInteger(simulationSteps) ||
+    simulationSteps < 1 ||
+    simulationSteps > DICE_ROLL_EVENT_LIMITS.maxSimulationSteps
+  ) {
     throw new RangeError(
-      "DiceRollEvent replay plan simulationSteps must be a positive integer."
+      `DiceRollEvent replay plan simulationSteps must be an integer in 1..${DICE_ROLL_EVENT_LIMITS.maxSimulationSteps}.`
     );
   }
 
   return {
-    rollId: plan.rollId,
+    rollId,
     dice,
     physics: validatePhysicsFromUnknown(plan.physics),
     stability: validateStabilityFromUnknown(plan.stability),
@@ -595,12 +610,32 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
 }
 
 function validateResult(result: DiceRollResult): void {
+  requireBoundedString(
+    "DiceRollEvent rollId",
+    result.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
+
   if (result.rollId.trim().length === 0) {
     throw new RangeError("DiceRollEvent requires a non-empty rollId.");
   }
 
   if (result.dice.length === 0) {
     throw new RangeError("DiceRollEvent requires at least one die.");
+  }
+
+  if (result.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent supports at most ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
+  }
+
+  if (result.reason !== undefined) {
+    requireBoundedString(
+      "DiceRollEvent reason",
+      result.reason,
+      DICE_ROLL_EVENT_LIMITS.maxReasonLength
+    );
   }
 
   if (!Number.isFinite(result.modifier) || !Number.isFinite(result.total)) {
@@ -722,7 +757,12 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
     throw new RangeError(`Unsupported DiceRollEvent version: ${String(rawEvent.version)}.`);
   }
 
-  if (typeof rawEvent.rollId !== "string" || rawEvent.rollId.trim().length === 0) {
+  const rollId = requireBoundedString(
+    "DiceRollEvent rollId",
+    rawEvent.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
+  if (rollId.trim().length === 0) {
     throw new RangeError("DiceRollEvent requires a non-empty rollId.");
   }
 
@@ -730,12 +770,23 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
     throw new RangeError("DiceRollEvent requires at least one die.");
   }
 
+  if (rawEvent.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent supports at most ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
+  }
+
   const modifier = requireFiniteNumber("DiceRollEvent modifier", rawEvent.modifier);
   const total = requireFiniteNumber("DiceRollEvent total", rawEvent.total);
 
-  if (rawEvent.reason !== undefined && typeof rawEvent.reason !== "string") {
-    throw new RangeError("DiceRollEvent reason must be a string when provided.");
-  }
+  const reason =
+    rawEvent.reason === undefined
+      ? undefined
+      : requireBoundedString(
+          "DiceRollEvent reason",
+          rawEvent.reason,
+          DICE_ROLL_EVENT_LIMITS.maxReasonLength
+        );
 
   const dice = rawEvent.dice.map((rawDie, index) => {
     const die = requireRecord(`DiceRollEvent die at index ${index}`, rawDie);
@@ -764,11 +815,11 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
   });
 
   const result: DiceRollResult = {
-    rollId: rawEvent.rollId,
+    rollId,
     dice: dice.map((die) => ({ sides: die.sides, value: die.value })),
     modifier,
     total,
-    ...(rawEvent.reason === undefined ? {} : { reason: rawEvent.reason })
+    ...(reason === undefined ? {} : { reason })
   };
 
   validateResult(result);
