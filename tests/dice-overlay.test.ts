@@ -198,21 +198,21 @@ describe("DiceOverlay", () => {
       { texture: "/bone.png" }
     ]);
 
-    const root = findByAttribute(documentRef.body, "data-partybeam-dice-overlay");
+    const root = findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay");
     expect(root).toBeDefined();
-    expect(findByAttribute(root!, "data-partybeam-dice-title")?.textContent).toBe("Attack roll");
-    expect(findByAttribute(root!, "data-partybeam-dice-result")?.textContent).toBe("2 + 5 = 7");
+    expect(findByAttribute(root!, "data-dihor-gamekit-dice-title")?.textContent).toBe("Attack roll");
+    expect(findByAttribute(root!, "data-dihor-gamekit-dice-result")?.textContent).toBe("2 + 5 = 7");
 
     overlay.close();
     expect(overlay.isOpen).toBe(false);
     expect(game.inert).toBe(false);
-    expect(findByAttribute(documentRef.body, "data-partybeam-dice-overlay")).toBeUndefined();
+    expect(findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay")).toBeUndefined();
     expect(players[0]?.dispose).toHaveBeenCalledTimes(1);
     expect(renderers[0]?.dispose).toHaveBeenCalledTimes(1);
 
     await overlay.roll({ dice: [{ sides: 6 }] });
     expect(players).toHaveLength(2);
-    expect(findByAttribute(documentRef.body, "data-partybeam-dice-overlay")).toBeDefined();
+    expect(findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay")).toBeDefined();
 
     overlay.dispose();
   });
@@ -240,7 +240,7 @@ describe("DiceOverlay", () => {
     expect(result.dice[0]?.value).toBe(1);
     expect(receivedHost).toBe(host as unknown as HTMLElement);
     expect(host.inert).toBe(false);
-    expect(findByAttribute(documentRef.body, "data-partybeam-dice-overlay")).toBeUndefined();
+    expect(findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay")).toBeUndefined();
 
     overlay.close();
   });
@@ -382,7 +382,7 @@ describe("DiceOverlay", () => {
       } satisfies Partial<DiceOverlayError>);
 
       expect(overlay.isOpen).toBe(false);
-      expect(findByAttribute(documentRef.body, "data-partybeam-dice-overlay")).toBeUndefined();
+      expect(findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay")).toBeUndefined();
     }
 
     expect(directPlan).not.toHaveBeenCalled();
@@ -507,8 +507,8 @@ describe("DiceOverlay", () => {
       name: "DiceOverlayError",
       phase: "playback"
     } satisfies Partial<DiceOverlayError>);
-    const root = findByAttribute(documentRef.body, "data-partybeam-dice-overlay");
-    expect(findByAttribute(root!, "data-partybeam-dice-result")?.textContent).toBe("Roll failed");
+    const root = findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay");
+    expect(findByAttribute(root!, "data-dihor-gamekit-dice-result")?.textContent).toBe("Roll failed");
     expect(player.clear).toHaveBeenCalledTimes(1);
 
     overlay.close();

@@ -41,7 +41,7 @@ export interface DiceRollReplayV1 {
  * Transport-neutral host-authoritative dice event.
  *
  * This model intentionally contains only JSON-friendly domain and replay data. It does not know
- * about WebSockets, PartyGameKit, Three.js or any other transport/rendering implementation.
+ * about WebSockets, Three.js or any other transport/rendering implementation.
  */
 export interface DiceRollEvent {
   readonly type: typeof DICE_ROLL_EVENT_TYPE;

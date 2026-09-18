@@ -374,7 +374,7 @@ export class DiceOverlay {
       }
 
       root = documentRef.createElement("div");
-      root.setAttribute("data-partybeam-dice-overlay", "");
+      root.setAttribute("data-dihor-gamekit-dice-overlay", "");
       root.setAttribute("role", "dialog");
       root.setAttribute("aria-modal", "true");
       assignStyles(root, {
@@ -391,7 +391,7 @@ export class DiceOverlay {
       });
 
       titleElement = documentRef.createElement("div");
-      titleElement.setAttribute("data-partybeam-dice-title", "");
+      titleElement.setAttribute("data-dihor-gamekit-dice-title", "");
       assignStyles(titleElement, {
         padding: "20px 24px 8px",
         fontSize: "clamp(20px, 3vw, 36px)",
@@ -401,7 +401,7 @@ export class DiceOverlay {
       root.appendChild(titleElement);
 
       rendererHost = documentRef.createElement("div");
-      rendererHost.setAttribute("data-partybeam-dice-renderer", "");
+      rendererHost.setAttribute("data-dihor-gamekit-dice-renderer", "");
       assignStyles(rendererHost, {
         flex: "1 1 auto",
         minHeight: "0",
@@ -411,7 +411,7 @@ export class DiceOverlay {
       root.appendChild(rendererHost);
 
       resultElement = documentRef.createElement("div");
-      resultElement.setAttribute("data-partybeam-dice-result", "");
+      resultElement.setAttribute("data-dihor-gamekit-dice-result", "");
       resultElement.setAttribute("aria-live", "polite");
       assignStyles(resultElement, {
         minHeight: "48px",

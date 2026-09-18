@@ -5,7 +5,7 @@ import { DiceScene } from "../src/index.js";
 describe("DiceScene", () => {
   it("aligns the visible floor with the physics plane at world y=0", () => {
     const scene = new DiceScene();
-    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor");
+    const floor = scene.scene.getObjectByName("Dihor.GameKit.Dice floor");
 
     expect(floor?.position.y).toBe(0);
     scene.dispose();
@@ -13,8 +13,8 @@ describe("DiceScene", () => {
 
   it("preserves the existing neutral lighting as the default", () => {
     const scene = new DiceScene({ showFloor: false });
-    const ambient = scene.scene.getObjectByName("PartyBeam.DiceKit ambient light") as AmbientLight;
-    const key = scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1") as DirectionalLight;
+    const ambient = scene.scene.getObjectByName("Dihor.GameKit.Dice ambient light") as AmbientLight;
+    const key = scene.scene.getObjectByName("Dihor.GameKit.Dice directional light 1") as DirectionalLight;
 
     expect(ambient).toBeInstanceOf(AmbientLight);
     expect(ambient.color.getHex()).toBe(0xffffff);
@@ -55,9 +55,9 @@ describe("DiceScene", () => {
         ]
       }
     });
-    const ambient = scene.scene.getObjectByName("PartyBeam.DiceKit ambient light") as AmbientLight;
-    const directional = scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1") as DirectionalLight;
-    const point = scene.scene.getObjectByName("PartyBeam.DiceKit point light 2") as PointLight;
+    const ambient = scene.scene.getObjectByName("Dihor.GameKit.Dice ambient light") as AmbientLight;
+    const directional = scene.scene.getObjectByName("Dihor.GameKit.Dice directional light 1") as DirectionalLight;
+    const point = scene.scene.getObjectByName("Dihor.GameKit.Dice point light 2") as PointLight;
 
     expect(ambient.color.getHexString()).toBe("223344");
     expect(ambient.intensity).toBeCloseTo(0.35);
@@ -76,22 +76,22 @@ describe("DiceScene", () => {
       lights: []
     });
 
-    expect(scene.scene.getObjectByName("PartyBeam.DiceKit directional light 1")).toBeUndefined();
-    expect(scene.scene.getObjectByName("PartyBeam.DiceKit point light 2")).toBeUndefined();
+    expect(scene.scene.getObjectByName("Dihor.GameKit.Dice directional light 1")).toBeUndefined();
+    expect(scene.scene.getObjectByName("Dihor.GameKit.Dice point light 2")).toBeUndefined();
     expect(scene.hasShadowCastingLights).toBe(false);
     scene.dispose();
   });
 
   it("preserves the default table color and accepts table color configuration", async () => {
     const defaultScene = new DiceScene();
-    const defaultFloor = defaultScene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const defaultFloor = defaultScene.scene.getObjectByName("Dihor.GameKit.Dice floor") as Mesh;
     const defaultMaterial = defaultFloor.material as MeshStandardMaterial;
 
     expect(defaultMaterial.color.getHex()).toBe(0x292d33);
     defaultScene.dispose();
 
     const scene = new DiceScene({ table: { color: "#315a43" } });
-    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const floor = scene.scene.getObjectByName("Dihor.GameKit.Dice floor") as Mesh;
     const material = floor.material as MeshStandardMaterial;
 
     expect(material.color.getHexString()).toBe("315a43");
@@ -105,7 +105,7 @@ describe("DiceScene", () => {
 
   it("keeps the legacy floorColor shortcut working", () => {
     const scene = new DiceScene({ floorColor: "#123456" });
-    const floor = scene.scene.getObjectByName("PartyBeam.DiceKit floor") as Mesh;
+    const floor = scene.scene.getObjectByName("Dihor.GameKit.Dice floor") as Mesh;
     const material = floor.material as MeshStandardMaterial;
 
     expect(material.color.getHexString()).toBe("123456");
