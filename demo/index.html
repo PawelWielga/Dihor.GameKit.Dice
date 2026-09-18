@@ -32,7 +32,7 @@
       <div class="workspace">
         <aside class="control-panel" aria-label="Dice configuration">
           <form id="dice-form">
-            <section class="control-section">
+            <section class="control-section control-section--primary">
               <div class="section-heading">
                 <span class="section-index">01</span>
                 <div>
@@ -242,6 +242,14 @@
                 </p>
               </div>
 
+              <details class="settings-group settings-group--nested">
+                <summary class="settings-summary settings-summary--nested">
+                  <span>
+                    <strong>Advanced appearance & assets</strong>
+                    <small>Custom font, global texture and per-face overrides</small>
+                  </span>
+                </summary>
+                <div class="settings-group__body settings-group__body--nested">
               <div class="field-grid field-grid--two">
                 <label class="field">
                   <span>Custom font family</span>
@@ -319,9 +327,18 @@
                   <label class="field"><span>Face 6</span><input id="face-6" type="url" placeholder="URL" /></label>
                 </div>
               </details>
+                </div>
+              </details>
             </section>
 
-            <section class="control-section">
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Table</strong>
+                  <small>Surface color and optional texture</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
               <div class="section-heading">
                 <span class="section-index">03</span>
                 <div>
@@ -361,9 +378,17 @@
                   logical dice result stay unchanged.
                 </p>
               </div>
-            </section>
+              </div>
+            </details>
 
-            <section class="control-section">
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Camera</strong>
+                  <small>Orbit, tilt and distance</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
               <div class="section-heading">
                 <span class="section-index">04</span>
                 <div>
@@ -418,9 +443,17 @@
                 Set X = 0° and Y = 0° for an exact vertical top-down view. At Y = 0°, changing X
                 does not change the view because the camera is directly above the table center.
               </p>
-            </section>
+              </div>
+            </details>
 
-            <section class="control-section">
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Lighting</strong>
+                  <small>Scene mood, key light and presets</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
               <div class="section-heading">
                 <span class="section-index">05</span>
                 <div>
@@ -515,17 +548,28 @@
                 Neutral matches the previous DiceKit defaults. Presets only change rendering.
                 Directional and point lights can also be mixed through the public API.
               </p>
-            </section>
+              </div>
+            </details>
 
-            <section class="control-section control-section--actions">
-              <label class="toggle">
-                <input id="debug-mode" type="checkbox" />
-                <span>Show debug pipeline</span>
-              </label>
+            <section class="control-section control-section--actions control-footer">
+              <details class="developer-tools">
+                <summary class="settings-summary settings-summary--compact">
+                  <span>
+                    <strong>Developer tools</strong>
+                    <small>Debug pipeline and all-dice comparison</small>
+                  </span>
+                </summary>
+                <div class="developer-tools__body">
+                  <label class="toggle">
+                    <input id="debug-mode" type="checkbox" />
+                    <span>Show debug pipeline</span>
+                  </label>
 
-              <button id="compare-button" class="button button--ghost" type="button">
-                Roll D4 + D6 + D8 + D10 + D12 + D20 together
-              </button>
+                  <button id="compare-button" class="button button--ghost" type="button">
+                    Roll D4 + D6 + D8 + D10 + D12 + D20 together
+                  </button>
+                </div>
+              </details>
 
               <div class="actions">
                 <button id="roll-button" class="button button--primary" type="submit">Roll dice</button>
