@@ -6,7 +6,7 @@ DiceKit does not send the event itself. PartyGameKit, WebSockets, WebRTC, LAN me
 
 ## Host flow
 
-The host owns the logical result. It may also create a physical `RollPlan` for clients that support full DiceKit playback.
+The host owns the logical result. It may also create a physical `PresimulatedRollPlan` for clients that support full DiceKit playback. Direct physical plans are local playback inputs and cannot be attached as authoritative event replay data.
 
 ```ts
 import {
@@ -86,7 +86,7 @@ Future replay versions should be added as explicit versioned models rather than 
 
 ## Determinism and authority
 
-`RollPlan` stores enough initial state to replay the planned animation without rolling again. It does not make cannon-es bit-for-bit deterministic across browsers, CPUs or engine versions.
+`PresimulatedRollPlan` stores enough initial state to replay the planned animation without rolling again. `DirectRollPlan` is intentionally excluded from `DiceRollEvent.replay` because its result is only known after visible physics settles. Neither variant makes cannon-es bit-for-bit deterministic across browsers, CPUs or engine versions.
 
 If a replayed physical simulation differs slightly or cannot be reproduced on a client, the values carried directly in `DiceRollEvent.dice` remain authoritative. A client may fall back to a simpler animation or a textual result.
 
