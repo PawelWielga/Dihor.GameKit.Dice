@@ -4,7 +4,7 @@ import {
   RollPlanner,
   createSeededRandomProvider,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function replayPlan(plan: RollPlan): readonly number[] {
   const world = new DicePhysicsWorld(plan.physics);

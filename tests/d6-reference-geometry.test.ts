@@ -1,6 +1,6 @@
 import { MeshStandardMaterial } from "three";
 import { describe, expect, it } from "vitest";
-import { DiceMeshFactory, getDiceTopology } from "../src/index.js";
+import { DiceMeshFactory, getDiceTopology } from "../src/advanced.js";
 
 describe("D8-derived rounded D6 geometry", () => {
   it("keeps the established D6 size and pips while using the shared rounded profile", () => {

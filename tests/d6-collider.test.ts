@@ -1,6 +1,6 @@
 import { Box } from "cannon-es";
 import { describe, expect, it } from "vitest";
-import { createD6Collider } from "../src/index.js";
+import { createD6Collider } from "../src/advanced.js";
 
 describe("D6 collider", () => {
   it("uses a simple box independent of rounded render geometry", () => {

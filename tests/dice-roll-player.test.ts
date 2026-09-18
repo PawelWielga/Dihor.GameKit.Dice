@@ -14,7 +14,7 @@ import {
   type PresimulatedRollPlan,
   type RollInitialStateContext,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class ManualScheduler implements DiceAnimationScheduler {
   private nextHandle = 1;

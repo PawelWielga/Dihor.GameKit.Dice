@@ -11,7 +11,7 @@ import {
   type DiceDefinition,
   type DiceRollResult,
   type PresimulatedRollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function logicalResult(): DiceRollResult {
   return {

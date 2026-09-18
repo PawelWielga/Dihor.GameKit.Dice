@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DicePhysicsWorld } from "../src/index.js";
+import { DicePhysicsWorld } from "../src/advanced.js";
 
 const stableState = {
   position: { x: 0, y: 0.5, z: 0 },

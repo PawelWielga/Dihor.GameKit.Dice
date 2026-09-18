@@ -6,7 +6,7 @@ import {
   getDiceValueFromOrientation,
   type DiceTopologyVector3,
   type QuaternionLike
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function normalize(vector: DiceTopologyVector3): DiceTopologyVector3 {
   const length = Math.hypot(vector.x, vector.y, vector.z);

@@ -127,7 +127,8 @@ src/
 ├── appearance/  # Colors, materials, textures and themes
 ├── events/      # Versioned transport-neutral event contracts
 ├── overlay/     # Framework-agnostic user-facing overlay
-└── index.ts     # Public package entry point
+├── advanced.ts  # Explicit opt-in advanced/legacy entry point
+└── index.ts     # Small recommended package root
 ```
 
 DiceOverlay supports two roll pipelines:
@@ -144,6 +145,35 @@ visible replay verifies result     top faces become the result
 ```
 
 Presimulated mode keeps the logical result authoritative and never snaps/remaps a physical face after simulation. Direct mode has no hidden full simulation: the rendered cannon-es run itself decides the returned values.
+
+## Package entry points
+
+The package root is intentionally limited to the APIs needed by normal game integrations: `DiceOverlay`, `DiceRoller`, request/result and appearance models, multiplayer event helpers, supported dice metadata and the public roll-plan union types.
+
+More specialized APIs use explicit subpath exports:
+
+| Entry point | Intended use |
+| --- | --- |
+| `@dihor/gamekit-dice` | Recommended game-facing API |
+| `@dihor/gamekit-dice/appearance` | Appearance defaults, resolvers and validation helpers |
+| `@dihor/gamekit-dice/core` | Logical dice helpers, seeded RNG and topology utilities |
+| `@dihor/gamekit-dice/events` | Transport-neutral multiplayer event contract |
+| `@dihor/gamekit-dice/overlay` | Full overlay API including dependency-injection hooks |
+| `@dihor/gamekit-dice/advanced` | Physics, player, renderer, mesh and other supported low-level APIs |
+
+### Preview migration
+
+Before this split, advanced symbols such as `RollPlanner`, `DiceRollPlayer`, `DiceRenderer`, `DiceScene` and `DiceMeshFactory` were imported from the package root. During the preview line, migrate those imports by changing the module path while keeping the symbol names unchanged:
+
+```ts
+// Before
+import { RollPlanner, DiceRenderer } from "@dihor/gamekit-dice";
+
+// Now
+import { RollPlanner, DiceRenderer } from "@dihor/gamekit-dice/advanced";
+```
+
+The `/advanced` entry intentionally preserves the previous full preview export surface. New normal game code should prefer the package root and use a specialized subpath only when it needs that layer directly.
 
 ## Public API example
 
@@ -197,11 +227,9 @@ The same appearance model supports a global texture plus optional physical-face 
 Seeded behavior is opt-in through the existing `RandomProvider` abstraction. Use separate stream names so logical results do not depend on how many random samples physical planning consumes:
 
 ```ts
-import {
-  DiceRoller,
-  RollPlanner,
-  createSeededRandomProvider
-} from "@dihor/gamekit-dice";
+import { DiceRoller } from "@dihor/gamekit-dice";
+import { createSeededRandomProvider } from "@dihor/gamekit-dice/core";
+import { RollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const seed = "match-42";
 

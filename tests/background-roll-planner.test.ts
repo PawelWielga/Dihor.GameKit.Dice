@@ -6,7 +6,7 @@ import {
   RollPlanningError,
   type PresimulatedRollPlan,
   type RollPlanningWorkerLike
-} from "../src/index.js";
+} from "../src/advanced.js";
 import type {
   RollPlanningWorkerRequest,
   RollPlanningWorkerResponse

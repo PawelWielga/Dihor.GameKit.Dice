@@ -5,7 +5,7 @@ import {
   SeededRandomProvider,
   createSeededRandomProvider,
   type DiceRollRequest
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function samples(provider: SeededRandomProvider, count: number): number[] {
   return Array.from({ length: count }, () => provider.next());

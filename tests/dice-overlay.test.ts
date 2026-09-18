@@ -14,7 +14,7 @@ import {
   type DirectRollPlan,
   type PresimulatedRollPlan,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class FakeDocument {
   readonly body: FakeElement;

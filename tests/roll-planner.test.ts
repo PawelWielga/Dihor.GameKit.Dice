@@ -15,7 +15,7 @@ import {
   type PhysicsQuaternion,
   type RollInitialStateContext,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function normalize(vector: DiceTopologyVector3): DiceTopologyVector3 {
   const length = Math.hypot(vector.x, vector.y, vector.z);

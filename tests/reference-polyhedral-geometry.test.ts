@@ -4,7 +4,7 @@ import {
   DiceMeshFactory,
   getDiceTopology,
   type DiceSides
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 const REFERENCE_PROFILE_SIDES = [4, 10, 12, 20] as const satisfies readonly DiceSides[];
 

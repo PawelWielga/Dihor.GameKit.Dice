@@ -4,7 +4,7 @@ import {
   D6_FACE_VALUES,
   D6_OPPOSITE_FACE,
   getD6TopValue
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 describe("D6 face mapping", () => {
   it("uses the classic opposite-face sum of seven", () => {
