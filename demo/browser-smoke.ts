@@ -6,13 +6,15 @@ interface CaseResult {
   readonly durationMs: number;
 }
 
-const fixtures = document.querySelector<HTMLDivElement>("#fixtures");
-const output = document.querySelector<HTMLPreElement>("#browser-smoke-result");
+const fixturesElement = document.querySelector<HTMLDivElement>("#fixtures");
+const outputElement = document.querySelector<HTMLPreElement>("#browser-smoke-result");
 
-if (!fixtures || !output) {
+if (!fixturesElement || !outputElement) {
   throw new Error("Browser smoke fixture DOM is incomplete.");
 }
 
+const fixtures: HTMLDivElement = fixturesElement;
+const output: HTMLPreElement = outputElement;
 const results: CaseResult[] = [];
 
 function assert(condition: unknown, message: string): asserts condition {
