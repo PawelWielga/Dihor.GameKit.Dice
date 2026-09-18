@@ -37,7 +37,7 @@ For a fixed DiceKit implementation:
 - the same seed + stream produces the same `RandomProvider` sample sequence,
 - the same logical request with the same logical random stream produces the same die values,
 - the same expected result and the same physical random stream produce the same generated `RollInitialState` candidates,
-- a successful `RollPlan` contains all initial physical state and simulation configuration needed to replay that planned roll without drawing new random samples.
+- a successful `PresimulatedRollPlan` contains all initial physical state and simulation configuration needed to replay that planned roll without drawing new random samples.
 
 `rollId` is intentionally separate from seeded dice values. Inject a deterministic `rollIdProvider` if tests or replay files need a repeatable identifier too.
 
@@ -49,7 +49,9 @@ The authoritative game result remains the logical `DiceRollResult`. A replayed c
 
 ## Saving a replay input
 
-`RollPlan` is JSON-serializable and is the minimal animation input. It contains:
+`RollPlan` is a discriminated union. `PresimulatedRollPlan` uses `preSimulated: true` and carries authoritative expected face values verified by hidden simulation. `DirectRollPlan` uses `preSimulated: false`, `simulationSteps: 0` and placeholder expected values because visible physics determines the result. Both can be played by `DiceRollPlayer`, but only the presimulated variant is replayable authoritative event data.
+
+A `PresimulatedRollPlan` is JSON-serializable and is the minimal replay animation input. It contains:
 
 - `rollId`,
 - die types and expected values,
