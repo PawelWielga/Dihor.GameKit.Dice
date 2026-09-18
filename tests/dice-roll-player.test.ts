@@ -55,6 +55,29 @@ class ImmediateTextureLoader implements DiceTextureLoader {
   }
 }
 
+class DeferredTextureLoader implements DiceTextureLoader {
+  readonly requestedUrls: string[] = [];
+  private resolvePending?: (texture: Texture) => void;
+
+  load(url: string): Promise<Texture> {
+    this.requestedUrls.push(url);
+
+    return new Promise<Texture>((resolve) => {
+      this.resolvePending = resolve;
+    });
+  }
+
+  resolve(texture: Texture): void {
+    if (!this.resolvePending) {
+      throw new Error("No deferred texture load is pending.");
+    }
+
+    const resolve = this.resolvePending;
+    this.resolvePending = undefined;
+    resolve(texture);
+  }
+}
+
 async function flushMicrotasks(count = 24): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await Promise.resolve();
@@ -218,6 +241,73 @@ describe("DiceRollPlayer", () => {
     await playback;
 
     player.dispose();
+    diceScene.dispose();
+  });
+
+  it("rejects immediately when cancelled during deferred texture preparation", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const loader = new DeferredTextureLoader();
+    const meshFactory = new DiceMeshFactory({ textureLoader: loader });
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const plan = createPlan();
+
+    const playback = player.play(plan, {
+      appearances: [{ texture: "/slow-body.png" }]
+    });
+    await flushMicrotasks();
+
+    expect(loader.requestedUrls).toEqual(["/slow-body.png"]);
+
+    player.cancel();
+    await expect(playback).rejects.toBeInstanceOf(DiceRollPlaybackError);
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const nextPlayback = player.play(plan);
+    scheduler.runFrames(20);
+    await expect(nextPlayback).resolves.toMatchObject({ rollId: "visible-roll" });
+    player.clear();
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const lateTexture = new Texture();
+    const disposeTexture = vi.spyOn(lateTexture, "dispose");
+    loader.resolve(lateTexture);
+    await flushMicrotasks();
+
+    expect(diceScene.content.children).toHaveLength(0);
+
+    meshFactory.dispose();
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("rejects immediately when disposed during deferred texture preparation", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const loader = new DeferredTextureLoader();
+    const meshFactory = new DiceMeshFactory({ textureLoader: loader });
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+
+    const playback = player.play(createPlan(), {
+      appearances: [{ texture: "/slow-dispose.png" }]
+    });
+    await flushMicrotasks();
+
+    player.dispose();
+    await expect(playback).rejects.toBeInstanceOf(DiceRollPlaybackError);
+    expect(diceScene.content.children).toHaveLength(0);
+
+    const lateTexture = new Texture();
+    const disposeTexture = vi.spyOn(lateTexture, "dispose");
+    loader.resolve(lateTexture);
+    await flushMicrotasks();
+
+    expect(diceScene.content.children).toHaveLength(0);
+    meshFactory.dispose();
+    expect(disposeTexture).toHaveBeenCalledTimes(1);
+
     diceScene.dispose();
   });
 
