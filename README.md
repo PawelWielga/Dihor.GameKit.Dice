@@ -220,9 +220,25 @@ console.log(result.dice);
 console.log(result.total);
 ```
 
-The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In the default `preSimulation: true` mode the logical result remains authoritative and hidden planning runs in a Web Worker when available. Set `preSimulation: false` to skip hidden planning and return the values read from the visible dice after they settle.
+The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
 
-For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`.
+Advanced consumers can configure the Worker-unavailable policy explicitly:
+
+```ts
+import { BackgroundRollPlanner } from "@dihor/gamekit-dice/advanced";
+
+const planner = new BackgroundRollPlanner({
+  fallbackStrategy: "direct" // safe interactive default
+});
+
+// Other choices:
+// "synchronous" - preserves presimulation but may block the UI thread.
+// "error"       - fail clearly if off-thread presimulation is unavailable.
+```
+
+For desktop/mobile browsers and TV/WebView targets, prefer `"direct"` or `"error"` so a missing Worker never causes unexpected synchronous planning on the UI thread. Use `"synchronous"` only in environments where blocking is explicitly acceptable, such as controlled tests or non-interactive execution.
+
+For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`. If planning falls back to direct physics, a forced `expectedDiceTotal` cannot be guaranteed, so `DiceOverlay` reports a planning error instead of silently returning a different forced result.
 
 Per-roll `diceScale` accepts values from `0.5` to `1.5` and defaults to `1.0`. The scale is written into `RollPlan.physics.diceSize`, so the Three.js mesh and cannon-es collider always use the same effective size. Multiple dice in the roll also scale their default spacing together.
 
