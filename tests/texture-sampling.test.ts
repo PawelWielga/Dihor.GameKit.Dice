@@ -10,7 +10,7 @@ import {
   DiceMeshFactory,
   type DiceMesh,
   type DiceTextureLoader
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function standardMaterial(mesh: Mesh): MeshStandardMaterial {
   const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;

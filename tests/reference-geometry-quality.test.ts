@@ -4,7 +4,7 @@ import {
   DiceMeshFactory,
   type DiceSides,
   type DiceTextureLoader
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 const REFERENCE_SIDES = [4, 6, 8, 10, 12, 20] as const satisfies readonly DiceSides[];
 

@@ -15,6 +15,26 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/dihor-gamekit-dice.js"
+    },
+    "./appearance": {
+      "types": "./dist/appearance/index.d.ts",
+      "import": "./dist/appearance.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "import": "./dist/events.js"
+    },
+    "./overlay": {
+      "types": "./dist/overlay/index.d.ts",
+      "import": "./dist/overlay.js"
+    },
+    "./advanced": {
+      "types": "./dist/advanced.d.ts",
+      "import": "./dist/advanced.js"
     }
   },
   "files": [

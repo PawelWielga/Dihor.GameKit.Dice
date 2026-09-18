@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDiceTopology } from "../src/index.js";
+import { getDiceTopology } from "../src/advanced.js";
 
 function extent(values: readonly number[]): number {
   return Math.max(...values) - Math.min(...values);

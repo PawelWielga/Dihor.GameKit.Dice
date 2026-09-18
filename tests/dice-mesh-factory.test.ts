@@ -5,7 +5,7 @@ import {
   SUPPORTED_DICE_SIDES,
   getDiceTopology,
   type DiceTextureLoader
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 class FakeTextureLoader implements DiceTextureLoader {
   readonly calls: string[] = [];

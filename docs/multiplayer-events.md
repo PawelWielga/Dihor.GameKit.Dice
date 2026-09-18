@@ -11,9 +11,9 @@ The host owns the logical result. It may also create a physical `PresimulatedRol
 ```ts
 import {
   DiceRoller,
-  RollPlanner,
   createDiceRollEvent
 } from "@dihor/gamekit-dice";
+import { RollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const request = {
   dice: [
@@ -49,7 +49,7 @@ import {
   DICE_ROLL_REPLAY_VERSION,
   diceRollResultFromEvent,
   validateDiceRollEvent
-} from "@dihor/gamekit-dice";
+} from "@dihor/gamekit-dice/events";
 
 const event = validateDiceRollEvent(JSON.parse(payload));
 const authoritativeResult = diceRollResultFromEvent(event);

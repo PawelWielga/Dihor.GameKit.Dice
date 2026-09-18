@@ -9,5 +9,6 @@
 - Supports configurable dice appearance, fonts, engraving effect, scale, table, camera and lighting.
 - Provides replay-safe `DiceRollEvent` transport models and direct/presimulated roll-plan types.
 - Includes framework-agnostic overlay and player APIs.
+- Splits the package into a small recommended root API plus explicit `/appearance`, `/core`, `/events`, `/overlay` and `/advanced` entry points; the advanced entry preserves the previous full preview surface for migration.
 - Includes reproducible npm installs, NodeNext consumer validation and GitHub Pages demo builds.
 - Distributed as an MIT-licensed npm `.tgz` artifact through GitHub Prereleases.

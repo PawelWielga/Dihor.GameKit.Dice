@@ -20,7 +20,8 @@ src/
 ├── appearance/  # Colors, materials, textures and themes
 ├── events/      # Versioned transport-neutral event contracts
 ├── overlay/     # Framework-agnostic integration/UI overlay
-└── index.ts     # Public exports only
+├── advanced.ts  # Explicit opt-in entry point for supported low-level APIs
+└── index.ts     # Intentionally small recommended package root
 ```
 
 ### `core`
@@ -165,7 +166,7 @@ Rules:
 - Prefer explicit domain types over loosely shaped objects.
 - Avoid `any` unless there is a documented interoperability reason.
 - Keep public API surface intentionally small.
-- Avoid exposing Three.js/cannon-es implementation details from the top-level package API unless required.
+- Keep Three.js/cannon-es implementation details out of the top-level package API; expose supported low-level APIs through explicit subpaths such as `/advanced`.
 - Prefer composition over large classes with mixed responsibilities.
 - Document non-obvious math, coordinate-system assumptions and face mappings.
 - Fail explicitly when a requested roll cannot be planned instead of returning an incorrect result.

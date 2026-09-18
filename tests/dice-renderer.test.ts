@@ -1,6 +1,6 @@
 import type { WebGLRenderer } from "three";
 import { describe, expect, it, vi } from "vitest";
-import { DiceRenderer } from "../src/index.js";
+import { DiceRenderer } from "../src/advanced.js";
 
 class FakeWebGLRenderer {
   readonly domElement = {} as HTMLCanvasElement;

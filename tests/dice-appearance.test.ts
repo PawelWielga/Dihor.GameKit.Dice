@@ -3,7 +3,7 @@ import {
   DEFAULT_DICE_APPEARANCE,
   hasDiceTextureSources,
   resolveDiceAppearance
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 describe("DiceAppearance", () => {
   it("provides a readable default appearance", () => {

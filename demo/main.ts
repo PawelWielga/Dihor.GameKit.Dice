@@ -33,7 +33,7 @@ import {
   type PhysicsQuaternion,
   type RollInitialStateContext,
   type RollPlan
-} from "../src/index.js";
+} from "../src/advanced.js";
 import { getDiceFaceLabelBumpScale } from "../src/three/dice/DiceFaceLabels.js";
 
 const SAMPLE_TEXTURE_URL = "https://threejs.org/examples/textures/uv_grid_opengl.jpg";

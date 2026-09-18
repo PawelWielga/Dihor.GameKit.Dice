@@ -9,11 +9,9 @@ Dihor.GameKit.Dice separates deterministic game data from best-effort physical p
 Use separate stream names for independent concerns:
 
 ```ts
-import {
-  DiceRoller,
-  RollPlanner,
-  createSeededRandomProvider
-} from "@dihor/gamekit-dice";
+import { DiceRoller } from "@dihor/gamekit-dice";
+import { createSeededRandomProvider } from "@dihor/gamekit-dice/core";
+import { RollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const seed = "match-2026-09-17";
 

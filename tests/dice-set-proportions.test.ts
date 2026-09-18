@@ -4,7 +4,7 @@ import {
   DiceMeshFactory,
   SUPPORTED_DICE_SIDES,
   type DiceSides
-} from "../src/index.js";
+} from "../src/advanced.js";
 
 function maximumVisualExtent(factory: DiceMeshFactory, sides: DiceSides): number {
   const mesh = factory.create(sides, { size: 1 });
