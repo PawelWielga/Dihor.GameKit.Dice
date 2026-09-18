@@ -5,6 +5,7 @@ import {
   type DicePhysicsWorldOptions,
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
+import { resolveDiceSpawnLayout, type DiceSpawnPoint } from "./DiceSpawnLayout.js";
 import {
   DEFAULT_DICE_SCALE,
   DEFAULT_THROW_FORCE,
@@ -102,20 +103,34 @@ export class DirectRollPlanner {
     const physics = world.config;
     world.dispose();
 
-    const spacing = this.configuredSlotSpacing === undefined
+    const desiredSpacing = this.configuredSlotSpacing === undefined
       ? physics.diceSize * 2.5
       : this.configuredSlotSpacing * diceScale;
-    const dice = request.dice.map((definition, index) => ({
-      sides: definition.sides,
-      expectedValue: 0,
-      initialState: this.createInitialState(
-        index,
-        request.dice.length,
-        physics.diceSize,
-        spacing,
-        throwForce
-      )
-    }));
+    const spawnPoints = resolveDiceSpawnLayout(
+      request.dice.map((definition) => definition.sides),
+      physics,
+      {
+        desiredSpacing,
+        customSpacing: this.configuredSlotSpacing !== undefined
+      }
+    );
+    const dice = request.dice.map((definition, index) => {
+      const spawnPoint = spawnPoints[index];
+
+      if (!spawnPoint) {
+        throw new RangeError(`Missing spawn point at index ${index}.`);
+      }
+
+      return {
+        sides: definition.sides,
+        expectedValue: 0,
+        initialState: this.createInitialState(
+          spawnPoint,
+          physics.diceSize,
+          throwForce
+        )
+      };
+    });
 
     return {
       rollId,
@@ -128,19 +143,15 @@ export class DirectRollPlanner {
   }
 
   private createInitialState(
-    index: number,
-    count: number,
+    spawnPoint: DiceSpawnPoint,
     size: number,
-    spacing: number,
     throwForce: number
   ): RollInitialState {
-    const slotX = (index - (count - 1) / 2) * spacing;
-
     return {
       position: {
-        x: slotX,
+        x: spawnPoint.x,
         y: size * this.randomRange(2.2, 3.2),
-        z: size * this.randomRange(-0.35, 0.35)
+        z: spawnPoint.z
       },
       quaternion: this.randomQuaternion(),
       velocity: {
