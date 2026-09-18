@@ -22,6 +22,8 @@ import type {
   StabilityConfig
 } from "../physics/index.js";
 
+import { DICE_ROLL_EVENT_LIMITS } from "./DiceRollEventLimits.js";
+
 export const DICE_ROLL_EVENT_TYPE = "dice-roll" as const;
 export const DICE_ROLL_EVENT_VERSION = 1 as const;
 export const DICE_ROLL_REPLAY_VERSION = 1 as const;
@@ -112,16 +114,57 @@ function requirePositiveInteger(name: string, value: unknown): number {
   return resolved;
 }
 
-function requireOptionalString(name: string, value: unknown): string | undefined {
+function requirePositiveIntegerAtMost(name: string, value: unknown, maximum: number): number {
+  const resolved = requirePositiveInteger(name, value);
+
+  if (resolved > maximum) {
+    throw new RangeError(`${name} must be at most ${maximum}; received ${resolved}.`);
+  }
+
+  return resolved;
+}
+
+function requireNumberInRange(
+  name: string,
+  value: unknown,
+  minimum: number,
+  maximum: number
+): number {
+  const resolved = requireFiniteNumber(name, value);
+
+  if (resolved < minimum || resolved > maximum) {
+    throw new RangeError(
+      `${name} must be in the range ${minimum}..${maximum}; received ${resolved}.`
+    );
+  }
+
+  return resolved;
+}
+
+function requireBoundedString(name: string, value: unknown, maximumLength: number): string {
+  if (typeof value !== "string") {
+    throw new RangeError(`${name} must be a string.`);
+  }
+
+  if (value.length > maximumLength) {
+    throw new RangeError(
+      `${name} must be at most ${maximumLength} characters; received ${value.length}.`
+    );
+  }
+
+  return value;
+}
+
+function requireOptionalString(
+  name: string,
+  value: unknown,
+  maximumLength = DICE_ROLL_EVENT_LIMITS.maxStyleStringLength
+): string | undefined {
   if (value === undefined) {
     return undefined;
   }
 
-  if (typeof value !== "string") {
-    throw new RangeError(`${name} must be a string when provided.`);
-  }
-
-  return value;
+  return requireBoundedString(name, value, maximumLength);
 }
 
 function cloneAppearance(appearance: DiceAppearance | undefined): DiceAppearance | undefined {
@@ -151,7 +194,8 @@ function validateFontFromUnknown(
   );
   const url = requireOptionalString(
     `DiceRollEvent appearance.font.url at index ${diceIndex}`,
-    font.url
+    font.url,
+    DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength
   );
   const weight =
     font.weight === undefined
@@ -200,15 +244,18 @@ function validateAppearanceFromUnknown(
   );
   const texture = requireOptionalString(
     `DiceRollEvent appearance.texture at index ${index}`,
-    raw.texture
+    raw.texture,
+    DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength
   );
   const normalMap = requireOptionalString(
     `DiceRollEvent appearance.normalMap at index ${index}`,
-    raw.normalMap
+    raw.normalMap,
+    DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength
   );
   const roughnessMap = requireOptionalString(
     `DiceRollEvent appearance.roughnessMap at index ${index}`,
-    raw.roughnessMap
+    raw.roughnessMap,
+    DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength
   );
   const roughness =
     raw.roughness === undefined
@@ -252,7 +299,11 @@ function validateAppearanceFromUnknown(
         );
       }
 
-      validatedFaces[face] = source;
+      validatedFaces[face] = requireBoundedString(
+        `DiceRollEvent appearance.faces[${face}] at index ${index}`,
+        source,
+        DICE_ROLL_EVENT_LIMITS.maxAssetReferenceLength
+      );
     }
 
     faces = validatedFaces;
@@ -280,14 +331,26 @@ function validateAppearanceFromUnknown(
   return validated;
 }
 
-function validateVectorFromUnknown(name: string, value: unknown): PhysicsVector3 {
+function validateVectorFromUnknown(
+  name: string,
+  value: unknown,
+  maximumMagnitude = Number.POSITIVE_INFINITY
+): PhysicsVector3 {
   const vector = requireRecord(name, value);
-
-  return {
+  const validated: PhysicsVector3 = {
     x: requireFiniteNumber(`${name}.x`, vector.x),
     y: requireFiniteNumber(`${name}.y`, vector.y),
     z: requireFiniteNumber(`${name}.z`, vector.z)
   };
+
+  const magnitude = Math.hypot(validated.x, validated.y, validated.z);
+  if (magnitude > maximumMagnitude) {
+    throw new RangeError(
+      `${name} magnitude must be at most ${maximumMagnitude}; received ${magnitude}.`
+    );
+  }
+
+  return validated;
 }
 
 function validateQuaternionFromUnknown(name: string, value: unknown): PhysicsQuaternion {
