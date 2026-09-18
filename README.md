@@ -103,6 +103,14 @@ npm run test:coverage
 
 Coverage intentionally protects runtime-heavy core, multiplayer events, physics/planning, playback lifecycle and texture-cache code rather than chasing 100% across rendering/demo files. CI prints the coverage table, enforces regression thresholds for those areas and uploads `coverage/coverage-summary.json` as an artifact.
 
+Run repeatable CPU/setup performance baselines:
+
+```bash
+npm run benchmark
+```
+
+Reference measurements, scenario definitions and intentionally loose CI regression budgets are documented in [docs/performance.md](docs/performance.md).
+
 Run the real-browser smoke suite:
 
 ```bash

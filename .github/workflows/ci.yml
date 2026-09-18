@@ -50,6 +50,17 @@ jobs:
       - name: Build library
         run: npm run build
 
+      - name: Performance baseline report
+        run: npm run benchmark:ci
+
+      - name: Upload performance baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline
+          path: performance-results.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Validate NodeNext consumer
         run: npm run test:consumer
 
