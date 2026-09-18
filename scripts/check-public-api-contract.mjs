@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import * as typescriptModule from "typescript";
+
+const ts = typescriptModule.default ?? typescriptModule;
 
 const rootDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(rootDirectory, "tests/public-api-contract.json");
