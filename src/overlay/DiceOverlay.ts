@@ -7,6 +7,8 @@ import {
 import {
   BackgroundRollPlanner,
   DirectRollPlanner,
+  type DirectRollPlan,
+  type PresimulatedRollPlan,
   type RollPlan,
   type RollPlanningOptions
 } from "../physics/index.js";
@@ -43,13 +45,13 @@ export interface DiceOverlayPlanner {
   plan(
     result: DiceRollResult,
     options?: RollPlanningOptions
-  ): RollPlan | Promise<RollPlan>;
+  ): PresimulatedRollPlan | Promise<PresimulatedRollPlan>;
   cancel?(): void;
   dispose?(): void;
 }
 
 export interface DiceOverlayDirectPlanner {
-  plan(request: DiceRollRequest, rollId: string, options?: RollPlanningOptions): RollPlan;
+  plan(request: DiceRollRequest, rollId: string, options?: RollPlanningOptions): DirectRollPlan;
 }
 
 export interface DiceOverlayRollOptions extends RollPlanningOptions {
