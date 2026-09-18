@@ -1,5 +1,5 @@
-import { DiceOverlay } from "../src/index.ts";
-import { BackgroundRollPlanner } from "../src/advanced.ts";
+import { DiceOverlay } from "../src/index.js";
+import { BackgroundRollPlanner } from "../src/advanced.js";
 
 interface CaseResult {
   readonly name: string;
