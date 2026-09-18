@@ -318,6 +318,12 @@ function validateAppearanceFromUnknown(
         );
       }
 
+      if (source.length > DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength) {
+        throw new RangeError(
+          `DiceRollEvent appearance.faces[${face}] at index ${index} must not exceed ${DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength} characters.`
+        );
+      }
+
       validatedFaces[face] = source;
     }
 
@@ -537,7 +543,7 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
 function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
   const plan = requireRecord("DiceRollEvent replay plan", value);
 
-  requireNonEmptyBoundedString(
+  const rollId = requireNonEmptyBoundedString(
     "DiceRollEvent replay plan rollId",
     plan.rollId,
     DICE_ROLL_EVENT_LIMITS.maxRollIdLength
@@ -607,7 +613,7 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
   }
 
   return {
-    rollId: plan.rollId,
+    rollId,
     dice,
     physics: validatePhysicsFromUnknown(plan.physics),
     stability: validateStabilityFromUnknown(plan.stability),
@@ -758,7 +764,7 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
     throw new RangeError(`Unsupported DiceRollEvent version: ${String(rawEvent.version)}.`);
   }
 
-  requireNonEmptyBoundedString(
+  const rollId = requireNonEmptyBoundedString(
     "DiceRollEvent rollId",
     rawEvent.rollId,
     DICE_ROLL_EVENT_LIMITS.maxRollIdLength
@@ -816,7 +822,7 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
   });
 
   const result: DiceRollResult = {
-    rollId: rawEvent.rollId,
+    rollId,
     dice: dice.map((die) => ({ sides: die.sides, value: die.value })),
     modifier,
     total,
