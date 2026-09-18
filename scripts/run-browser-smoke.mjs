@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 const host = "127.0.0.1";
 const port = 4174;
@@ -78,11 +79,12 @@ async function waitForServer(url: string): Promise<void> {
 }
 
 const browser = findBrowser();
-const viteBin = new URL("../node_modules/vite/bin/vite.js", import.meta.url);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const viteBin = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
 const server = spawn(
   process.execPath,
   [
-    viteBin.pathname,
+    viteBin,
     "--config",
     "vite.demo.config.ts",
     "--host",
@@ -92,7 +94,7 @@ const server = spawn(
     "--strictPort"
   ],
   {
-    cwd: new URL("..", import.meta.url),
+    cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"]
   }
 );
