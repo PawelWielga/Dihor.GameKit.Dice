@@ -1,4 +1,5 @@
 export { DiceRoller } from "./DiceRoller.js";
+export { resolveDiceRollModifier } from "./DiceRollModifier.js";
 export type { DiceRollerOptions, RollIdProvider } from "./DiceRoller.js";
 export type { DiceDefinition } from "./DiceDefinition.js";
 export type { DiceRollRequest } from "./DiceRollRequest.js";
