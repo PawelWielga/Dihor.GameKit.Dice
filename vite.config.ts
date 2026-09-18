@@ -19,8 +19,50 @@ export default defineConfig({
         "src/three/dice/DiceTextureCache.ts"
       ],
       exclude: [
-        "src/**/index.ts"
-      ]
+        "src/**/index.ts",
+        "src/core/DiceDefinition.ts",
+        "src/core/DiceRollRequest.ts",
+        "src/core/DiceRollResult.ts",
+        "src/core/DieResult.ts",
+        "src/core/RandomProvider.ts",
+        "src/physics/RollModels.ts"
+      ],
+      thresholds: {
+        statements: 85,
+        branches: 75,
+        functions: 90,
+        lines: 85,
+        "src/core/**/*.ts": {
+          statements: 90,
+          branches: 75,
+          functions: 90,
+          lines: 90
+        },
+        "src/events/**/*.ts": {
+          statements: 85,
+          branches: 80,
+          functions: 95,
+          lines: 85
+        },
+        "src/physics/**/*.ts": {
+          statements: 80,
+          branches: 70,
+          functions: 90,
+          lines: 80
+        },
+        "src/player/DiceRollPlayer.ts": {
+          statements: 80,
+          branches: 65,
+          functions: 80,
+          lines: 80
+        },
+        "src/three/dice/DiceTextureCache.ts": {
+          statements: 80,
+          branches: 75,
+          functions: 80,
+          lines: 80
+        }
+      }
     }
   },
   build: {
