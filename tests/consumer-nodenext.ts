@@ -7,7 +7,8 @@ import {
   type DiceRollRequest,
   type DiceRollResult,
   type DirectRollPlan,
-  type PresimulatedRollPlan
+  type PresimulatedRollPlan,
+  type RollPlan
 } from "@dihor/gamekit-dice";
 import {
   resolveDiceAppearance,
@@ -69,7 +70,7 @@ declare const player: DiceRollPlayer;
 
 const directPlan: DirectRollPlan = directPlanner.plan(request, "consumer-direct");
 const presimulatedPlan: PresimulatedRollPlan = presimulatedPlanner.plan(result);
-const backgroundPlan: Promise<PresimulatedRollPlan> = backgroundPlanner.plan(result);
+const backgroundPlan: Promise<RollPlan> = backgroundPlanner.plan(result);
 
 createDiceRollEvent(result, { plan: presimulatedPlan });
 // @ts-expect-error Direct physical plans are not authoritative replay data.
