@@ -101,6 +101,7 @@ export {
   createD6Collider,
   createDiceCollider,
   resolveStabilityConfig,
+  type BackgroundRollFallbackStrategy,
   type BackgroundRollPlannerOptions,
   type BackgroundRollPlanningTiming,
   type DiceArenaBoundaryPoint,
