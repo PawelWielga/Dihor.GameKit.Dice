@@ -95,6 +95,14 @@ Run TypeScript checks:
 npm run typecheck
 ```
 
+Run the real-browser smoke suite:
+
+```bash
+npm run test:browser
+```
+
+The smoke suite starts the Vite demo server and drives a locally installed Chrome, Chromium or Edge in headless mode. Set `CHROME_BIN` when the browser executable is not discoverable automatically. It intentionally covers only a few high-value browser paths: WebGL rendering, Worker-backed D6 presimulation, a D20 direct roll with live resize, a mixed textured roll, and cancellation/cleanup. Unit tests remain the primary fast feedback loop.
+
 Build the static demo bundle locally:
 
 ```bash
