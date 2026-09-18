@@ -7,7 +7,7 @@ const host = "127.0.0.1";
 const port = 4174;
 const pageUrl = `http://${host}:${port}/Dihor.GameKit.Dice/browser-smoke.html`;
 
-function findBrowser(): string {
+function findBrowser() {
   const explicit = process.env.CHROME_BIN?.trim();
   if (explicit) {
     return explicit;
@@ -58,8 +58,8 @@ function findBrowser(): string {
   );
 }
 
-async function waitForServer(url: string): Promise<void> {
-  let lastError: unknown;
+async function waitForServer(url) {
+  let lastError;
 
   for (let attempt = 0; attempt < 80; attempt += 1) {
     try {
