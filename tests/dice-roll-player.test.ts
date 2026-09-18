@@ -72,7 +72,7 @@ function settledState(context: RollInitialStateContext) {
   } as const;
 }
 
-function createPlan(): RollPlan {
+function createPlan(diceScale = 1): RollPlan {
   const planner = new RollPlanner({
     initialStateProvider: settledState,
     maxAttemptsPerDie: 1,
@@ -89,7 +89,7 @@ function createPlan(): RollPlan {
     ],
     modifier: 0,
     total: 7
-  });
+  }, { diceScale });
 }
 
 function createTarget() {
@@ -128,11 +128,7 @@ describe("DiceRollPlayer", () => {
     const meshFactory = new DiceMeshFactory();
     const createD6 = vi.spyOn(meshFactory, "createD6");
     const player = new DiceRollPlayer(target, { scheduler, meshFactory });
-    const basePlan = createPlan();
-    const plan: RollPlan = {
-      ...basePlan,
-      physics: { ...basePlan.physics, diceSize: basePlan.physics.diceSize * 1.25 }
-    };
+    const plan = createPlan(1.25);
     const appearances = [
       { color: "#7b1e1e", markingsColor: "#f5e6c8" },
       { color: "#183153", markingsColor: "#f8fafc", roughness: 0.4, metalness: 0.2 }
