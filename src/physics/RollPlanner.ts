@@ -289,7 +289,7 @@ export class RollPlanner {
         });
       }
 
-      const verification = this.verifyCombinedPlan(plannedDice, physicsOptions);
+      const verification = this.verifyCombinedPlan(plannedDice, physics);
 
       if (verification.matches) {
         return {
