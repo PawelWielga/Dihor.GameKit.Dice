@@ -1,9 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as typescriptModule from "typescript";
-
-const ts = typescriptModule.default ?? typescriptModule;
 
 const rootDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contractPath = resolve(rootDirectory, "tests/public-api-contract.json");
@@ -21,84 +18,58 @@ function sortNames(values) {
   return [...values].sort((left, right) => left.localeCompare(right));
 }
 
-function hasModifier(statement, kind) {
-  if (!ts.canHaveModifiers(statement)) {
-    return false;
-  }
-
-  return (ts.getModifiers(statement) ?? []).some((modifier) => modifier.kind === kind);
-}
-
 function collectExports(sourcePath) {
   const absolutePath = resolve(rootDirectory, sourcePath);
   const sourceText = readFileSync(absolutePath, "utf8");
-  const sourceFile = ts.createSourceFile(
-    absolutePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS
-  );
   const exports = [];
+  const namedReExport =
+    /export\s+(type\s+)?\{([\s\S]*?)\}\s+from\s+["'][^"']+["'];/g;
 
-  for (const statement of sourceFile.statements) {
-    if (ts.isExportDeclaration(statement)) {
-      if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
-        throw new Error(
-          `${sourcePath}: public entry points must use explicit named exports; wildcard exports are not allowed.`
-        );
+  let remainingSource = sourceText;
+  let match;
+
+  while ((match = namedReExport.exec(sourceText)) !== null) {
+    const statementIsTypeOnly = match[1] !== undefined;
+    const items = match[2].split(",");
+
+    for (const rawItem of items) {
+      let item = rawItem.trim();
+
+      if (item.length === 0) {
+        continue;
       }
 
-      for (const element of statement.exportClause.elements) {
-        const kind = statement.isTypeOnly || element.isTypeOnly ? "type" : "value";
-        exports.push(`${element.name.text}:${kind}`);
+      const itemIsTypeOnly = item.startsWith("type ");
+      if (itemIsTypeOnly) {
+        item = item.slice("type ".length).trim();
       }
 
-      continue;
-    }
-
-    if (!hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
-      continue;
-    }
-
-    if (hasModifier(statement, ts.SyntaxKind.DefaultKeyword)) {
-      throw new Error(`${sourcePath}: default exports are not supported by the public API contract.`);
-    }
-
-    if (
-      ts.isFunctionDeclaration(statement) ||
-      ts.isClassDeclaration(statement) ||
-      ts.isEnumDeclaration(statement)
-    ) {
-      if (!statement.name) {
-        throw new Error(`${sourcePath}: exported declaration is missing a public name.`);
+      const aliasParts = item.split(/\s+as\s+/);
+      if (aliasParts.length > 2 || aliasParts.some((part) => part.trim().length === 0)) {
+        throw new Error(`${sourcePath}: unsupported named export syntax: ${rawItem.trim()}`);
       }
 
-      exports.push(`${statement.name.text}:value`);
-      continue;
-    }
+      const publicName = (aliasParts[1] ?? aliasParts[0]).trim();
 
-    if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
-      exports.push(`${statement.name.text}:type`);
-      continue;
-    }
-
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) {
-          throw new Error(
-            `${sourcePath}: destructured public variable exports are not supported by the contract checker.`
-          );
-        }
-
-        exports.push(`${declaration.name.text}:value`);
+      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(publicName)) {
+        throw new Error(`${sourcePath}: unsupported public export name: ${publicName}`);
       }
 
-      continue;
+      const kind = statementIsTypeOnly || itemIsTypeOnly ? "type" : "value";
+      exports.push(`${publicName}:${kind}`);
     }
 
+    const start = match.index;
+    const end = start + match[0].length;
+    remainingSource =
+      remainingSource.slice(0, start) +
+      " ".repeat(match[0].length) +
+      remainingSource.slice(end);
+  }
+
+  if (/\bexport\s+/.test(remainingSource)) {
     throw new Error(
-      `${sourcePath}: unsupported public export declaration kind ${ts.SyntaxKind[statement.kind]}.`
+      `${sourcePath}: public entry points must use explicit named re-exports; wildcard, default and local exports are not allowed.`
     );
   }
 
