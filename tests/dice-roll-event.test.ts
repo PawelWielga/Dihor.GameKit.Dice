@@ -10,7 +10,7 @@ import {
   validateDiceRollEvent,
   type DiceDefinition,
   type DiceRollResult,
-  type RollPlan
+  type PresimulatedRollPlan
 } from "../src/index.js";
 
 function logicalResult(): DiceRollResult {
@@ -26,7 +26,7 @@ function logicalResult(): DiceRollResult {
   };
 }
 
-function replayPlan(result: DiceRollResult): RollPlan {
+function replayPlan(result: DiceRollResult): PresimulatedRollPlan {
   return new RollPlanner({
     randomProvider: createSeededRandomProvider("event-test", "physics"),
     maxPlanningTimeMs: 5000
@@ -105,7 +105,7 @@ describe("DiceRollEvent", () => {
   it("rejects replay plans that do not match the authoritative result", () => {
     const result = logicalResult();
     const validPlan = replayPlan(result);
-    const mismatchedPlan: RollPlan = {
+    const mismatchedPlan: PresimulatedRollPlan = {
       ...validPlan,
       dice: validPlan.dice.map((die, index) =>
         index === 0 ? { ...die, expectedValue: die.expectedValue === 1 ? 2 : 1 } : die
