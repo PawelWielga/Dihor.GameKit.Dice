@@ -71,6 +71,14 @@ if (event.replay?.version === DICE_ROLL_REPLAY_VERSION) {
 
 `validateDiceRollEvent` rejects unsupported event/replay versions, invalid die types or values, malformed appearance fields, mismatched totals and replay plans that disagree with the authoritative result.
 
+## Resource limits
+
+Transport payload validation also applies an operational envelope before playback work begins. The current limits are exported as `DICE_ROLL_EVENT_LIMITS` so hosts can reject or shape payloads consistently before sending them.
+
+The limits include the runtime dice cap (`MAX_DICE_PER_ROLL`, currently 6), bounded roll/reason strings, bounded appearance strings and asset URLs, a maximum arena polygon size, bounded stability/simulation step counts, supported dice-size and arena extents, and maximum replay position/velocity/angular-velocity magnitudes.
+
+These limits apply to event-driven/network playback. They do not change the direct local appearance API, where the application deliberately controls its own asset URLs and configuration.
+
 The renderer is optional. A phone, server, test harness or low-power client can consume `rollId`, `dice`, `modifier`, `total` and `reason` without importing or constructing a Three.js renderer.
 
 ## Versioning
