@@ -300,7 +300,31 @@ try {
   process.exitCode = 1;
 } finally {
   client?.close();
-  browserProcess?.kill("SIGTERM");
+
+  if (browserProcess && browserProcess.exitCode === null) {
+    browserProcess.kill("SIGTERM");
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 2000);
+      browserProcess.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+  }
+
   server.kill("SIGTERM");
-  rmSync(userDataDir, { recursive: true, force: true });
+
+  try {
+    rmSync(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100
+    });
+  } catch (error) {
+    console.warn(
+      "Browser smoke tests passed, but the temporary Chrome profile could not be removed:",
+      error instanceof Error ? error.message : error
+    );
+  }
 }
