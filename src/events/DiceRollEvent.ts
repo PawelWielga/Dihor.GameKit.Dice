@@ -11,20 +11,40 @@ import {
   type DiceRollResult,
   type DiceSides
 } from "../core/index.js";
-import type {
-  DiceArenaBoundaryPoint,
-  DicePhysicsConfig,
-  PhysicsQuaternion,
-  PhysicsVector3,
-  PresimulatedRollPlan,
-  RollInitialState,
-  RollPlanDie,
-  StabilityConfig
+import {
+  MAX_DICE_PER_ROLL,
+  type DiceArenaBoundaryPoint,
+  type DicePhysicsConfig,
+  type PhysicsQuaternion,
+  type PhysicsVector3,
+  type PresimulatedRollPlan,
+  type RollInitialState,
+  type RollPlanDie,
+  type StabilityConfig
 } from "../physics/index.js";
 
 export const DICE_ROLL_EVENT_TYPE = "dice-roll" as const;
 export const DICE_ROLL_EVENT_VERSION = 1 as const;
 export const DICE_ROLL_REPLAY_VERSION = 1 as const;
+
+/** Operational limits applied when validating transport payloads. */
+export const DICE_ROLL_EVENT_LIMITS = Object.freeze({
+  maxDiceCount: MAX_DICE_PER_ROLL,
+  maxRollIdLength: 128,
+  maxReasonLength: 512,
+  maxArenaBoundaryPoints: 64,
+  maxStabilityConsecutiveSteps: 600,
+  maxStabilityMaxSteps: 3600,
+  maxSimulationSteps: 3600,
+  minDiceSize: 0.05,
+  maxDiceSize: 10,
+  maxArenaExtent: 1000,
+  maxPositionMagnitude: 1000,
+  maxVelocityMagnitude: 250,
+  maxAngularVelocityMagnitude: 250,
+  maxAppearanceStringLength: 2048,
+  maxFontFamilyLength: 256
+} as const);
 
 export interface DiceRollEventDie {
   readonly sides: DiceSides;
@@ -112,13 +132,58 @@ function requirePositiveInteger(name: string, value: unknown): number {
   return resolved;
 }
 
-function requireOptionalString(name: string, value: unknown): string | undefined {
+function requireOptionalString(
+  name: string,
+  value: unknown,
+  maxLength: number = DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength
+): string | undefined {
   if (value === undefined) {
     return undefined;
   }
 
   if (typeof value !== "string") {
     throw new RangeError(`${name} must be a string when provided.`);
+  }
+
+  if (value.length > maxLength) {
+    throw new RangeError(`${name} must not exceed ${maxLength} characters.`);
+  }
+
+  return value;
+}
+
+function requireBoundedPositiveNumber(
+  name: string,
+  value: unknown,
+  min: number,
+  max: number
+): number {
+  const resolved = requirePositiveNumber(name, value);
+
+  if (resolved < min || resolved > max) {
+    throw new RangeError(`${name} must be in the ${min}..${max} range.`);
+  }
+
+  return resolved;
+}
+
+function requireBoundedPositiveInteger(name: string, value: unknown, max: number): number {
+  const resolved = requirePositiveInteger(name, value);
+
+  if (resolved > max) {
+    throw new RangeError(`${name} must not exceed ${max}.`);
+  }
+
+  return resolved;
+}
+
+function requireNonEmptyBoundedString(name: string, value: unknown, maxLength: number): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RangeError(`${name} must be a non-empty string.`);
+  }
+
+  if (value.length > maxLength) {
+    throw new RangeError(`${name} must not exceed ${maxLength} characters.`);
   }
 
   return value;
@@ -147,7 +212,8 @@ function validateFontFromUnknown(
   const font = requireRecord(`DiceRollEvent appearance.font at index ${diceIndex}`, value);
   const family = requireOptionalString(
     `DiceRollEvent appearance.font.family at index ${diceIndex}`,
-    font.family
+    font.family,
+    DICE_ROLL_EVENT_LIMITS.maxFontFamilyLength
   );
   const url = requireOptionalString(
     `DiceRollEvent appearance.font.url at index ${diceIndex}`,
@@ -252,6 +318,12 @@ function validateAppearanceFromUnknown(
         );
       }
 
+      if (source.length > DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength) {
+        throw new RangeError(
+          `DiceRollEvent appearance.faces[${face}] at index ${index} must not exceed ${DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength} characters.`
+        );
+      }
+
       validatedFaces[face] = source;
     }
 
@@ -280,14 +352,23 @@ function validateAppearanceFromUnknown(
   return validated;
 }
 
-function validateVectorFromUnknown(name: string, value: unknown): PhysicsVector3 {
+function validateVectorFromUnknown(
+  name: string,
+  value: unknown,
+  maxMagnitude?: number
+): PhysicsVector3 {
   const vector = requireRecord(name, value);
-
-  return {
+  const validated = {
     x: requireFiniteNumber(`${name}.x`, vector.x),
     y: requireFiniteNumber(`${name}.y`, vector.y),
     z: requireFiniteNumber(`${name}.z`, vector.z)
   };
+
+  if (maxMagnitude !== undefined && Math.hypot(validated.x, validated.y, validated.z) > maxMagnitude) {
+    throw new RangeError(`${name} magnitude must not exceed ${maxMagnitude}.`);
+  }
+
+  return validated;
 }
 
 function validateQuaternionFromUnknown(name: string, value: unknown): PhysicsQuaternion {
@@ -311,13 +392,19 @@ function validateArenaBoundaryFromUnknown(value: unknown): readonly DiceArenaBou
     throw new RangeError("DiceRollEvent replay plan physics.arenaBoundary must contain at least three points.");
   }
 
+  if (value.length > DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints) {
+    throw new RangeError(
+      `DiceRollEvent replay plan physics.arenaBoundary must not exceed ${DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints} points.`
+    );
+  }
+
   const boundary = value.map((rawPoint, index) => {
     const point = requireRecord(
       `DiceRollEvent replay plan physics.arenaBoundary[${index}]`,
       rawPoint
     );
 
-    return {
+    const resolved = {
       x: requireFiniteNumber(
         `DiceRollEvent replay plan physics.arenaBoundary[${index}].x`,
         point.x
@@ -327,6 +414,14 @@ function validateArenaBoundaryFromUnknown(value: unknown): readonly DiceArenaBou
         point.z
       )
     };
+
+    if (Math.hypot(resolved.x, resolved.z) > DICE_ROLL_EVENT_LIMITS.maxArenaExtent) {
+      throw new RangeError(
+        `DiceRollEvent replay plan physics.arenaBoundary[${index}] must stay within ${DICE_ROLL_EVENT_LIMITS.maxArenaExtent} units of the origin.`
+      );
+    }
+
+    return resolved;
   });
 
   for (let index = 0; index < boundary.length; index += 1) {
@@ -375,13 +470,17 @@ function validatePhysicsFromUnknown(value: unknown): DicePhysicsConfig {
       "DiceRollEvent replay plan physics.angularDamping",
       physics.angularDamping
     ),
-    diceSize: requirePositiveNumber(
+    diceSize: requireBoundedPositiveNumber(
       "DiceRollEvent replay plan physics.diceSize",
-      physics.diceSize
+      physics.diceSize,
+      DICE_ROLL_EVENT_LIMITS.minDiceSize,
+      DICE_ROLL_EVENT_LIMITS.maxDiceSize
     ),
-    arenaHalfExtent: requirePositiveNumber(
+    arenaHalfExtent: requireBoundedPositiveNumber(
       "DiceRollEvent replay plan physics.arenaHalfExtent",
-      physics.arenaHalfExtent
+      physics.arenaHalfExtent,
+      Number.EPSILON,
+      DICE_ROLL_EVENT_LIMITS.maxArenaExtent
     ),
     ...(arenaBoundary === undefined ? {} : { arenaBoundary })
   };
@@ -399,13 +498,15 @@ function validateStabilityFromUnknown(value: unknown): StabilityConfig {
       "DiceRollEvent replay plan stability.angularThreshold",
       stability.angularThreshold
     ),
-    consecutiveSteps: requirePositiveInteger(
+    consecutiveSteps: requireBoundedPositiveInteger(
       "DiceRollEvent replay plan stability.consecutiveSteps",
-      stability.consecutiveSteps
+      stability.consecutiveSteps,
+      DICE_ROLL_EVENT_LIMITS.maxStabilityConsecutiveSteps
     ),
-    maxSteps: requirePositiveInteger(
+    maxSteps: requireBoundedPositiveInteger(
       "DiceRollEvent replay plan stability.maxSteps",
-      stability.maxSteps
+      stability.maxSteps,
+      DICE_ROLL_EVENT_LIMITS.maxStabilityMaxSteps
     )
   };
 }
@@ -419,7 +520,8 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
   return {
     position: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.position`,
-      state.position
+      state.position,
+      DICE_ROLL_EVENT_LIMITS.maxPositionMagnitude
     ),
     quaternion: validateQuaternionFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.quaternion`,
@@ -427,11 +529,13 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
     ),
     velocity: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.velocity`,
-      state.velocity
+      state.velocity,
+      DICE_ROLL_EVENT_LIMITS.maxVelocityMagnitude
     ),
     angularVelocity: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.angularVelocity`,
-      state.angularVelocity
+      state.angularVelocity,
+      DICE_ROLL_EVENT_LIMITS.maxAngularVelocityMagnitude
     )
   };
 }
@@ -439,12 +543,20 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
 function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
   const plan = requireRecord("DiceRollEvent replay plan", value);
 
-  if (typeof plan.rollId !== "string" || plan.rollId.trim().length === 0) {
-    throw new RangeError("DiceRollEvent replay plan requires a non-empty rollId.");
-  }
+  const rollId = requireNonEmptyBoundedString(
+    "DiceRollEvent replay plan rollId",
+    plan.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
 
   if (!Array.isArray(plan.dice) || plan.dice.length === 0) {
     throw new RangeError("DiceRollEvent replay plan requires at least one die.");
+  }
+
+  if (plan.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent replay plan must not exceed ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
   }
 
   // Replay v1 historically omitted this flag for presimulated plans, so absence stays valid.
@@ -490,14 +602,18 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
     plan.simulationSteps
   );
 
-  if (!Number.isInteger(simulationSteps) || simulationSteps < 1) {
+  if (
+    !Number.isInteger(simulationSteps) ||
+    simulationSteps < 1 ||
+    simulationSteps > DICE_ROLL_EVENT_LIMITS.maxSimulationSteps
+  ) {
     throw new RangeError(
-      "DiceRollEvent replay plan simulationSteps must be a positive integer."
+      `DiceRollEvent replay plan simulationSteps must be an integer in 1..${DICE_ROLL_EVENT_LIMITS.maxSimulationSteps}.`
     );
   }
 
   return {
-    rollId: plan.rollId,
+    rollId,
     dice,
     physics: validatePhysicsFromUnknown(plan.physics),
     stability: validateStabilityFromUnknown(plan.stability),
@@ -507,12 +623,26 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
 }
 
 function validateResult(result: DiceRollResult): void {
-  if (result.rollId.trim().length === 0) {
-    throw new RangeError("DiceRollEvent requires a non-empty rollId.");
-  }
+  requireNonEmptyBoundedString(
+    "DiceRollEvent rollId",
+    result.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
 
   if (result.dice.length === 0) {
     throw new RangeError("DiceRollEvent requires at least one die.");
+  }
+
+  if (result.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent must not exceed ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
+  }
+
+  if (result.reason !== undefined && result.reason.length > DICE_ROLL_EVENT_LIMITS.maxReasonLength) {
+    throw new RangeError(
+      `DiceRollEvent reason must not exceed ${DICE_ROLL_EVENT_LIMITS.maxReasonLength} characters.`
+    );
   }
 
   if (!Number.isFinite(result.modifier) || !Number.isFinite(result.total)) {
@@ -634,19 +764,35 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
     throw new RangeError(`Unsupported DiceRollEvent version: ${String(rawEvent.version)}.`);
   }
 
-  if (typeof rawEvent.rollId !== "string" || rawEvent.rollId.trim().length === 0) {
-    throw new RangeError("DiceRollEvent requires a non-empty rollId.");
-  }
+  const rollId = requireNonEmptyBoundedString(
+    "DiceRollEvent rollId",
+    rawEvent.rollId,
+    DICE_ROLL_EVENT_LIMITS.maxRollIdLength
+  );
 
   if (!Array.isArray(rawEvent.dice) || rawEvent.dice.length === 0) {
     throw new RangeError("DiceRollEvent requires at least one die.");
   }
 
+  if (rawEvent.dice.length > DICE_ROLL_EVENT_LIMITS.maxDiceCount) {
+    throw new RangeError(
+      `DiceRollEvent must not exceed ${DICE_ROLL_EVENT_LIMITS.maxDiceCount} dice.`
+    );
+  }
+
   const modifier = requireFiniteNumber("DiceRollEvent modifier", rawEvent.modifier);
   const total = requireFiniteNumber("DiceRollEvent total", rawEvent.total);
 
-  if (rawEvent.reason !== undefined && typeof rawEvent.reason !== "string") {
-    throw new RangeError("DiceRollEvent reason must be a string when provided.");
+  if (rawEvent.reason !== undefined) {
+    if (typeof rawEvent.reason !== "string") {
+      throw new RangeError("DiceRollEvent reason must be a string when provided.");
+    }
+
+    if (rawEvent.reason.length > DICE_ROLL_EVENT_LIMITS.maxReasonLength) {
+      throw new RangeError(
+        `DiceRollEvent reason must not exceed ${DICE_ROLL_EVENT_LIMITS.maxReasonLength} characters.`
+      );
+    }
   }
 
   const dice = rawEvent.dice.map((rawDie, index) => {
@@ -676,7 +822,7 @@ export function validateDiceRollEvent(event: unknown): DiceRollEvent {
   });
 
   const result: DiceRollResult = {
-    rollId: rawEvent.rollId,
+    rollId,
     dice: dice.map((die) => ({ sides: die.sides, value: die.value })),
     modifier,
     total,
