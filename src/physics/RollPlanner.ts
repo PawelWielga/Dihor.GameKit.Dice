@@ -13,6 +13,7 @@ import {
   type DicePhysicsWorldOptions,
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
+import { resolveDiceSpawnLayout, type DiceSpawnPoint } from "./DiceSpawnLayout.js";
 import type {
   DiceArenaBoundaryPoint,
   DicePhysicsConfig,
@@ -47,6 +48,7 @@ export interface RollInitialStateContext {
   readonly sides: DiceSides;
   readonly expectedValue: number;
   readonly slotX: number;
+  readonly slotZ: number;
   readonly diceSize: number;
 }
 
@@ -198,7 +200,7 @@ export class RollPlanner {
   private readonly maxCombinedAttempts: number;
   private readonly maxPlanningTimeMs: number;
   private readonly nowProvider: () => number;
-  private readonly slotSpacing: number;
+  private readonly configuredSlotSpacing?: number;
 
   constructor(options: RollPlannerOptions = {}) {
     this.randomProvider = options.randomProvider ?? mathRandomProvider;
@@ -219,11 +221,10 @@ export class RollPlanner {
       options.maxPlanningTimeMs ?? 2000
     );
     this.nowProvider = options.nowProvider ?? (() => Date.now());
-    const configuredDiceSize = options.physics?.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
-    this.slotSpacing = requirePositiveFinite(
-      "slotSpacing",
-      options.slotSpacing ?? configuredDiceSize * 2.5
-    );
+    this.configuredSlotSpacing =
+      options.slotSpacing === undefined
+        ? undefined
+        : requirePositiveFinite("slotSpacing", options.slotSpacing);
   }
 
   plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
@@ -236,6 +237,20 @@ export class RollPlanner {
       ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
     };
     const expectedDice = this.validateResult(result);
+    const resolvedWorld = new DicePhysicsWorld(physicsOptions);
+    const physics = resolvedWorld.config;
+    resolvedWorld.dispose();
+    const desiredSpacing = this.configuredSlotSpacing === undefined
+      ? physics.diceSize * 2.5
+      : this.configuredSlotSpacing * diceScale;
+    const spawnPoints = resolveDiceSpawnLayout(
+      expectedDice.map((die) => die.sides),
+      physics,
+      {
+        desiredSpacing,
+        customSpacing: this.configuredSlotSpacing !== undefined
+      }
+    );
     const startedAt = this.nowProvider();
     let lastFailure = "No matching physical plan was found.";
 
@@ -250,16 +265,21 @@ export class RollPlanner {
           throw new RollPlanningError(`Missing die result at index ${dieIndex}.`);
         }
 
-        const slotX = this.slotX(dieIndex, expectedDice.length, diceScale);
+        const spawnPoint = spawnPoints[dieIndex];
+
+        if (!spawnPoint) {
+          throw new RollPlanningError(`Missing spawn point at index ${dieIndex}.`);
+        }
+
         const initialState = this.findInitialState(
           expectedDie.sides,
           expectedDie.value,
           dieIndex,
           expectedDice.length,
-          slotX,
+          spawnPoint,
           startedAt,
           throwForce,
-          physicsOptions
+          physics
         );
 
         plannedDice.push({
@@ -269,7 +289,7 @@ export class RollPlanner {
         });
       }
 
-      const verification = this.verifyCombinedPlan(plannedDice, physicsOptions);
+      const verification = this.verifyCombinedPlan(plannedDice, physics);
 
       if (verification.matches) {
         return {
@@ -292,7 +312,7 @@ export class RollPlanner {
     expectedValue: number,
     dieIndex: number,
     diceCount: number,
-    slotX: number,
+    spawnPoint: DiceSpawnPoint,
     startedAt: number,
     throwForce: number,
     physicsOptions: DicePhysicsWorldOptions
@@ -309,7 +329,8 @@ export class RollPlanner {
             diceCount,
             sides,
             expectedValue,
-            slotX,
+            slotX: spawnPoint.x,
+            slotZ: spawnPoint.z,
             diceSize: probeWorld.config.diceSize
           }),
           throwForce
@@ -441,7 +462,7 @@ export class RollPlanner {
         position: {
           x: context.slotX,
           y: size * this.randomRange(2.2, 3.8),
-          z: 0
+          z: context.slotZ
         },
         quaternion: this.randomQuaternion(),
         velocity: {
@@ -485,7 +506,7 @@ export class RollPlanner {
       position: {
         x: context.slotX,
         y: supportY + dropHeight,
-        z: size * this.randomRange(-0.3, 0.3)
+        z: context.slotZ
       },
       quaternion,
       velocity: {
@@ -532,10 +553,6 @@ export class RollPlanner {
     }
 
     return sample;
-  }
-
-  private slotX(index: number, count: number, diceScale: number): number {
-    return (index - (count - 1) / 2) * this.slotSpacing * diceScale;
   }
 
   private assertWithinDeadline(startedAt: number): void {
