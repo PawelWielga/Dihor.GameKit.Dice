@@ -157,6 +157,26 @@ describe("DiceRollEvent", () => {
     ).toThrowError(RangeError);
   });
 
+  it("accepts legacy presimulated replay payloads without the discriminator", () => {
+    const payload = replayPayload();
+    delete payload.replay.plan.preSimulated;
+
+    const validated = validateDiceRollEvent(payload);
+
+    expect(validated.replay?.plan.preSimulated).toBe(true);
+  });
+
+  it("rejects direct physical plans received as authoritative replay data", () => {
+    const payload = replayPayload();
+    payload.replay.plan.preSimulated = false;
+    payload.replay.plan.simulationSteps = 0;
+    for (const die of payload.replay.plan.dice) {
+      die.expectedValue = 0;
+    }
+
+    expect(() => validateDiceRollEvent(payload)).toThrowError(/presimulated/i);
+  });
+
   it("rejects missing or malformed replay initial state data", () => {
     const missing = replayPayload();
     delete missing.replay.plan.dice[0].initialState;
