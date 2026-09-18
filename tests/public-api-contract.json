@@ -5,6 +5,7 @@
     "DEFAULT_DICE_APPEARANCE:value",
     "DEFAULT_DICE_FACE_LABEL_MODE:value",
     "DEFAULT_DICE_FONT_APPEARANCE:value",
+    "DICE_ROLL_EVENT_LIMITS:value",
     "DICE_ROLL_EVENT_TYPE:value",
     "DICE_ROLL_EVENT_VERSION:value",
     "DICE_ROLL_REPLAY_VERSION:value",
@@ -95,6 +96,7 @@
   "events": [
     "createDiceRollEvent:value",
     "CreateDiceRollEventOptions:type",
+    "DICE_ROLL_EVENT_LIMITS:value",
     "DICE_ROLL_EVENT_TYPE:value",
     "DICE_ROLL_EVENT_VERSION:value",
     "DICE_ROLL_REPLAY_VERSION:value",
@@ -142,6 +144,7 @@
     "DEFAULT_ENGRAVING_DEPTH:value",
     "DEFAULT_STABILITY_CONFIG:value",
     "DEFAULT_THROW_FORCE:value",
+    "DICE_ROLL_EVENT_LIMITS:value",
     "DICE_ROLL_EVENT_TYPE:value",
     "DICE_ROLL_EVENT_VERSION:value",
     "DICE_ROLL_REPLAY_VERSION:value",
