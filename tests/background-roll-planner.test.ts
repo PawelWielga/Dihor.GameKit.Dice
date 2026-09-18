@@ -4,7 +4,7 @@ import {
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   RollPlanningError,
-  type RollPlan,
+  type PresimulatedRollPlan,
   type RollPlanningWorkerLike
 } from "../src/index.js";
 import type {
@@ -16,7 +16,7 @@ class FakeWorker implements RollPlanningWorkerLike {
   onmessage: ((event: { readonly data: RollPlanningWorkerResponse }) => void) | null = null;
   onerror: ((event: { readonly message?: string }) => void) | null = null;
   readonly postMessage = vi.fn((request: RollPlanningWorkerRequest) => {
-    const plan: RollPlan = {
+    const plan: PresimulatedRollPlan = {
       rollId: request.result.rollId,
       dice: request.result.dice.map((die) => ({
         sides: die.sides,
@@ -30,7 +30,8 @@ class FakeWorker implements RollPlanningWorkerLike {
       })),
       physics: DEFAULT_DICE_PHYSICS_CONFIG,
       stability: DEFAULT_STABILITY_CONFIG,
-      simulationSteps: 12
+      simulationSteps: 12,
+      preSimulated: true
     };
 
     queueMicrotask(() => this.onmessage?.({ data: { id: request.id, ok: true, plan } }));
