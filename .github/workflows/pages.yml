@@ -120,7 +120,7 @@ jobs:
 
       - name: Build dev demo
         working-directory: dev-source
-        run: npm run build:demo -- --base=/PartyBeam.DiceKit/dev/
+        run: npm run build:demo -- --base=/Dihor.GameKit.Dice/dev/
 
       - name: Assemble Pages artifact
         shell: bash

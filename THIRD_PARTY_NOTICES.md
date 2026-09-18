@@ -2,7 +2,7 @@
 
 ## Cinzel
 
-PartyBeam.DiceKit bundles the Cinzel typeface as its default numeric dice font.
+Dihor.GameKit.Dice bundles the Cinzel typeface as its default numeric dice font.
 
 Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)
 

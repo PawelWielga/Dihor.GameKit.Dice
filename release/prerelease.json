@@ -2,5 +2,5 @@
   "version": "0.1.0-preview.1",
   "tag": "v0.1.0-preview.1",
   "license": "MIT",
-  "npmPackage": "@partybeam/dice-kit"
+  "npmPackage": "@dihor/gamekit-dice"
 }

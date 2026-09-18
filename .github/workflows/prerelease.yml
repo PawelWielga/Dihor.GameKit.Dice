@@ -68,7 +68,7 @@ jobs:
             echo "Release tag mismatch: expected $TAG, manifest has $MANIFEST_TAG" >&2
             exit 1
           fi
-          if [[ "$PACKAGE_NAME" != "@partybeam/dice-kit" || "$MANIFEST_PACKAGE" != "$PACKAGE_NAME" ]]; then
+          if [[ "$PACKAGE_NAME" != "@dihor/gamekit-dice" || "$MANIFEST_PACKAGE" != "$PACKAGE_NAME" ]]; then
             echo "Unexpected npm package name." >&2
             exit 1
           fi
@@ -143,7 +143,7 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: partybeam-dice-kit-${{ steps.version.outputs.version }}
+          name: dihor-gamekit-dice-${{ steps.version.outputs.version }}
           path: artifacts/
           if-no-files-found: error
 
@@ -159,11 +159,11 @@ jobs:
             gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
               --prerelease \
               --generate-notes \
-              --title "PartyBeam.DiceKit ${{ steps.version.outputs.version }}"
+              --title "Dihor.GameKit.Dice ${{ steps.version.outputs.version }}"
           else
             gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
               --target "$GITHUB_SHA" \
               --prerelease \
               --generate-notes \
-              --title "PartyBeam.DiceKit ${{ steps.version.outputs.version }}"
+              --title "Dihor.GameKit.Dice ${{ steps.version.outputs.version }}"
           fi

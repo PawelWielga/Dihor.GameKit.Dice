@@ -1,19 +1,19 @@
 # Multiplayer dice-roll events
 
-`DiceRollEvent` is a transport-neutral contract for sending an authoritative dice result from a PartyBeam host to clients.
+`DiceRollEvent` is a transport-neutral contract for sending an authoritative dice result from a game host to clients.
 
-DiceKit does not send the event itself. PartyGameKit, WebSockets, WebRTC, LAN messages or any future transport can carry the JSON payload without DiceKit depending on that transport.
+Dihor.GameKit.Dice does not send the event itself. WebSockets, WebRTC, LAN messages or any future transport can carry the JSON payload without Dihor.GameKit.Dice depending on that transport.
 
 ## Host flow
 
-The host owns the logical result. It may also create a physical `PresimulatedRollPlan` for clients that support full DiceKit playback. Direct physical plans are local playback inputs and cannot be attached as authoritative event replay data.
+The host owns the logical result. It may also create a physical `PresimulatedRollPlan` for clients that support full Dihor.GameKit.Dice playback. Direct physical plans are local playback inputs and cannot be attached as authoritative event replay data.
 
 ```ts
 import {
   DiceRoller,
   RollPlanner,
   createDiceRollEvent
-} from "@partybeam/dice-kit";
+} from "@dihor/gamekit-dice";
 
 const request = {
   dice: [
@@ -49,7 +49,7 @@ import {
   DICE_ROLL_REPLAY_VERSION,
   diceRollResultFromEvent,
   validateDiceRollEvent
-} from "@partybeam/dice-kit";
+} from "@dihor/gamekit-dice";
 
 const event = validateDiceRollEvent(JSON.parse(payload));
 const authoritativeResult = diceRollResultFromEvent(event);
