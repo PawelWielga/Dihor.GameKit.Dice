@@ -89,7 +89,62 @@ function validateConvexBoundary(boundary: readonly DiceArenaBoundaryPoint[]): nu
   return winding;
 }
 
+function quadrilateralCenter(
+  boundary: readonly DiceArenaBoundaryPoint[]
+): DiceSpawnPoint | undefined {
+  if (boundary.length !== 4) {
+    return undefined;
+  }
+
+  const a = boundary[0]!;
+  const b = boundary[1]!;
+  const c = boundary[2]!;
+  const d = boundary[3]!;
+  const diagonalAX = c.x - a.x;
+  const diagonalAZ = c.z - a.z;
+  const diagonalBX = d.x - b.x;
+  const diagonalBZ = d.z - b.z;
+  const denominator =
+    diagonalAX * diagonalBZ -
+    diagonalAZ * diagonalBX;
+
+  if (Math.abs(denominator) <= FIT_EPSILON) {
+    return undefined;
+  }
+
+  const offsetX = b.x - a.x;
+  const offsetZ = b.z - a.z;
+  const t =
+    (offsetX * diagonalBZ - offsetZ * diagonalBX) /
+    denominator;
+  const u =
+    (offsetX * diagonalAZ - offsetZ * diagonalAX) /
+    denominator;
+
+  if (
+    t < -FIT_EPSILON ||
+    t > 1 + FIT_EPSILON ||
+    u < -FIT_EPSILON ||
+    u > 1 + FIT_EPSILON
+  ) {
+    return undefined;
+  }
+
+  return {
+    x: a.x + diagonalAX * t,
+    z: a.z + diagonalAZ * t
+  };
+}
+
 function polygonCenter(boundary: readonly DiceArenaBoundaryPoint[]): DiceSpawnPoint {
+  // A camera viewport projected onto the table is a quadrilateral. Perspective
+  // projection preserves line intersections, so the diagonal intersection is
+  // the projected viewport center (and therefore the camera target on the table).
+  const projectiveCenter = quadrilateralCenter(boundary);
+  if (projectiveCenter) {
+    return projectiveCenter;
+  }
+
   const sum = boundary.reduce(
     (current, point) => ({ x: current.x + point.x, z: current.z + point.z }),
     { x: 0, z: 0 }
