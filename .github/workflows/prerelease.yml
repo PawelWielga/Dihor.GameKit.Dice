@@ -168,6 +168,43 @@ jobs:
           EXPECTED_ASSETS=("$PACKAGE_ASSET" "SHA256SUMS.txt")
 
           if gh release view "$TAG" >/dev/null 2>&1; then
+            if ! gh release view "$TAG" --json assets --jq '.assets[].name' \
+              | grep -Fxq "$PACKAGE_ASSET"; then
+              echo "Existing release $TAG is missing expected package asset $PACKAGE_ASSET." >&2
+              echo "Refusing to replace a published tag's package with bytes built from another commit." >&2
+              exit 1
+            fi
+
+            mkdir -p artifacts/published
+            gh release download "$TAG" \
+              --pattern "$PACKAGE_ASSET" \
+              --dir artifacts/published \
+              --clobber
+
+            PUBLISHED_PACKAGE="artifacts/published/$PACKAGE_ASSET"
+            RELEASE_DIGEST="$(
+              gh release view "$TAG" --json assets \
+                --jq ".assets[] | select(.name == \"$PACKAGE_ASSET\") | .digest"
+            )"
+            PUBLISHED_DIGEST="sha256:$(sha256sum "$PUBLISHED_PACKAGE" | cut -d' ' -f1)"
+
+            if [[ "$RELEASE_DIGEST" != "$PUBLISHED_DIGEST" ]]; then
+              echo "Published package digest does not match GitHub release metadata." >&2
+              echo "Expected: $RELEASE_DIGEST" >&2
+              echo "Actual:   $PUBLISHED_DIGEST" >&2
+              exit 1
+            fi
+
+            (
+              cd artifacts/published
+              sha256sum "$PACKAGE_ASSET"
+            ) > artifacts/SHA256SUMS.txt
+
+            (
+              cd artifacts/published
+              sha256sum -c ../SHA256SUMS.txt
+            )
+
             gh release view "$TAG" --json body --jq '.body' > release-notes.md
             sed -i \
               -e 's#PawelWielga/PartyBeam\.DiceKit#PawelWielga/Dihor.GameKit.Dice#g' \
@@ -194,7 +231,18 @@ jobs:
               fi
             done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
 
-            gh release upload "$TAG" "${RELEASE_ASSETS[@]}" --clobber
+            # Preserve the published package bytes for an existing tag. Only checksum
+            # metadata is refreshed after stale assets and legacy naming are cleaned.
+            gh release upload "$TAG" artifacts/SHA256SUMS.txt --clobber
+
+            FINAL_DIGEST="$(
+              gh release view "$TAG" --json assets \
+                --jq ".assets[] | select(.name == \"$PACKAGE_ASSET\") | .digest"
+            )"
+            if [[ "$FINAL_DIGEST" != "$RELEASE_DIGEST" ]]; then
+              echo "Existing release package digest changed during metadata cleanup." >&2
+              exit 1
+            fi
           elif git rev-parse "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
               --prerelease \
