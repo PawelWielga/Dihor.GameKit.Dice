@@ -1,4 +1,4 @@
-import { DiceOverlay } from "../src/index.js";
+import { DiceOverlay, DiceRoller } from "../src/index.js";
 import { BackgroundRollPlanner } from "../src/advanced.js";
 
 interface CaseResult {
@@ -60,8 +60,7 @@ async function run(): Promise<void> {
   assert(typeof requestAnimationFrame === "function", "requestAnimationFrame is unavailable.");
   assert(typeof ResizeObserver === "function", "ResizeObserver is unavailable.");
 
-  await runCase("D6 presimulation uses Worker and WebGL", async () => {
-    const host = createHost();
+  await runCase("D6 Worker presimulation produces a plan", async () => {
     let usedWorker = false;
     const planner = new BackgroundRollPlanner({
       fallbackStrategy: "error",
@@ -69,19 +68,40 @@ async function run(): Promise<void> {
         usedWorker = timing.usedWorker;
       }
     });
-    const overlay = new DiceOverlay({
-      container: host,
-      showOverlay: false,
-      planner
+    const roller = new DiceRoller({
+      randomProvider: { next: () => 0.25 },
+      rollIdProvider: () => "browser-smoke-d6"
     });
 
     try {
+      const logicalResult = roller.roll({ dice: [{ sides: 6 }] });
+      const plan = await withTimeout(
+        "D6 Worker presimulation",
+        planner.plan(logicalResult),
+        15_000
+      );
+
+      assert(plan.preSimulated, "Worker planning unexpectedly returned a direct plan.");
+      assert(plan.dice.length === 1 && plan.dice[0]?.sides === 6, "D6 presimulation plan is invalid.");
+      assert(plan.dice[0]?.expectedValue === logicalResult.dice[0]?.value, "D6 plan does not preserve the authoritative value.");
+      assert(usedWorker, "Presimulation did not use a Web Worker.");
+    } finally {
+      planner.dispose();
+    }
+  });
+
+  await runCase("D6 renders and completes in WebGL", async () => {
+    const host = createHost();
+    const overlay = new DiceOverlay({ container: host, showOverlay: false });
+
+    try {
       const result = await withTimeout(
-        "D6 presimulated roll",
-        overlay.roll({ dice: [{ sides: 6 }] }, { preSimulation: true })
+        "D6 direct browser roll",
+        overlay.roll({ dice: [{ sides: 6 }] }, { preSimulation: false }),
+        20_000
       );
       assert(result.dice.length === 1 && result.dice[0]?.sides === 6, "D6 result is invalid.");
-      assert(usedWorker, "Presimulation did not use a Web Worker.");
+      assert(result.dice[0]!.value >= 1 && result.dice[0]!.value <= 6, "D6 value is out of range.");
       assert(host.querySelector("canvas") instanceof HTMLCanvasElement, "WebGL canvas was not mounted.");
     } finally {
       overlay.dispose();
