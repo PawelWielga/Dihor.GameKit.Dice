@@ -58,7 +58,7 @@
     "test:browser": "node scripts/run-browser-smoke.mjs",
     "test:coverage": "vitest run --coverage && npm run test:api-contract",
     "benchmark": "npm run build --silent && node scripts/run-performance-baseline.mjs",
-    "benchmark:ci": "node scripts/run-performance-baseline.mjs --json performance-results.json"
+    "benchmark:ci": "node scripts/run-performance-baseline.mjs --check --json performance-results.json"
   },
   "dependencies": {
     "@fontsource/cinzel": "5.3.0",
