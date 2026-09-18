@@ -135,7 +135,7 @@ function requirePositiveInteger(name: string, value: unknown): number {
 function requireOptionalString(
   name: string,
   value: unknown,
-  maxLength = DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength
+  maxLength: number = DICE_ROLL_EVENT_LIMITS.maxAppearanceStringLength
 ): string | undefined {
   if (value === undefined) {
     return undefined;
