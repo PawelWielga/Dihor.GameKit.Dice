@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Severe regression guard. These are intentionally wider than the reference baseline and are not frame-time targets.",
+  "reference": {
+    "date": "2026-09-18",
+    "environment": "GitHub-hosted ubuntu-24.04, Node 22.12",
+    "note": "Reference values are documented in docs/performance.md; budgets intentionally include substantial runner variance."
+  },
+  "scenarios": {
+    "direct-d6": {
+      "maxMedianMs": 2,
+      "maxP95Ms": 5
+    },
+    "direct-mixed-3": {
+      "maxMedianMs": 2,
+      "maxP95Ms": 5
+    },
+    "direct-three-d10-max-force": {
+      "maxMedianMs": 2,
+      "maxP95Ms": 5
+    },
+    "direct-six-dice": {
+      "maxMedianMs": 2,
+      "maxP95Ms": 5
+    },
+    "presimulation-d6-seeded": {
+      "maxMedianMs": 50,
+      "maxP95Ms": 100
+    },
+    "playback-d6-cpu": {
+      "maxMedianMs": 30,
+      "maxP95Ms": 60
+    },
+    "playback-mixed-3-cpu": {
+      "maxMedianMs": 60,
+      "maxP95Ms": 120
+    },
+    "mesh-d6-pips": {
+      "maxMedianMs": 10,
+      "maxP95Ms": 25
+    },
+    "mesh-d20-numeric": {
+      "maxMedianMs": 15,
+      "maxP95Ms": 35
+    },
+    "mesh-d10-textured-memory": {
+      "maxMedianMs": 15,
+      "maxP95Ms": 35
+    }
+  }
+}
