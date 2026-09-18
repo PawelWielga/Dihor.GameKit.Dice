@@ -374,13 +374,19 @@ function validateArenaBoundaryFromUnknown(value: unknown): readonly DiceArenaBou
     throw new RangeError("DiceRollEvent replay plan physics.arenaBoundary must contain at least three points.");
   }
 
+  if (value.length > DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints) {
+    throw new RangeError(
+      `DiceRollEvent replay plan physics.arenaBoundary must contain at most ${DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryPoints} points.`
+    );
+  }
+
   const boundary = value.map((rawPoint, index) => {
     const point = requireRecord(
       `DiceRollEvent replay plan physics.arenaBoundary[${index}]`,
       rawPoint
     );
 
-    return {
+    const validated = {
       x: requireFiniteNumber(
         `DiceRollEvent replay plan physics.arenaBoundary[${index}].x`,
         point.x
@@ -390,6 +396,15 @@ function validateArenaBoundaryFromUnknown(value: unknown): readonly DiceArenaBou
         point.z
       )
     };
+
+    const magnitude = Math.hypot(validated.x, validated.z);
+    if (magnitude > DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryCoordinateMagnitude) {
+      throw new RangeError(
+        `DiceRollEvent replay plan physics.arenaBoundary[${index}] magnitude must be at most ${DICE_ROLL_EVENT_LIMITS.maxArenaBoundaryCoordinateMagnitude}.`
+      );
+    }
+
+    return validated;
   });
 
   for (let index = 0; index < boundary.length; index += 1) {
@@ -416,7 +431,8 @@ function validatePhysicsFromUnknown(value: unknown): DicePhysicsConfig {
   return {
     gravity: validateVectorFromUnknown(
       "DiceRollEvent replay plan physics.gravity",
-      physics.gravity
+      physics.gravity,
+      DICE_ROLL_EVENT_LIMITS.maxGravityMagnitude
     ),
     timeStep: requirePositiveNumber(
       "DiceRollEvent replay plan physics.timeStep",
@@ -438,13 +454,17 @@ function validatePhysicsFromUnknown(value: unknown): DicePhysicsConfig {
       "DiceRollEvent replay plan physics.angularDamping",
       physics.angularDamping
     ),
-    diceSize: requirePositiveNumber(
+    diceSize: requireNumberInRange(
       "DiceRollEvent replay plan physics.diceSize",
-      physics.diceSize
+      physics.diceSize,
+      DICE_ROLL_EVENT_LIMITS.minDiceSize,
+      DICE_ROLL_EVENT_LIMITS.maxDiceSize
     ),
-    arenaHalfExtent: requirePositiveNumber(
+    arenaHalfExtent: requireNumberInRange(
       "DiceRollEvent replay plan physics.arenaHalfExtent",
-      physics.arenaHalfExtent
+      physics.arenaHalfExtent,
+      Number.MIN_VALUE,
+      DICE_ROLL_EVENT_LIMITS.maxArenaHalfExtent
     ),
     ...(arenaBoundary === undefined ? {} : { arenaBoundary })
   };
@@ -462,13 +482,15 @@ function validateStabilityFromUnknown(value: unknown): StabilityConfig {
       "DiceRollEvent replay plan stability.angularThreshold",
       stability.angularThreshold
     ),
-    consecutiveSteps: requirePositiveInteger(
+    consecutiveSteps: requirePositiveIntegerAtMost(
       "DiceRollEvent replay plan stability.consecutiveSteps",
-      stability.consecutiveSteps
+      stability.consecutiveSteps,
+      DICE_ROLL_EVENT_LIMITS.maxStabilityConsecutiveSteps
     ),
-    maxSteps: requirePositiveInteger(
+    maxSteps: requirePositiveIntegerAtMost(
       "DiceRollEvent replay plan stability.maxSteps",
-      stability.maxSteps
+      stability.maxSteps,
+      DICE_ROLL_EVENT_LIMITS.maxStabilitySteps
     )
   };
 }
@@ -482,7 +504,8 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
   return {
     position: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.position`,
-      state.position
+      state.position,
+      DICE_ROLL_EVENT_LIMITS.maxPositionMagnitude
     ),
     quaternion: validateQuaternionFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.quaternion`,
@@ -490,11 +513,13 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
     ),
     velocity: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.velocity`,
-      state.velocity
+      state.velocity,
+      DICE_ROLL_EVENT_LIMITS.maxVelocityMagnitude
     ),
     angularVelocity: validateVectorFromUnknown(
       `DiceRollEvent replay plan dice[${index}].initialState.angularVelocity`,
-      state.angularVelocity
+      state.angularVelocity,
+      DICE_ROLL_EVENT_LIMITS.maxAngularVelocityMagnitude
     )
   };
 }
