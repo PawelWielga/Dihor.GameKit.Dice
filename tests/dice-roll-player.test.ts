@@ -2,6 +2,7 @@ import { Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
 import {
   DiceMeshFactory,
+  DicePhysicsWorld,
   DiceRollPlaybackError,
   DiceRollPlayer,
   DiceScene,
@@ -118,6 +119,41 @@ describe("DiceRollPlayer", () => {
 
     player.clear();
     expect(diceScene.content.children).toHaveLength(0);
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("keeps the active physical arena synchronized with camera and viewport changes", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    diceScene.setSize(800, 800);
+    const player = new DiceRollPlayer(target, { scheduler });
+    const basePlan = createPlan();
+    const plan: RollPlan = {
+      ...basePlan,
+      physics: {
+        ...basePlan.physics,
+        arenaBoundary: diceScene.getTableBoundary()
+      }
+    };
+    const updateArenaBoundary = vi.spyOn(DicePhysicsWorld.prototype, "updateArenaBoundary");
+
+    const playback = player.play(plan);
+    scheduler.runFrames(1);
+    updateArenaBoundary.mockClear();
+
+    diceScene.setCamera({ x: 35, y: 42, z: 12 });
+    diceScene.setSize(1200, 700);
+    const expectedBoundary = diceScene.getTableBoundary();
+    scheduler.runFrames(1);
+
+    expect(updateArenaBoundary).toHaveBeenCalledTimes(1);
+    expect(updateArenaBoundary).toHaveBeenLastCalledWith(expectedBoundary);
+
+    scheduler.runFrames(20);
+    await playback;
+
+    updateArenaBoundary.mockRestore();
     player.dispose();
     diceScene.dispose();
   });
