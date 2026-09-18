@@ -29,44 +29,95 @@ interface LabelSurface {
   readonly mesh: Mesh;
   readonly geometry: PlaneGeometry;
   readonly material: MeshStandardMaterial;
+  releaseLabel(): void;
 }
 
-interface CachedLabelResource {
+export interface DiceFaceLabelResource {
   readonly texture: CanvasTexture;
   readonly bumpTexture: CanvasTexture;
   dispose(): void;
 }
 
+interface CachedLabelEntry {
+  readonly resource: DiceFaceLabelResource;
+  references: number;
+}
+
+interface DiceFaceLabelLease {
+  readonly resource: DiceFaceLabelResource;
+  release(): void;
+}
+
+export const DEFAULT_DICE_FACE_LABEL_CACHE_MAX_ENTRIES = 64;
+
 /**
- * Factory-owned cache for generated numeric label and bump textures.
- * Meshes own only their geometry/material; cached textures stay valid until the cache is disposed.
+ * Factory-owned LRU cache for generated numeric label and bump textures.
+ *
+ * Entries may temporarily exceed the configured limit while every candidate is referenced by a
+ * live mesh. Once a lease is released, the oldest unused entries are evicted until the limit is
+ * satisfied.
  */
 export class DiceFaceLabelCache {
-  private readonly entries = new Map<string, CachedLabelResource>();
+  private readonly entries = new Map<string, CachedLabelEntry>();
+  private readonly maxEntries: number;
   private disposed = false;
+
+  constructor(maxEntries = DEFAULT_DICE_FACE_LABEL_CACHE_MAX_ENTRIES) {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+      throw new RangeError(`maxEntries must be a positive integer; received ${String(maxEntries)}.`);
+    }
+
+    this.maxEntries = maxEntries;
+  }
 
   get size(): number {
     return this.entries.size;
   }
 
-  getOrCreate(
+  acquire(
     key: string,
-    create: () => CachedLabelResource | undefined
-  ): CachedLabelResource | undefined {
+    create: () => DiceFaceLabelResource | undefined
+  ): DiceFaceLabelLease | undefined {
     if (this.disposed) {
       throw new Error("DiceFaceLabelCache has been disposed.");
     }
 
-    const existing = this.entries.get(key);
-    if (existing) {
-      return existing;
+    let entry = this.entries.get(key);
+
+    if (entry) {
+      // Refresh insertion order so Map iteration remains oldest-to-newest for LRU eviction.
+      this.entries.delete(key);
+      this.entries.set(key, entry);
+    } else {
+      const resource = create();
+
+      if (!resource) {
+        return undefined;
+      }
+
+      entry = { resource, references: 0 };
+      this.entries.set(key, entry);
     }
 
-    const resource = create();
-    if (resource) {
-      this.entries.set(key, resource);
-    }
-    return resource;
+    entry.references += 1;
+    this.evictUnused();
+
+    let released = false;
+    return {
+      resource: entry.resource,
+      release: () => {
+        if (released) {
+          return;
+        }
+
+        released = true;
+        entry!.references = Math.max(0, entry!.references - 1);
+
+        if (!this.disposed) {
+          this.evictUnused();
+        }
+      }
+    };
   }
 
   dispose(): void {
@@ -75,10 +126,27 @@ export class DiceFaceLabelCache {
     }
 
     this.disposed = true;
-    for (const resource of this.entries.values()) {
-      resource.dispose();
+    for (const entry of this.entries.values()) {
+      entry.resource.dispose();
     }
     this.entries.clear();
+  }
+
+  private evictUnused(): void {
+    if (this.entries.size <= this.maxEntries) {
+      return;
+    }
+
+    for (const [key, entry] of this.entries) {
+      if (this.entries.size <= this.maxEntries) {
+        return;
+      }
+
+      if (entry.references === 0) {
+        entry.resource.dispose();
+        this.entries.delete(key);
+      }
+    }
   }
 }
 
@@ -458,28 +526,22 @@ function hideLegacyMarkings(mesh: DiceMesh, sides: DiceSides): void {
 }
 
 function labelCacheKey(
-  sides: DiceSides,
   value: number,
-  color: string,
-  font: ResolvedDiceFontAppearance,
-  engravingDepth: number
+  font: ResolvedDiceFontAppearance
 ): string {
   return JSON.stringify([
-    sides,
     value,
     font.family,
     font.weight,
     font.size,
-    font.url ?? "",
-    color,
-    engravingDepth
+    font.url ?? ""
   ]);
 }
 
 function createLabelResource(
   value: number,
   font: ResolvedDiceFontAppearance
-): CachedLabelResource | undefined {
+): DiceFaceLabelResource | undefined {
   const canvas = createCanvas();
   const bumpCanvas = createCanvas(BUMP_CANVAS_SIZE);
 
@@ -546,25 +608,26 @@ function createLabelSurface(
   engravingDepth: number,
   cache: DiceFaceLabelCache
 ): LabelSurface | undefined {
-  const resource = cache.getOrCreate(
-    labelCacheKey(sides, face.value, color, font, engravingDepth),
+  const lease = cache.acquire(
+    labelCacheKey(face.value, font),
     () => createLabelResource(face.value, font)
   );
 
-  if (!resource) {
+  if (!lease) {
     return undefined;
   }
 
-  const topology = getDiceTopology(sides);
-  const basis = faceBasis(topology, face, size);
-  const planeSize =
-    Math.min(basis.width, basis.height) * getDiceFaceLabelPlaneScale(sides) * overlayScale;
-  const geometry = new PlaneGeometry(planeSize, planeSize);
+  try {
+    const topology = getDiceTopology(sides);
+    const basis = faceBasis(topology, face, size);
+    const planeSize =
+      Math.min(basis.width, basis.height) * getDiceFaceLabelPlaneScale(sides) * overlayScale;
+    const geometry = new PlaneGeometry(planeSize, planeSize);
 
-  const material = new MeshStandardMaterial({
+    const material = new MeshStandardMaterial({
     color,
-    map: resource.texture,
-    bumpMap: resource.bumpTexture,
+    map: lease.resource.texture,
+    bumpMap: lease.resource.bumpTexture,
     bumpScale: getDiceFaceLabelBumpScale(engravingDepth),
     metalness: 0,
     roughness: ENGRAVED_ROUGHNESS,
@@ -588,11 +651,16 @@ function createLabelSurface(
     )
   );
 
-  return {
-    mesh,
-    geometry,
-    material
-  };
+    return {
+      mesh,
+      geometry,
+      material,
+      releaseLabel: lease.release
+    };
+  } catch (error) {
+    lease.release();
+    throw error;
+  }
 }
 
 /**
@@ -671,6 +739,7 @@ export function applyDiceFaceLabels(
         mesh.object.remove(surface.mesh);
         surface.geometry.dispose();
         surface.material.dispose();
+        surface.releaseLabel();
       }
 
       if (!sharedCache) {
