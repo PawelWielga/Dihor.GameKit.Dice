@@ -194,20 +194,19 @@ async function run(): Promise<void> {
   });
 }
 
-run()
-  .then(() => {
-    document.body.dataset.browserSmokeStatus = "passed";
-    output.textContent = JSON.stringify({ status: "passed", results }, null, 2);
-  })
-  .catch((error: unknown) => {
-    document.body.dataset.browserSmokeStatus = "failed";
-    output.textContent = JSON.stringify(
-      {
-        status: "failed",
-        error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
-        results
-      },
-      null,
-      2
-    );
-  });
+try {
+  await run();
+  document.body.dataset.browserSmokeStatus = "passed";
+  output.textContent = JSON.stringify({ status: "passed", results }, null, 2);
+} catch (error: unknown) {
+  document.body.dataset.browserSmokeStatus = "failed";
+  output.textContent = JSON.stringify(
+    {
+      status: "failed",
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
+      results
+    },
+    null,
+    2
+  );
+}
