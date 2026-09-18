@@ -326,6 +326,81 @@ describe("DiceOverlay", () => {
     overlay.dispose();
   });
 
+  it("rejects invalid direct modifiers before rendering, planning or playback and remains reusable", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    player.directValues = [4];
+    const rendererFactory = vi.fn(() => new FakeRenderer());
+    const playerFactory = vi.fn(() => player);
+    const directPlan = vi.fn((request: { dice: readonly { sides: 4 | 6 | 8 | 10 | 12 | 20 }[] }, rollId: string): RollPlan => {
+      const zero = { x: 0, y: 0, z: 0 } as const;
+
+      return {
+        rollId,
+        dice: request.dice.map((die, index) => ({
+          sides: die.sides,
+          expectedValue: 0,
+          initialState: {
+            position: { x: index * 2, y: 1, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 },
+            velocity: zero,
+            angularVelocity: zero
+          }
+        })),
+        physics: DEFAULT_DICE_PHYSICS_CONFIG,
+        stability: DEFAULT_STABILITY_CONFIG,
+        simulationSteps: 0,
+        preSimulated: false
+      };
+    });
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: {
+        roll: vi.fn(() => {
+          throw new Error("logical roller must not run in direct mode");
+        }),
+        createRollId: () => "direct-validation"
+      },
+      planner: { plan: vi.fn() },
+      directPlanner: { plan: directPlan },
+      rendererFactory,
+      playerFactory
+    });
+
+    for (const modifier of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      await expect(
+        overlay.roll(
+          { dice: [{ sides: 6 }], modifier },
+          { preSimulation: false }
+        )
+      ).rejects.toMatchObject({
+        name: "DiceOverlayError",
+        phase: "roll"
+      } satisfies Partial<DiceOverlayError>);
+
+      expect(overlay.isOpen).toBe(false);
+      expect(findByAttribute(documentRef.body, "data-partybeam-dice-overlay")).toBeUndefined();
+    }
+
+    expect(directPlan).not.toHaveBeenCalled();
+    expect(rendererFactory).not.toHaveBeenCalled();
+    expect(playerFactory).not.toHaveBeenCalled();
+    expect(player.calls).toHaveLength(0);
+
+    const valid = await overlay.roll(
+      { dice: [{ sides: 6 }], modifier: 1 },
+      { preSimulation: false }
+    );
+
+    expect(valid.total).toBe(5);
+    expect(directPlan).toHaveBeenCalledTimes(1);
+    expect(rendererFactory).toHaveBeenCalledTimes(1);
+    expect(playerFactory).toHaveBeenCalledTimes(1);
+    expect(player.calls).toHaveLength(1);
+
+    overlay.dispose();
+  });
+
   it("uses a requested dice total only in presimulated mode", async () => {
     const documentRef = new FakeDocument();
     const roller = new DiceRoller({
