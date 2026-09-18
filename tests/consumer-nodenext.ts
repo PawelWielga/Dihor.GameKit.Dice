@@ -11,7 +11,7 @@ import {
   type DiceRollResult,
   type DirectRollPlan,
   type PresimulatedRollPlan
-} from "@partybeam/dice-kit";
+} from "@dihor/gamekit-dice";
 
 const request: DiceRollRequest = {
   dice: [

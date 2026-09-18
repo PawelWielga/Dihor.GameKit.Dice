@@ -235,7 +235,7 @@ function createD6(): DiceTopology {
     { x: -1, y: 1, z: 1 }
   ];
 
-  // Preserve the established PartyBeam D6 mapping: +Y, +Z, +X, -X, -Z, -Y.
+  // Preserve the established D6 mapping: +Y, +Z, +X, -X, -Z, -Y.
   const faces = [
     [3, 2, 6, 7],
     [4, 5, 6, 7],

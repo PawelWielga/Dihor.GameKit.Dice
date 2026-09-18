@@ -16,7 +16,7 @@ export interface QuaternionLike {
 export const D6_FACE_VALUES = [1, 2, 3, 4, 5, 6] as const;
 
 /**
- * Canonical local-space face normals for PartyBeam.DiceKit D6 dice.
+ * Canonical local-space face normals for D6 dice.
  * Opposite faces preserve the classic sum-to-seven arrangement.
  */
 export const D6_FACE_NORMALS: Readonly<Record<D6FaceValue, D6FaceNormal>> = {

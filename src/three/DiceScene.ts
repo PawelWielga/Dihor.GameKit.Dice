@@ -180,10 +180,10 @@ export class DiceScene {
     this.scene.background = background === null ? null : new Color(background);
     this.setCamera(options.camera);
 
-    this.content.name = "PartyBeam.DiceKit content";
+    this.content.name = "Dihor.GameKit.Dice content";
     this.scene.add(this.content);
 
-    this.lighting.name = "PartyBeam.DiceKit lighting";
+    this.lighting.name = "Dihor.GameKit.Dice lighting";
     this.scene.add(this.lighting);
     this.setLighting(options.lighting);
 
@@ -198,7 +198,7 @@ export class DiceScene {
       });
 
       const floor = new Mesh(this.floorGeometry, this.floorMaterial);
-      floor.name = "PartyBeam.DiceKit floor";
+      floor.name = "Dihor.GameKit.Dice floor";
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = 0;
       floor.receiveShadow = true;
@@ -232,7 +232,7 @@ export class DiceScene {
       options.ambient?.color ?? DEFAULT_AMBIENT_COLOR,
       nonNegativeOr(options.ambient?.intensity, DEFAULT_AMBIENT_INTENSITY)
     );
-    ambient.name = "PartyBeam.DiceKit ambient light";
+    ambient.name = "Dihor.GameKit.Dice ambient light";
     this.lighting.add(ambient);
 
     const configuredLights = options.lights ?? [{
@@ -253,7 +253,7 @@ export class DiceScene {
           config.color ?? DEFAULT_KEY_LIGHT_COLOR,
           nonNegativeOr(config.intensity, DEFAULT_KEY_LIGHT_INTENSITY)
         );
-        light.name = `PartyBeam.DiceKit directional light ${index + 1}`;
+        light.name = `Dihor.GameKit.Dice directional light ${index + 1}`;
         light.position.set(position.x, position.y, position.z);
         light.castShadow = config.castShadow ?? false;
         this.lighting.add(light);
@@ -268,7 +268,7 @@ export class DiceScene {
         nonNegativeOr(config.distance, 0),
         nonNegativeOr(config.decay, DEFAULT_POINT_LIGHT_DECAY)
       );
-      light.name = `PartyBeam.DiceKit point light ${index + 1}`;
+      light.name = `Dihor.GameKit.Dice point light ${index + 1}`;
       light.position.set(position.x, position.y, position.z);
       light.castShadow = config.castShadow ?? false;
       this.lighting.add(light);

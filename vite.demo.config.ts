@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: "demo",
-  base: "/PartyBeam.DiceKit/",
+  base: "/Dihor.GameKit.Dice/",
   build: {
     outDir: "../dist-demo",
     emptyOutDir: true,

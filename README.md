@@ -1,6 +1,6 @@
-# PartyBeam.DiceKit
+# Dihor.GameKit.Dice
 
-Reusable 3D dice rolling library for PartyBeam games, built with TypeScript, Three.js and cannon-es.
+Reusable 3D dice rolling library for games and applications, built with TypeScript, Three.js and cannon-es.
 
 ## Status
 
@@ -8,7 +8,7 @@ The reusable MVP pipeline is implemented: direct physical rolls and worker-backe
 
 ## Goals
 
-PartyBeam.DiceKit provides a framework-agnostic API for rolling configurable 3D dice in games and applications. The logical result is decided by the core layer first, while the visual layer uses a planned physics simulation to present a natural-looking roll that lands on the expected physical face.
+Dihor.GameKit.Dice provides a framework-agnostic API for rolling configurable 3D dice in games and applications. The logical result is decided by the core layer first, while the visual layer uses a planned physics simulation to present a natural-looking roll that lands on the expected physical face.
 
 The library supports:
 
@@ -38,18 +38,18 @@ The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
 
 ## Prerelease package
 
-DiceKit uses the same prerelease model as PartyGameKit. Release versions follow the `0.1.0-preview.N` convention and are packaged with `npm pack` as a `.tgz` artifact attached to a GitHub Prerelease.
+Dihor.GameKit.Dice prereleases follow the `0.1.0-preview.N` convention and are packaged with `npm pack` as a `.tgz` artifact attached to a GitHub Prerelease.
 
 The first release line is:
 
 ```text
-@partybeam/dice-kit 0.1.0-preview.1
+@dihor/gamekit-dice 0.1.0-preview.1
 tag: v0.1.0-preview.1
 ```
 
 The prerelease workflow validates the manifest and package version, runs the full test/build suite, verifies package contents and MIT license metadata, creates SHA-256 checksums, uploads the npm artifact and creates or updates the matching GitHub Prerelease.
 
-This does **not** publish the package to the public npm registry. The GitHub Release artifact is the distribution channel, matching PartyGameKit's current prerelease approach.
+This does **not** publish the package to the public npm registry. The GitHub Release artifact is the distribution channel.
 
 ## Development
 
@@ -67,7 +67,7 @@ npm run dev:demo
 
 The demo is served under the same project path used by GitHub Pages:
 
-`http://localhost:5173/PartyBeam.DiceKit/`
+`http://localhost:5173/Dihor.GameKit.Dice/`
 
 Build the library:
 
@@ -150,7 +150,7 @@ Presimulated mode keeps the logical result authoritative and never snaps/remaps 
 A normal game can use `DiceOverlay` for the complete logical → planned → visible roll:
 
 ```ts
-import { DiceOverlay } from "@partybeam/dice-kit";
+import { DiceOverlay } from "@dihor/gamekit-dice";
 
 const dice = new DiceOverlay();
 
@@ -201,7 +201,7 @@ import {
   DiceRoller,
   RollPlanner,
   createSeededRandomProvider
-} from "@partybeam/dice-kit";
+} from "@dihor/gamekit-dice";
 
 const seed = "match-42";
 
@@ -227,7 +227,7 @@ See [`docs/replay-and-determinism.md`](./docs/replay-and-determinism.md) for the
 A host can package the authoritative result and optional replay plan into a JSON-friendly `DiceRollEvent`:
 
 ```ts
-import { createDiceRollEvent } from "@partybeam/dice-kit";
+import { createDiceRollEvent } from "@dihor/gamekit-dice";
 
 const event = createDiceRollEvent(result, {
   definitions: request.dice,
@@ -237,7 +237,7 @@ const event = createDiceRollEvent(result, {
 const payload = JSON.stringify(event);
 ```
 
-DiceKit deliberately does not send the payload. PartyGameKit, WebSockets, WebRTC or another application transport can carry it. Clients reconstruct the logical result with `diceRollResultFromEvent(event)` and must not roll a replacement result locally. `event.replay` is optional presentation data; clients that cannot or do not want to run full physics can display the authoritative values directly.
+Dihor.GameKit.Dice deliberately does not send the payload. WebSockets, WebRTC or another application transport can carry it. Clients reconstruct the logical result with `diceRollResultFromEvent(event)` and must not roll a replacement result locally. `event.replay` is optional presentation data; clients that cannot or do not want to run full physics can display the authoritative values directly.
 
 See [`docs/multiplayer-events.md`](./docs/multiplayer-events.md) for host/client flow, versioning and fallback behavior.
 
@@ -247,7 +247,7 @@ The interactive development application lives in `demo/` and is published automa
 
 Live demo:
 
-https://pawelwielga.github.io/PartyBeam.DiceKit/
+https://pawelwielga.github.io/Dihor.GameKit.Dice/
 
 The Pages workflow builds the demo with `npm run build:demo`, uploads `dist-demo/` as the Pages artifact and deploys it without committing generated files to `/docs`.
 
@@ -268,7 +268,7 @@ See [`AGENTS.md`](./AGENTS.md) for detailed implementation rules.
 
 ## External references
 
-Public examples and repositories may be studied to understand general techniques and architectural patterns. PartyBeam.DiceKit code, geometries, models, textures and assets are implemented independently in this repository. Do not copy external implementation code or assets into the project.
+Public examples and repositories may be studied to understand general techniques and architectural patterns. Dihor.GameKit.Dice code, geometries, models, textures and assets are implemented independently in this repository. Do not copy external implementation code or assets into the project.
 
 ## Roadmap
 
@@ -276,4 +276,4 @@ The implementation roadmap is tracked in GitHub Issues, starting with the MVP ro
 
 ## License
 
-License terms for PartyBeam.DiceKit will be defined before the first public package release.
+Dihor.GameKit.Dice is licensed under the MIT License. See [`LICENSE`](./LICENSE).

@@ -45,7 +45,7 @@ function createBrowserPlanningWorker(): RollPlanningWorkerLike | undefined {
   try {
     return new Worker(new URL("./RollPlannerWorker.ts", import.meta.url), {
       type: "module",
-      name: "partybeam-dice-planner"
+      name: "dihor-gamekit-dice-planner"
     }) as unknown as RollPlanningWorkerLike;
   } catch {
     return undefined;

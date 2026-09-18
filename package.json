@@ -1,20 +1,20 @@
 {
-  "name": "@partybeam/dice-kit",
+  "name": "@dihor/gamekit-dice",
   "version": "0.1.0-preview.1",
-  "description": "Reusable framework-agnostic 3D dice rolling library for PartyBeam games.",
+  "description": "Reusable framework-agnostic 3D dice rolling library for games and applications.",
   "type": "module",
   "sideEffects": false,
   "license": "MIT",
   "engines": {
     "node": ">=22.12.0"
   },
-  "main": "./dist/partybeam-dice-kit.js",
-  "module": "./dist/partybeam-dice-kit.js",
+  "main": "./dist/dihor-gamekit-dice.js",
+  "module": "./dist/dihor-gamekit-dice.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/partybeam-dice-kit.js"
+      "import": "./dist/dihor-gamekit-dice.js"
     }
   },
   "files": [
@@ -48,12 +48,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PawelWielga/PartyBeam.DiceKit.git"
+    "url": "git+https://github.com/PawelWielga/Dihor.GameKit.Dice.git"
   },
   "bugs": {
-    "url": "https://github.com/PawelWielga/PartyBeam.DiceKit/issues"
+    "url": "https://github.com/PawelWielga/Dihor.GameKit.Dice/issues"
   },
-  "homepage": "https://github.com/PawelWielga/PartyBeam.DiceKit#readme",
+  "homepage": "https://github.com/PawelWielga/Dihor.GameKit.Dice#readme",
   "keywords": [
     "dice",
     "3d",
@@ -61,7 +61,8 @@
     "cannon-es",
     "physics",
     "typescript",
-    "partybeam",
+    "dihor",
+    "gamekit",
     "games"
   ]
 }

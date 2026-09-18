@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Instructions for coding agents working in `PartyBeam.DiceKit`.
+Instructions for coding agents working in `Dihor.GameKit.Dice`.
 
 ## Project purpose
 
-`PartyBeam.DiceKit` is a reusable, framework-agnostic TypeScript library for presenting configurable 3D dice rolls in PartyBeam games and other applications.
+`Dihor.GameKit.Dice` is a reusable, framework-agnostic TypeScript library for presenting configurable 3D dice rolls in games and applications.
 
 The logical roll result is authoritative and is determined before the visible animation. The physics layer plans and replays a physical roll that lands on the expected physical face. Three.js renders the scene; cannon-es handles physics.
 
@@ -54,7 +54,7 @@ src/
 
 - Owns versioned JSON-friendly contracts such as `DiceRollEvent`.
 - May reference logical `core` types and replay-plan types, but must not own game logic or physics execution.
-- Must not depend on Three.js, overlay UI, PartyGameKit, WebSockets or another concrete transport.
+- Must not depend on Three.js, overlay UI, WebSockets, WebRTC or another concrete transport.
 - Host-provided logical values remain authoritative. Replay data is optional presentation input only.
 - New incompatible replay payloads require an explicit new replay version rather than silently changing an existing version.
 

@@ -4,9 +4,9 @@ export default defineConfig({
   build: {
     lib: {
       entry: "src/index.ts",
-      name: "PartyBeamDiceKit",
+      name: "DihorGameKitDice",
       formats: ["es"],
-      fileName: "partybeam-dice-kit"
+      fileName: "dihor-gamekit-dice"
     },
     rollupOptions: {
       external: [/^three(?:\/.*)?$/, "cannon-es"]

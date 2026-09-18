@@ -1,6 +1,6 @@
 # Seeded rolls and replay
 
-DiceKit separates deterministic game data from best-effort physical presentation.
+Dihor.GameKit.Dice separates deterministic game data from best-effort physical presentation.
 
 ## Seeded random streams
 
@@ -13,7 +13,7 @@ import {
   DiceRoller,
   RollPlanner,
   createSeededRandomProvider
-} from "@partybeam/dice-kit";
+} from "@dihor/gamekit-dice";
 
 const seed = "match-2026-09-17";
 
@@ -32,7 +32,7 @@ A seeded provider is opt-in. Existing callers that do not need deterministic beh
 
 ## What is deterministic
 
-For a fixed DiceKit implementation:
+For a fixed Dihor.GameKit.Dice implementation:
 
 - the same seed + stream produces the same `RandomProvider` sample sequence,
 - the same logical request with the same logical random stream produces the same die values,
@@ -43,7 +43,7 @@ For a fixed DiceKit implementation:
 
 ## What is not guaranteed across environments
 
-DiceKit does not promise bit-for-bit identical physics across different browsers, CPUs, JavaScript engines or `cannon-es` versions. Floating-point and engine differences can change the exact path of a visible simulation.
+Dihor.GameKit.Dice does not promise bit-for-bit identical physics across different browsers, CPUs, JavaScript engines or `cannon-es` versions. Floating-point and engine differences can change the exact path of a visible simulation.
 
 The authoritative game result remains the logical `DiceRollResult`. A replayed client must not replace that result with a different locally simulated value.
 
@@ -72,4 +72,4 @@ const restored = JSON.parse(saved);
 // without rolling or planning again.
 ```
 
-For long-lived saved replays, applications should also record their own DiceKit/package version next to the plan so they can make an explicit compatibility decision after future physics or geometry changes.
+For long-lived saved replays, applications should also record their own Dihor.GameKit.Dice/package version next to the plan so they can make an explicit compatibility decision after future physics or geometry changes.

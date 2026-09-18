@@ -790,7 +790,7 @@ export class DiceMeshFactory {
     const faceTextureMaterials: MeshStandardMaterial[] = [];
 
     const object = new Group();
-    object.name = "PartyBeam.DiceKit D6";
+    object.name = "Dihor.GameKit.Dice D6";
 
     const body = new Mesh(bodyGeometry, bodyMaterial);
     body.name = "D6 body";
@@ -897,7 +897,7 @@ export class DiceMeshFactory {
       flatShading: false
     });
     const object = new Group();
-    object.name = `PartyBeam.DiceKit D${sides}`;
+    object.name = `Dihor.GameKit.Dice D${sides}`;
     const body = new Mesh(bodyGeometry, bodyMaterial);
     body.name = `D${sides} body`;
     body.castShadow = true;

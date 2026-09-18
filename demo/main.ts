@@ -689,7 +689,7 @@ function createFontAppearance(): DiceFontAppearance | undefined {
       }
 
       return {
-        family: family || "PartyBeam Custom Dice Font",
+        family: family || "Dihor GameKit Dice Custom Font",
         weight,
         size,
         ...(url ? { url } : {})
@@ -877,7 +877,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
     resultJson.textContent = JSON.stringify({ error: message }, null, 2);
     updateDebugPanel();
     setStatus("Roll failed", "error");
-    console.error("PartyBeam.DiceKit demo roll failed", error);
+    console.error("Dihor.GameKit.Dice demo roll failed", error);
   } finally {
     setRollingState(false);
   }
