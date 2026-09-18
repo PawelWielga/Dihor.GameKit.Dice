@@ -663,6 +663,13 @@ function createLabelSurface(
   }
 }
 
+function disposeLabelSurface(mesh: DiceMesh, surface: LabelSurface): void {
+  mesh.object.remove(surface.mesh);
+  surface.geometry.dispose();
+  surface.material.dispose();
+  surface.releaseLabel();
+}
+
 /**
  * Replaces legacy generated numeric markings with font-backed canvas labels.
  * D6 is changed only when `faceLabelMode` is `numbers`; pips remain the default.
@@ -687,38 +694,50 @@ export function applyDiceFaceLabels(
   const overlayScale = existingOverlayScale(mesh, sides);
   const surfaces: LabelSurface[] = [];
 
-  for (const face of topology.faces) {
-    if (texturedValues.has(face.value)) {
-      continue;
+  try {
+    for (const face of topology.faces) {
+      if (texturedValues.has(face.value)) {
+        continue;
+      }
+
+      const surface = createLabelSurface(
+        sides,
+        face,
+        size,
+        overlayScale,
+        resolved.markingsColor,
+        resolvedFont,
+        resolved.engravingDepth,
+        cache
+      );
+
+      if (surface) {
+        surfaces.push(surface);
+      }
     }
 
-    const surface = createLabelSurface(
-      sides,
-      face,
-      size,
-      overlayScale,
-      resolved.markingsColor,
-      resolvedFont,
-      resolved.engravingDepth,
-      cache
-    );
-
-    if (surface) {
-      surfaces.push(surface);
+    if (surfaces.length === 0) {
+      if (!sharedCache) {
+        cache.dispose();
+      }
+      return mesh;
     }
-  }
 
-  if (surfaces.length === 0) {
+    hideLegacyMarkings(mesh, sides);
+
+    for (const surface of surfaces) {
+      mesh.object.add(surface.mesh);
+    }
+  } catch (error) {
+    for (const surface of surfaces) {
+      disposeLabelSurface(mesh, surface);
+    }
+
     if (!sharedCache) {
       cache.dispose();
     }
-    return mesh;
-  }
 
-  hideLegacyMarkings(mesh, sides);
-
-  for (const surface of surfaces) {
-    mesh.object.add(surface.mesh);
+    throw error;
   }
 
   let disposed = false;
@@ -736,10 +755,7 @@ export function applyDiceFaceLabels(
       disposed = true;
 
       for (const surface of surfaces) {
-        mesh.object.remove(surface.mesh);
-        surface.geometry.dispose();
-        surface.material.dispose();
-        surface.releaseLabel();
+        disposeLabelSurface(mesh, surface);
       }
 
       if (!sharedCache) {
