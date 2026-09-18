@@ -295,6 +295,8 @@ export class DiceRollPlayer {
       return;
     }
 
+    this.syncArenaBoundary(session);
+
     if (session.lastTimestampMs === undefined) {
       session.lastTimestampMs = timestampMs;
       this.target.render();
@@ -354,6 +356,14 @@ export class DiceRollPlayer {
     this.syncMeshes(session.bodies, session.meshes);
     this.target.render();
     this.scheduleFrame(session);
+  }
+
+  private syncArenaBoundary(session: PlaybackSession): void {
+    if (session.plan.physics.arenaBoundary === undefined) {
+      return;
+    }
+
+    session.world.updateArenaBoundary(this.target.diceScene.getTableBoundary());
   }
 
   private finishSession(session: PlaybackSession): void {
