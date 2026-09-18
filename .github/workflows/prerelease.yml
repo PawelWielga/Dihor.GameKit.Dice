@@ -1,0 +1,169 @@
+name: Prerelease
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v0.1.0-preview.*'
+    paths:
+      - 'release/prerelease.json'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Prerelease tag, for example v0.1.0-preview.1
+        required: true
+        default: v0.1.0-preview.1
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(jq -r '.tag' release/prerelease.json)"
+          fi
+
+          if [[ ! "$TAG" =~ ^v0\.1\.0-preview\.[0-9]+$ ]]; then
+            echo "Unsupported prerelease tag: $TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PACKAGE_VERSION="$(jq -r '.version' package.json)"
+          PACKAGE_NAME="$(jq -r '.name' package.json)"
+          PACKAGE_LICENSE="$(jq -r '.license' package.json)"
+          MANIFEST_VERSION="$(jq -r '.version' release/prerelease.json)"
+          MANIFEST_TAG="$(jq -r '.tag' release/prerelease.json)"
+          MANIFEST_PACKAGE="$(jq -r '.npmPackage' release/prerelease.json)"
+          MANIFEST_LICENSE="$(jq -r '.license' release/prerelease.json)"
+
+          for ACTUAL in "$PACKAGE_VERSION" "$MANIFEST_VERSION"; do
+            if [[ "$ACTUAL" != "$VERSION" ]]; then
+              echo "Release version mismatch: expected $VERSION, found $ACTUAL" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "$MANIFEST_TAG" != "$TAG" ]]; then
+            echo "Release tag mismatch: expected $TAG, manifest has $MANIFEST_TAG" >&2
+            exit 1
+          fi
+          if [[ "$PACKAGE_NAME" != "@partybeam/dice-kit" || "$MANIFEST_PACKAGE" != "$PACKAGE_NAME" ]]; then
+            echo "Unexpected npm package name." >&2
+            exit 1
+          fi
+          if [[ "$PACKAGE_LICENSE" != "MIT" || "$MANIFEST_LICENSE" != "MIT" ]]; then
+            echo "Prerelease must declare MIT license." >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build library
+        run: npm run build
+
+      - name: Validate NodeNext consumer
+        run: npm run test:consumer
+
+      - name: Build demo
+        run: npm run build:demo
+
+      - name: Validate package license files
+        shell: bash
+        run: |
+          test -f LICENSE
+          test -f THIRD_PARTY_NOTICES.md
+          test -f README.md
+          test -f CHANGELOG.md
+          test "$(jq -r '.license' package.json)" = "MIT"
+
+      - name: Pack npm prerelease
+        shell: bash
+        run: |
+          mkdir -p artifacts/npm
+          npm pack --pack-destination artifacts/npm
+          PACKAGE="$(find artifacts/npm -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          if [[ -z "$PACKAGE" ]]; then
+            echo "No npm package was produced." >&2
+            exit 1
+          fi
+
+          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.version')" = "${{ steps.version.outputs.version }}"
+          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.license')" = "MIT"
+          tar -tzf "$PACKAGE" > package-files.txt
+          grep -q '^package/dist/' package-files.txt
+          for FILE in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
+            grep -q "^package/$FILE$" package-files.txt
+          done
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          (
+            cd artifacts
+            find npm -type f -print0 | sort -z | xargs -0 sha256sum
+          ) > artifacts/SHA256SUMS.txt
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: partybeam-dice-kit-${{ steps.version.outputs.version }}
+          path: artifacts/
+          if-no-files-found: error
+
+      - name: Create or update GitHub prerelease
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          RELEASE_ASSETS=(artifacts/npm/* artifacts/SHA256SUMS.txt)
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${RELEASE_ASSETS[@]}" --clobber
+          elif git rev-parse "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
+              --prerelease \
+              --generate-notes \
+              --title "PartyBeam.DiceKit ${{ steps.version.outputs.version }}"
+          else
+            gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --generate-notes \
+              --title "PartyBeam.DiceKit ${{ steps.version.outputs.version }}"
+          fi

@@ -47,3 +47,25 @@ jobs:
 
       - name: Build demo
         run: npm run build:demo
+
+      - name: Validate npm package
+        shell: bash
+        run: |
+          mkdir -p artifacts/npm
+          npm pack --pack-destination artifacts/npm
+          PACKAGE="$(find artifacts/npm -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          test -n "$PACKAGE"
+          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.version')" = "0.1.0-preview.1"
+          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.license')" = "MIT"
+          tar -tzf "$PACKAGE" > package-files.txt
+          grep -q '^package/dist/' package-files.txt
+          for FILE in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
+            grep -q "^package/$FILE$" package-files.txt
+          done
+
+      - name: Upload npm prerelease artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: partybeam-dice-kit-${{ github.sha }}
+          path: artifacts/npm/*.tgz
+          if-no-files-found: error
