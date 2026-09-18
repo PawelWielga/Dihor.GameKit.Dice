@@ -70,10 +70,27 @@ describe("DicePhysicsWorld", () => {
     expect(staticAfter).toHaveLength(5);
     expect(staticAfter[0]).toBe(staticBefore[0]);
     expect(staticAfter.slice(1)).not.toEqual(staticBefore.slice(1));
-    expect(body.position.almostEquals(initialPosition)).toBe(true);
-    expect(body.quaternion.almostEquals(initialQuaternion)).toBe(true);
-    expect(body.velocity.almostEquals(initialVelocity)).toBe(true);
-    expect(body.angularVelocity.almostEquals(initialAngularVelocity)).toBe(true);
+    expect([body.position.x, body.position.y, body.position.z]).toEqual([
+      initialPosition.x,
+      initialPosition.y,
+      initialPosition.z
+    ]);
+    expect([body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w]).toEqual([
+      initialQuaternion.x,
+      initialQuaternion.y,
+      initialQuaternion.z,
+      initialQuaternion.w
+    ]);
+    expect([body.velocity.x, body.velocity.y, body.velocity.z]).toEqual([
+      initialVelocity.x,
+      initialVelocity.y,
+      initialVelocity.z
+    ]);
+    expect([body.angularVelocity.x, body.angularVelocity.y, body.angularVelocity.z]).toEqual([
+      initialAngularVelocity.x,
+      initialAngularVelocity.y,
+      initialAngularVelocity.z
+    ]);
 
     const unchangedStaticBodies = [...staticAfter];
     expect(
