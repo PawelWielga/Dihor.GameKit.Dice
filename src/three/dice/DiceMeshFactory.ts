@@ -772,9 +772,9 @@ export class DiceMeshFactory {
         textures?.body && requestedAppearance?.color === undefined
           ? "#ffffff"
           : appearance.color,
-      map: textures?.body?.texture,
-      normalMap: textures?.normal?.texture,
-      roughnessMap: textures?.roughness?.texture,
+      ...(textures?.body ? { map: textures.body.texture } : {}),
+      ...(textures?.normal ? { normalMap: textures.normal.texture } : {}),
+      ...(textures?.roughness ? { roughnessMap: textures.roughness.texture } : {}),
       metalness: appearance.metalness,
       roughness: appearance.roughness
     });
@@ -889,9 +889,9 @@ export class DiceMeshFactory {
         textures?.body && requestedAppearance?.color === undefined
           ? "#ffffff"
           : appearance.color,
-      map: textures?.body?.texture,
-      normalMap: textures?.normal?.texture,
-      roughnessMap: textures?.roughness?.texture,
+      ...(textures?.body ? { map: textures.body.texture } : {}),
+      ...(textures?.normal ? { normalMap: textures.normal.texture } : {}),
+      ...(textures?.roughness ? { roughnessMap: textures.roughness.texture } : {}),
       metalness: appearance.metalness,
       roughness: appearance.roughness,
       flatShading: false
