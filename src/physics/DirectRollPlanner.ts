@@ -18,8 +18,8 @@ import {
 } from "./RollPlanner.js";
 import type {
   PhysicsQuaternion,
+  DirectRollPlan,
   RollInitialState,
-  RollPlan,
   StabilityConfig
 } from "./RollModels.js";
 
@@ -85,7 +85,7 @@ export class DirectRollPlanner {
     request: DiceRollRequest,
     rollId: string,
     options: RollPlanningOptions = {}
-  ): RollPlan {
+  ): DirectRollPlan {
     if (request.dice.length < 1 || request.dice.length > MAX_DICE_PER_ROLL) {
       throw new RangeError(
         `DirectRollPlanner supports between one and ${MAX_DICE_PER_ROLL} dice.`
@@ -123,7 +123,7 @@ export class DirectRollPlanner {
 
       return {
         sides: definition.sides,
-        expectedValue: 0,
+        expectedValue: 0 as const,
         initialState: this.createInitialState(
           spawnPoint,
           physics.diceSize,
