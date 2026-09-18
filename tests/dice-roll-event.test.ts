@@ -33,6 +33,12 @@ function replayPlan(result: DiceRollResult): RollPlan {
   }).plan(result);
 }
 
+function replayPayload(): Record<string, any> {
+  const result = logicalResult();
+  return JSON.parse(JSON.stringify(createDiceRollEvent(result, { plan: replayPlan(result) })));
+}
+
+
 describe("DiceRollEvent", () => {
   it("serializes definitions, authoritative values and optional replay plan to JSON", () => {
     const result = logicalResult();
@@ -149,5 +155,133 @@ describe("DiceRollEvent", () => {
         replay: { version: DICE_ROLL_REPLAY_VERSION, plan: null }
       })
     ).toThrowError(RangeError);
+  });
+
+  it("rejects missing or malformed replay initial state data", () => {
+    const missing = replayPayload();
+    delete missing.replay.plan.dice[0].initialState;
+
+    expect(() => validateDiceRollEvent(missing)).toThrowError(RangeError);
+
+    const malformed = replayPayload();
+    malformed.replay.plan.dice[0].initialState.position = { x: 0, y: "bad", z: 0 };
+
+    expect(() => validateDiceRollEvent(malformed)).toThrowError(RangeError);
+  });
+
+  it("rejects non-finite replay vectors and invalid quaternions before playback", () => {
+    const nonFinite = replayPayload();
+    nonFinite.replay.plan.dice[0].initialState.velocity.x = Number.POSITIVE_INFINITY;
+
+    expect(() => validateDiceRollEvent(nonFinite)).toThrowError(RangeError);
+
+    const nan = replayPayload();
+    nan.replay.plan.dice[0].initialState.angularVelocity.z = Number.NaN;
+
+    expect(() => validateDiceRollEvent(nan)).toThrowError(RangeError);
+
+    const zeroQuaternion = replayPayload();
+    zeroQuaternion.replay.plan.dice[0].initialState.quaternion = {
+      x: 0,
+      y: 0,
+      z: 0,
+      w: 0
+    };
+
+    expect(() => validateDiceRollEvent(zeroQuaternion)).toThrowError(RangeError);
+  });
+
+  it("rejects replay physics values that the physics world would reject", () => {
+    const invalidTimeStep = replayPayload();
+    invalidTimeStep.replay.plan.physics.timeStep = 0;
+    expect(() => validateDiceRollEvent(invalidTimeStep)).toThrowError(RangeError);
+
+    const invalidFriction = replayPayload();
+    invalidFriction.replay.plan.physics.friction = 1.5;
+    expect(() => validateDiceRollEvent(invalidFriction)).toThrowError(RangeError);
+
+    const invalidGravity = replayPayload();
+    invalidGravity.replay.plan.physics.gravity.y = Number.NaN;
+    expect(() => validateDiceRollEvent(invalidGravity)).toThrowError(RangeError);
+  });
+
+  it("rejects replay stability values that playback would reject", () => {
+    const invalidMaxSteps = replayPayload();
+    invalidMaxSteps.replay.plan.stability.maxSteps = 0;
+    expect(() => validateDiceRollEvent(invalidMaxSteps)).toThrowError(RangeError);
+
+    const invalidThreshold = replayPayload();
+    invalidThreshold.replay.plan.stability.angularThreshold = -1;
+    expect(() => validateDiceRollEvent(invalidThreshold)).toThrowError(RangeError);
+  });
+
+  it("validates current engraving, font and D6 face-label appearance fields", () => {
+    const result: DiceRollResult = {
+      rollId: "appearance-roll",
+      dice: [{ sides: 6, value: 1 }],
+      modifier: 0,
+      total: 1
+    };
+    const definitions: readonly DiceDefinition[] = [{
+      sides: 6,
+      appearance: {
+        color: "#ffffff",
+        markingsColor: "#111111",
+        engravingDepth: 1.5,
+        font: {
+          family: "Georgia",
+          url: "/fonts/georgia.woff2",
+          weight: 650,
+          size: 1.2
+        },
+        faceLabelMode: "numbers"
+      }
+    }];
+    const event = createDiceRollEvent(result, {
+      definitions,
+      plan: replayPlan(result)
+    });
+    const restored = JSON.parse(JSON.stringify(event));
+
+    expect(validateDiceRollEvent(restored)).toEqual(event);
+
+    for (const mutate of [
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.engravingDepth = 3;
+      },
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.font.size = 0.1;
+      },
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.font.weight = 0;
+      },
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.font.family = "   ";
+      },
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.font.url = "";
+      },
+      (payload: Record<string, any>) => {
+        payload.dice[0].appearance.faceLabelMode = "symbols";
+      }
+    ]) {
+      const invalid = JSON.parse(JSON.stringify(event)) as Record<string, any>;
+      mutate(invalid);
+      expect(() => validateDiceRollEvent(invalid)).toThrowError(RangeError);
+    }
+  });
+
+  it("returns a validated copy instead of trusting nested payload objects", () => {
+    const payload = replayPayload();
+    payload.untrustedExtra = "ignored";
+    payload.replay.plan.untrustedExtra = { executable: true };
+    payload.dice[0].appearance = { color: "#ffffff", untrustedExtra: true };
+
+    const validated = validateDiceRollEvent(payload) as unknown as Record<string, any>;
+
+    expect(validated).not.toBe(payload);
+    expect(validated.untrustedExtra).toBeUndefined();
+    expect(validated.replay.plan.untrustedExtra).toBeUndefined();
+    expect(validated.dice[0].appearance.untrustedExtra).toBeUndefined();
   });
 });
