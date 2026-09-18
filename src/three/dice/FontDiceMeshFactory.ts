@@ -38,29 +38,47 @@ export class DiceMeshFactory extends VisualDiceMeshFactory {
     const resolvedOptions = this.resolveOptions(options);
     const mesh = super.create(sides, resolvedOptions);
 
-    return applyDiceFaceLabels(
-      mesh,
-      sides,
-      resolvedOptions.size ?? 1,
-      resolvedOptions.appearance,
-      this.faceLabelCache
-    );
+    try {
+      return applyDiceFaceLabels(
+        mesh,
+        sides,
+        resolvedOptions.size ?? 1,
+        resolvedOptions.appearance,
+        this.faceLabelCache
+      );
+    } catch (error) {
+      try {
+        mesh.dispose();
+      } catch {
+        // Preserve the original label/configuration error for the caller.
+      }
+
+      throw error;
+    }
   }
 
   override createAsync(sides: DiceSides, options: DiceMeshOptions = {}): Promise<DiceMesh> {
     const resolvedOptions = this.resolveOptions(options);
 
-    return super
-      .createAsync(sides, resolvedOptions)
-      .then((mesh) =>
-        applyDiceFaceLabels(
+    return super.createAsync(sides, resolvedOptions).then((mesh) => {
+      try {
+        return applyDiceFaceLabels(
           mesh,
           sides,
           resolvedOptions.size ?? 1,
           resolvedOptions.appearance,
           this.faceLabelCache
-        )
-      );
+        );
+      } catch (error) {
+        try {
+          mesh.dispose();
+        } catch {
+          // Preserve the original label/configuration error for the caller.
+        }
+
+        throw error;
+      }
+    });
   }
 
   override dispose(): void {
