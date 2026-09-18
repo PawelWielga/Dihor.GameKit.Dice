@@ -688,6 +688,8 @@ function validateDefinitions(
     if (!definition || !die || definition.sides !== die.sides) {
       throw new RangeError(`DiceRollEvent definition does not match result at index ${index}.`);
     }
+
+    validateAppearanceFromUnknown(definition.appearance, definition.sides, index);
   }
 }
 
@@ -844,11 +846,17 @@ export function createDiceRollEvent(
 ): DiceRollEvent {
   validateResult(result);
   validateDefinitions(result, options.definitions);
-  validatePlan(result, options.plan);
+  const plan =
+    options.plan === undefined ? undefined : validateReplayPlanFromUnknown(options.plan);
+  validatePlan(result, plan);
 
   const dice = result.dice.map((die, index) => {
     const definition = options.definitions?.[index];
-    const appearance = cloneAppearance(definition?.appearance);
+    const appearance = validateAppearanceFromUnknown(
+      definition?.appearance,
+      die.sides,
+      index
+    );
 
     return {
       sides: die.sides,
@@ -865,11 +873,11 @@ export function createDiceRollEvent(
     modifier: result.modifier,
     total: result.total,
     ...(result.reason === undefined ? {} : { reason: result.reason }),
-    ...(options.plan
+    ...(plan
       ? {
           replay: {
             version: DICE_ROLL_REPLAY_VERSION,
-            plan: options.plan
+            plan
           }
         }
       : {})
