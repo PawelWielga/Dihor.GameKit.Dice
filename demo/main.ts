@@ -225,6 +225,7 @@ const faceTextureInputs = [1, 2, 3, 4, 5, 6].map((face) =>
 );
 const debugMode = requireElement<HTMLInputElement>("#debug-mode");
 const compareButton = requireElement<HTMLButtonElement>("#compare-button");
+const arenaRegressionButton = requireElement<HTMLButtonElement>("#arena-regression-button");
 const rollButton = requireElement<HTMLButtonElement>("#roll-button");
 const mobileRollButton = requireElement<HTMLButtonElement>("#mobile-roll-button");
 const resetButton = requireElement<HTMLButtonElement>("#reset-button");
@@ -823,6 +824,7 @@ function setRollingState(isRolling: boolean, comparison = false): void {
   rollButton.disabled = isRolling;
   mobileRollButton.disabled = isRolling;
   compareButton.disabled = isRolling;
+  arenaRegressionButton.disabled = isRolling;
   resetButton.disabled = isRolling;
   const rollLabel = isRolling && !comparison ? "Rolling…" : "Roll dice";
   rollButton.textContent = rollLabel;
@@ -878,6 +880,50 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
     console.error("PartyBeam.DiceKit demo roll failed", error);
   } finally {
     setRollingState(false);
+  }
+}
+
+async function runArenaRegressionScenario(): Promise<void> {
+  if (rolling) {
+    return;
+  }
+
+  const originalCameraX = Number(cameraX.value);
+  const originalCameraY = Number(cameraY.value);
+  const originalStageWidth = stage.style.width;
+  let active = true;
+  let frame = 0;
+
+  const animateViewport = (): void => {
+    if (!active || !rolling) {
+      return;
+    }
+
+    frame += 1;
+    const phase = frame / 8;
+    const nextX = Math.max(-180, Math.min(180, originalCameraX + Math.sin(phase) * 35));
+    const nextY = Math.max(5, Math.min(80, originalCameraY + Math.cos(phase) * 12));
+
+    cameraX.value = nextX.toFixed(0);
+    cameraY.value = nextY.toFixed(0);
+    stage.style.width = frame % 24 < 12 ? "88%" : "100%";
+    applyCamera();
+    demoRenderer?.resize();
+    requestAnimationFrame(animateViewport);
+  };
+
+  const run = runRequest(createRequest());
+  requestAnimationFrame(animateViewport);
+
+  try {
+    await run;
+  } finally {
+    active = false;
+    cameraX.value = String(originalCameraX);
+    cameraY.value = String(originalCameraY);
+    stage.style.width = originalStageWidth;
+    applyCamera();
+    demoRenderer?.resize();
   }
 }
 
@@ -981,6 +1027,9 @@ debugMode.addEventListener("change", updateDebugPanel);
 resetButton.addEventListener("click", resetOutput);
 compareButton.addEventListener("click", () => {
   void runRequest(createComparisonRequest(), true);
+});
+arenaRegressionButton.addEventListener("click", () => {
+  void runArenaRegressionScenario();
 });
 
 form.addEventListener("submit", (event) => {
