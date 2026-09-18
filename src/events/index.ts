@@ -13,3 +13,13 @@ export type {
   DiceRollEventDie,
   DiceRollReplayV1
 } from "./DiceRollEvent.js";
+
+export {
+  DEFAULT_DICE_ROLL_EVENT_ASSET_POLICY,
+  resolveDiceRollEventAppearances
+} from "./DiceRollEventAssets.js";
+export type {
+  DiceRollEventAssetContext,
+  DiceRollEventAssetKind,
+  DiceRollEventAssetPolicy
+} from "./DiceRollEventAssets.js";

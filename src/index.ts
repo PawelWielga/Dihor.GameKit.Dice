@@ -30,7 +30,12 @@ export {
   createDiceRollEvent,
   diceRollResultFromEvent,
   validateDiceRollEvent,
+  DEFAULT_DICE_ROLL_EVENT_ASSET_POLICY,
+  resolveDiceRollEventAppearances,
   type CreateDiceRollEventOptions,
+  type DiceRollEventAssetContext,
+  type DiceRollEventAssetKind,
+  type DiceRollEventAssetPolicy,
   type DiceRollEvent,
   type DiceRollEventDie,
   type DiceRollReplayV1
