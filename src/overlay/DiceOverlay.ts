@@ -8,7 +8,6 @@ import {
   BackgroundRollPlanner,
   DirectRollPlanner,
   type DirectRollPlan,
-  type PresimulatedRollPlan,
   type RollPlan,
   type RollPlanningOptions
 } from "../physics/index.js";
@@ -45,7 +44,7 @@ export interface DiceOverlayPlanner {
   plan(
     result: DiceRollResult,
     options?: RollPlanningOptions
-  ): PresimulatedRollPlan | Promise<PresimulatedRollPlan>;
+  ): RollPlan | Promise<RollPlan>;
   cancel?(): void;
   dispose?(): void;
 }
@@ -204,10 +203,10 @@ export class DiceOverlay {
     request: DiceRollRequest,
     options: DiceOverlayRollOptions
   ): Promise<DiceRollResult> {
+    const expectedDiceTotal = options.expectedDiceTotal ?? 0;
     let logicalResult: DiceRollResult;
 
     try {
-      const expectedDiceTotal = options.expectedDiceTotal ?? 0;
       if (expectedDiceTotal === 0) {
         logicalResult = this.roller.roll(request);
       } else if (this.roller.rollToDiceTotal) {
@@ -233,6 +232,12 @@ export class DiceOverlay {
         ...options,
         arenaBoundary: surface.renderer.diceScene.getTableBoundary()
       });
+
+      if (plan.preSimulated === false && expectedDiceTotal !== 0) {
+        throw new Error(
+          "expectedDiceTotal requires presimulation. The configured planner fell back to direct physics."
+        );
+      }
     } catch (error) {
       if (this.surface === surface) {
         this.close();
@@ -240,11 +245,26 @@ export class DiceOverlay {
       throw this.wrapError("planning", error);
     }
 
+    let returnedResult = logicalResult;
+
     try {
       const playback = await surface.player.play(plan, {
         appearances: request.dice.map((die) => die.appearance)
       });
-      this.assertPlaybackMatches(logicalResult, playback);
+
+      if (plan.preSimulated === false) {
+        returnedResult = {
+          rollId: playback.rollId,
+          dice: playback.dice,
+          modifier: logicalResult.modifier,
+          total:
+            playback.dice.reduce((sum, die) => sum + die.value, 0) +
+            logicalResult.modifier,
+          ...(request.reason === undefined ? {} : { reason: request.reason })
+        };
+      } else {
+        this.assertPlaybackMatches(logicalResult, playback);
+      }
     } catch (error) {
       if (this.surface === surface) {
         surface.resultElement && (surface.resultElement.textContent = "Roll failed");
@@ -254,9 +274,9 @@ export class DiceOverlay {
     }
 
     if (this.surface === surface) {
-      this.presentResult(surface, logicalResult);
+      this.presentResult(surface, returnedResult);
     }
-    return logicalResult;
+    return returnedResult;
   }
 
   private async rollDirect(

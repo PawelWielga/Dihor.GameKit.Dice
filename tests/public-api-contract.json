@@ -131,6 +131,7 @@
     "DiceOverlayRollOptions:type"
   ],
   "advanced": [
+    "BackgroundRollFallbackStrategy:type",
     "BackgroundRollPlanner:value",
     "BackgroundRollPlannerOptions:type",
     "BackgroundRollPlanningTiming:type",
