@@ -1,3 +1,4 @@
+import { resolveDiceRollModifier } from "./DiceRollModifier.js";
 import type { DiceRollRequest } from "./DiceRollRequest.js";
 import type { DiceRollResult } from "./DiceRollResult.js";
 import type { DiceSides } from "./DiceSides.js";
@@ -60,7 +61,7 @@ export class DiceRoller {
 
   roll(request: DiceRollRequest): DiceRollResult {
     this.validateDice(request.dice);
-    const modifier = this.resolveModifier(request.modifier);
+    const modifier = resolveDiceRollModifier(request.modifier);
     const dice = request.dice.map(({ sides }) => ({
       sides,
       value: this.rollDie(sides)
@@ -75,7 +76,7 @@ export class DiceRoller {
    */
   rollToDiceTotal(request: DiceRollRequest, expectedDiceTotal: number): DiceRollResult {
     this.validateDice(request.dice);
-    const modifier = this.resolveModifier(request.modifier);
+    const modifier = resolveDiceRollModifier(request.modifier);
     const { min: minTotal, max: maxTotal } = getDiceTotalRange(request.dice);
 
     if (
@@ -117,16 +118,6 @@ export class DiceRoller {
       total,
       ...(request.reason === undefined ? {} : { reason: request.reason })
     };
-  }
-
-  private resolveModifier(modifier: number | undefined): number {
-    const resolved = modifier ?? 0;
-
-    if (!Number.isFinite(resolved)) {
-      throw new RangeError(`Dice roll modifier must be finite; received ${String(resolved)}.`);
-    }
-
-    return resolved;
   }
 
   private validateDice(dice: DiceRollRequest["dice"]): void {

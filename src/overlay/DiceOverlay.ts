@@ -1,5 +1,6 @@
 import {
   DiceRoller,
+  resolveDiceRollModifier,
   type DiceRollRequest,
   type DiceRollResult
 } from "../core/index.js";
@@ -260,6 +261,13 @@ export class DiceOverlay {
     request: DiceRollRequest,
     options: DiceOverlayRollOptions
   ): Promise<DiceRollResult> {
+    let modifier: number;
+    try {
+      modifier = resolveDiceRollModifier(request.modifier);
+    } catch (error) {
+      throw this.wrapError("roll", error);
+    }
+
     let surface: OverlaySurface;
     try {
       surface = this.ensureSurface();
@@ -293,14 +301,6 @@ export class DiceOverlay {
         surface.player.clear();
       }
       throw this.wrapError("playback", error);
-    }
-
-    const modifier = request.modifier ?? 0;
-    if (!Number.isFinite(modifier)) {
-      throw this.wrapError(
-        "roll",
-        new RangeError(`Dice roll modifier must be finite; received ${String(modifier)}.`)
-      );
     }
 
     const logicalResult: DiceRollResult = {

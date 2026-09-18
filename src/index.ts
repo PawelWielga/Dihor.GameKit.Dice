@@ -31,6 +31,7 @@ export {
   getDiceFace,
   getDiceTopology,
   getDiceTotalRange,
+  resolveDiceRollModifier,
   getDiceValueFromOrientation,
   type D6FaceNormal,
   type D6FaceValue,
