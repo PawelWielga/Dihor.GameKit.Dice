@@ -8,6 +8,7 @@ on:
       - 'v0.1.0-preview.*'
     paths:
       - 'release/prerelease.json'
+      - '.github/workflows/prerelease.yml'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -135,10 +136,18 @@ jobs:
       - name: Create checksums
         shell: bash
         run: |
+          PACKAGE="$(find artifacts/npm -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          PACKAGE_NAME="$(basename "$PACKAGE")"
+
           (
-            cd artifacts
-            find npm -type f -print0 | sort -z | xargs -0 sha256sum
+            cd artifacts/npm
+            sha256sum "$PACKAGE_NAME"
           ) > artifacts/SHA256SUMS.txt
+
+          (
+            cd artifacts/npm
+            sha256sum -c ../SHA256SUMS.txt
+          )
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -151,19 +160,67 @@ jobs:
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          RELEASE_ASSETS=(artifacts/npm/* artifacts/SHA256SUMS.txt)
+          VERSION="${{ steps.version.outputs.version }}"
+          TITLE="Dihor.GameKit.Dice $VERSION"
+          PACKAGE="$(find artifacts/npm -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          PACKAGE_ASSET="$(basename "$PACKAGE")"
+          RELEASE_ASSETS=("$PACKAGE" artifacts/SHA256SUMS.txt)
+          EXPECTED_ASSETS=("$PACKAGE_ASSET" "SHA256SUMS.txt")
 
           if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release view "$TAG" --json body --jq '.body' > release-notes.md
+            sed -i \
+              -e 's#PawelWielga/PartyBeam\.DiceKit#PawelWielga/Dihor.GameKit.Dice#g' \
+              -e 's#PartyBeam\.DiceKit#Dihor.GameKit.Dice#g' \
+              release-notes.md
+
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --prerelease \
+              --notes-file release-notes.md
+
+            while IFS= read -r ASSET; do
+              KEEP=false
+              for EXPECTED in "${EXPECTED_ASSETS[@]}"; do
+                if [[ "$ASSET" == "$EXPECTED" ]]; then
+                  KEEP=true
+                  break
+                fi
+              done
+
+              if [[ "$KEEP" == "false" ]]; then
+                echo "Removing stale release asset: $ASSET"
+                gh release delete-asset "$TAG" "$ASSET" --yes
+              fi
+            done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
+
             gh release upload "$TAG" "${RELEASE_ASSETS[@]}" --clobber
           elif git rev-parse "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
               --prerelease \
               --generate-notes \
-              --title "Dihor.GameKit.Dice ${{ steps.version.outputs.version }}"
+              --title "$TITLE"
           else
             gh release create "$TAG" "${RELEASE_ASSETS[@]}" \
               --target "$GITHUB_SHA" \
               --prerelease \
               --generate-notes \
-              --title "Dihor.GameKit.Dice ${{ steps.version.outputs.version }}"
+              --title "$TITLE"
+          fi
+
+          test "$(gh release view "$TAG" --json name --jq '.name')" = "$TITLE"
+          test "$(gh release view "$TAG" --json isPrerelease --jq '.isPrerelease')" = "true"
+
+          mapfile -t ACTUAL_ASSETS < <(
+            gh release view "$TAG" --json assets --jq '.assets[].name' | sort
+          )
+          mapfile -t SORTED_EXPECTED_ASSETS < <(
+            printf '%s\n' "${EXPECTED_ASSETS[@]}" | sort
+          )
+
+          if [[ "${ACTUAL_ASSETS[*]}" != "${SORTED_EXPECTED_ASSETS[*]}" ]]; then
+            echo "Unexpected release asset set." >&2
+            printf 'Expected: %s\n' "${SORTED_EXPECTED_ASSETS[*]}" >&2
+            printf 'Actual:   %s\n' "${ACTUAL_ASSETS[*]}" >&2
+            exit 1
           fi
