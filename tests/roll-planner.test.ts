@@ -177,6 +177,27 @@ describe("DirectRollPlanner", () => {
     ).toThrowError(/slotSpacing/);
   });
 
+  it("centers a perspective viewport spawn on the quadrilateral diagonal intersection", () => {
+    const perspectiveBoundary = [
+      { x: -4, z: -8 },
+      { x: 4, z: -8 },
+      { x: 8, z: 16 },
+      { x: -8, z: 16 }
+    ] as const;
+    const planner = new DirectRollPlanner({
+      randomProvider: { next: () => 0.5 }
+    });
+
+    const plan = planner.plan(
+      { dice: [{ sides: 6 }] },
+      "projective-center",
+      { arenaBoundary: perspectiveBoundary }
+    );
+
+    expect(plan.dice[0]!.initialState.position.x).toBeCloseTo(0);
+    expect(plan.dice[0]!.initialState.position.z).toBeCloseTo(0);
+  });
+
   it("uses the same diceScale for direct physical size and spacing", () => {
     const planner = new DirectRollPlanner({
       randomProvider: { next: () => 0.5 }
@@ -266,6 +287,30 @@ describe("RollPlanner", () => {
         z: die.initialState.position.z
       }))
     );
+  });
+
+  it("uses the same projective viewport center for presimulated placement", () => {
+    const perspectiveBoundary = [
+      { x: -4, z: -8 },
+      { x: 4, z: -8 },
+      { x: 8, z: 16 },
+      { x: -8, z: 16 }
+    ] as const;
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    });
+
+    const plan = planner.plan(
+      result([{ sides: 6, value: 1 }], "projective-center-planned"),
+      { arenaBoundary: perspectiveBoundary }
+    );
+
+    expect(plan.dice[0]!.initialState.position.x).toBeCloseTo(0);
+    expect(plan.dice[0]!.initialState.position.z).toBeCloseTo(0);
   });
 
   it("rejects a custom arena that is too small before hidden simulation starts", () => {
