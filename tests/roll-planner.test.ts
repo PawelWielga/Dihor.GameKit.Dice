@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_DICE_PHYSICS_CONFIG,
+  DirectRollPlanner,
   RollPlanner,
   RollPlanningError,
   SUPPORTED_DICE_SIDES,
@@ -89,6 +91,29 @@ function result(
   };
 }
 
+describe("DirectRollPlanner", () => {
+  it("uses the same diceScale for direct physical size and spacing", () => {
+    const planner = new DirectRollPlanner({
+      randomProvider: { next: () => 0.5 }
+    });
+
+    const plan = planner.plan(
+      { dice: [{ sides: 8 }, { sides: 8 }] },
+      "direct-scale",
+      { diceScale: 0.75 }
+    );
+
+    expect(plan.preSimulated).toBe(false);
+    expect(plan.physics.diceSize).toBeCloseTo(0.75);
+    expect(
+      Math.abs(
+        plan.dice[1]!.initialState.position.x -
+        plan.dice[0]!.initialState.position.x
+      )
+    ).toBeCloseTo(0.75 * 2.5);
+  });
+});
+
 describe("RollPlanner", () => {
   it("finds and verifies replayable physical plans for every supported die type", () => {
     for (const sides of SUPPORTED_DICE_SIDES) {
@@ -140,6 +165,52 @@ describe("RollPlanner", () => {
     }
   });
 
+  it("uses the same per-roll viewport boundary in hidden planning and replay config", () => {
+    const boundary = [
+      { x: -6, z: -4 },
+      { x: 6, z: -4 },
+      { x: 5, z: 4 },
+      { x: -5, z: 4 }
+    ] as const;
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    });
+
+    const plan = planner.plan(result([{ sides: 6, value: 1 }]), { arenaBoundary: boundary });
+
+    expect(plan.physics.arenaBoundary).toEqual(boundary);
+  });
+
+  it("applies diceScale consistently to physics size and default slot spacing", () => {
+    const slots: number[] = [];
+    const planner = new RollPlanner({
+      initialStateProvider(context) {
+        slots.push(context.slotX);
+        return settledState(context);
+      },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: { consecutiveSteps: 4, maxSteps: 120 }
+    });
+
+    const plan = planner.plan(
+      result([{ sides: 6, value: 1 }, { sides: 6, value: 1 }]),
+      { diceScale: 1.5 }
+    );
+
+    expect(plan.physics.diceSize).toBeCloseTo(DEFAULT_DICE_PHYSICS_CONFIG.diceSize * 1.5);
+    expect(Math.abs(slots[1]! - slots[0]!)).toBeCloseTo(
+      DEFAULT_DICE_PHYSICS_CONFIG.diceSize * 2.5 * 1.5
+    );
+    expect(() => planner.plan(result([{ sides: 6, value: 1 }]), { diceScale: 1.51 }))
+      .toThrowError(RangeError);
+  });
+
   it("supports mixed dice in the same planned roll", () => {
     const planner = new RollPlanner({
       initialStateProvider: settledState,
@@ -165,6 +236,75 @@ describe("RollPlanner", () => {
       [20, 13]
     ]);
     expect(plan.dice.map((die) => die.initialState.position.x)).toEqual([-2.5, 0, 2.5]);
+  });
+
+  it("plans the complete supported RPG set in one roll", () => {
+    const planner = new RollPlanner({
+      initialStateProvider: settledState,
+      slotSpacing: 2.6,
+      physics: { arenaHalfExtent: 9 },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: {
+        consecutiveSteps: 4,
+        maxSteps: 120
+      }
+    });
+    const dice = SUPPORTED_DICE_SIDES.map((sides) => ({ sides, value: 1 }));
+    const plan = planner.plan(result(dice, "full-rpg-set"));
+
+    expect(plan.dice).toHaveLength(SUPPORTED_DICE_SIDES.length);
+    expect(plan.dice.map((die) => die.sides)).toEqual([...SUPPORTED_DICE_SIDES]);
+    expect(plan.dice.map((die) => die.expectedValue)).toEqual(
+      SUPPORTED_DICE_SIDES.map(() => 1)
+    );
+  });
+
+  it("applies per-roll throw force without changing authoritative values, including multiple dice", () => {
+    const planner = new RollPlanner({
+      initialStateProvider: (context) => {
+        const state = settledState(context);
+        return {
+          ...state,
+          velocity: { x: 0.01, y: 0.01, z: 0.01 },
+          angularVelocity: { x: 0.01, y: 0.01, z: 0.01 }
+        };
+      },
+      maxAttemptsPerDie: 1,
+      maxCombinedAttempts: 1,
+      maxPlanningTimeMs: 5000,
+      stability: {
+        consecutiveSteps: 4,
+        maxSteps: 120
+      }
+    });
+    const authoritative = result([
+      { sides: 6, value: 4 },
+      { sides: 8, value: 7 }
+    ]);
+
+    const defaultPlan = planner.plan(authoritative);
+    const strongerPlan = planner.plan(authoritative, { throwForce: 1.5 });
+
+    expect(defaultPlan.dice.map((die) => die.expectedValue)).toEqual([4, 7]);
+    expect(strongerPlan.dice.map((die) => die.expectedValue)).toEqual([4, 7]);
+    expect(defaultPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.01);
+    expect(strongerPlan.dice[0]?.initialState.velocity.x).toBeCloseTo(0.015);
+    expect(strongerPlan.dice[0]?.initialState.angularVelocity.y).toBeCloseTo(0.01375);
+    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeCloseTo(0.01175);
+    expect(strongerPlan.dice[1]?.initialState.angularVelocity.z).toBeLessThan(
+      strongerPlan.dice[1]!.initialState.velocity.z
+    );
+  });
+
+  it("rejects throw force values outside the supported safe range", () => {
+    const planner = new RollPlanner({ initialStateProvider: settledState });
+    const authoritative = result([{ sides: 6, value: 1 }]);
+
+    expect(() => planner.plan(authoritative, { throwForce: 0.49 })).toThrowError(RangeError);
+    expect(() => planner.plan(authoritative, { throwForce: 1.51 })).toThrowError(RangeError);
+    expect(() => planner.plan(authoritative, { throwForce: Number.NaN })).toThrowError(RangeError);
   });
 
   it("fails in a bounded way when the supplied physical states cannot reach the result", () => {

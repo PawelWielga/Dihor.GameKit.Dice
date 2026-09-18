@@ -72,7 +72,7 @@ function settledState(context: RollInitialStateContext) {
   } as const;
 }
 
-function createPlan(): RollPlan {
+function createPlan(diceScale = 1): RollPlan {
   const planner = new RollPlanner({
     initialStateProvider: settledState,
     maxAttemptsPerDie: 1,
@@ -89,7 +89,7 @@ function createPlan(): RollPlan {
     ],
     modifier: 0,
     total: 7
-  });
+  }, { diceScale });
 }
 
 function createTarget() {
@@ -128,7 +128,7 @@ describe("DiceRollPlayer", () => {
     const meshFactory = new DiceMeshFactory();
     const createD6 = vi.spyOn(meshFactory, "createD6");
     const player = new DiceRollPlayer(target, { scheduler, meshFactory });
-    const plan = createPlan();
+    const plan = createPlan(1.25);
     const appearances = [
       { color: "#7b1e1e", markingsColor: "#f5e6c8" },
       { color: "#183153", markingsColor: "#f8fafc", roughness: 0.4, metalness: 0.2 }
@@ -181,6 +181,27 @@ describe("DiceRollPlayer", () => {
     scheduler.runFrames(20);
     await playback;
 
+    player.dispose();
+    diceScene.dispose();
+  });
+
+  it("returns observed face values for a direct non-presimulated plan", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const player = new DiceRollPlayer(target, { scheduler });
+    const presimulated = createPlan();
+    const directPlan: RollPlan = {
+      ...presimulated,
+      dice: presimulated.dice.map((die) => ({ ...die, expectedValue: 0 })),
+      simulationSteps: 0,
+      preSimulated: false
+    };
+
+    const playback = player.play(directPlan);
+    scheduler.runFrames(20);
+    const result = await playback;
+
+    expect(result.dice.map((die) => die.value)).toEqual([1, 6]);
     player.dispose();
     diceScene.dispose();
   });

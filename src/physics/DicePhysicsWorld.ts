@@ -6,6 +6,7 @@ import {
 } from "../core/index.js";
 import { createDiceCollider } from "./dice/index.js";
 import type {
+  DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
   PhysicsVector3,
@@ -22,6 +23,7 @@ export interface DicePhysicsWorldOptions {
   readonly angularDamping?: number;
   readonly diceSize?: number;
   readonly arenaHalfExtent?: number;
+  readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
 }
 
 export interface StabilityOptions {
@@ -98,6 +100,33 @@ function validateVector(name: string, vector: PhysicsVector3): void {
   requireFinite(`${name}.z`, vector.z);
 }
 
+function resolveArenaBoundary(
+  boundary: readonly DiceArenaBoundaryPoint[] | undefined
+): readonly DiceArenaBoundaryPoint[] | undefined {
+  if (boundary === undefined) {
+    return undefined;
+  }
+
+  if (boundary.length < 3) {
+    throw new RangeError("arenaBoundary must contain at least three points.");
+  }
+
+  const resolved = boundary.map((point, index) => ({
+    x: requireFinite(`arenaBoundary[${index}].x`, point.x),
+    z: requireFinite(`arenaBoundary[${index}].z`, point.z)
+  }));
+
+  for (let index = 0; index < resolved.length; index += 1) {
+    const current = resolved[index]!;
+    const next = resolved[(index + 1) % resolved.length]!;
+    if (Math.hypot(next.x - current.x, next.z - current.z) <= Number.EPSILON) {
+      throw new RangeError(`arenaBoundary edge ${index} must have non-zero length.`);
+    }
+  }
+
+  return resolved;
+}
+
 function validateQuaternion(name: string, quaternion: PhysicsQuaternion): void {
   requireFinite(`${name}.x`, quaternion.x);
   requireFinite(`${name}.y`, quaternion.y);
@@ -119,6 +148,8 @@ function resolveConfig(options: DicePhysicsWorldOptions): DicePhysicsConfig {
   );
   const defaultArenaScale =
     DEFAULT_DICE_PHYSICS_CONFIG.arenaHalfExtent / DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
+
+  const arenaBoundary = resolveArenaBoundary(options.arenaBoundary);
 
   return {
     gravity: {
@@ -144,7 +175,8 @@ function resolveConfig(options: DicePhysicsWorldOptions): DicePhysicsConfig {
     arenaHalfExtent: requirePositive(
       "arenaHalfExtent",
       options.arenaHalfExtent ?? diceSize * defaultArenaScale
-    )
+    ),
+    ...(arenaBoundary ? { arenaBoundary } : {})
   };
 }
 
@@ -323,33 +355,38 @@ export class DicePhysicsWorld {
 
   private createArenaWalls(): void {
     const extent = this.config.arenaHalfExtent;
+    const boundary = this.config.arenaBoundary ?? [
+      { x: -extent, z: -extent },
+      { x: extent, z: -extent },
+      { x: extent, z: extent },
+      { x: -extent, z: extent }
+    ];
     const thickness = this.config.diceSize * 0.25;
-    const wallHeight = this.config.diceSize * 8;
+    const wallHeight = this.config.diceSize * 10;
     const halfHeight = wallHeight / 2;
-    const longHalfExtent = extent + thickness;
 
-    this.addStaticBox(
-      new Vec3(thickness / 2, halfHeight, longHalfExtent),
-      new Vec3(-extent - thickness / 2, halfHeight, 0)
-    );
-    this.addStaticBox(
-      new Vec3(thickness / 2, halfHeight, longHalfExtent),
-      new Vec3(extent + thickness / 2, halfHeight, 0)
-    );
-    this.addStaticBox(
-      new Vec3(longHalfExtent, halfHeight, thickness / 2),
-      new Vec3(0, halfHeight, -extent - thickness / 2)
-    );
-    this.addStaticBox(
-      new Vec3(longHalfExtent, halfHeight, thickness / 2),
-      new Vec3(0, halfHeight, extent + thickness / 2)
-    );
+    for (let index = 0; index < boundary.length; index += 1) {
+      const start = boundary[index]!;
+      const end = boundary[(index + 1) % boundary.length]!;
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const length = Math.hypot(dx, dz);
+      const center = new Vec3((start.x + end.x) / 2, halfHeight, (start.z + end.z) / 2);
+      const yaw = -Math.atan2(dz, dx);
+
+      this.addStaticBox(
+        new Vec3(length / 2 + thickness / 2, halfHeight, thickness / 2),
+        center,
+        yaw
+      );
+    }
   }
 
-  private addStaticBox(halfExtents: Vec3, position: Vec3): void {
+  private addStaticBox(halfExtents: Vec3, position: Vec3, yaw = 0): void {
     const body = new Body({ mass: 0 });
     body.addShape(new Box(halfExtents));
     body.position.copy(position);
+    body.quaternion.setFromEuler(0, yaw, 0);
     this.world.addBody(body);
     this.staticBodies.push(body);
   }

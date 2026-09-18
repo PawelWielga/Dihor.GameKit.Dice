@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Interactive PartyBeam.DiceKit playground for physical polyhedral dice rolls, materials and face textures."
+      content="Interactive PartyBeam.DiceKit playground for physical polyhedral dice rolls, materials, fonts and face textures."
     />
     <title>PartyBeam.DiceKit Playground</title>
     <link rel="stylesheet" href="./demo.css" />
@@ -32,7 +32,7 @@
       <div class="workspace">
         <aside class="control-panel" aria-label="Dice configuration">
           <form id="dice-form">
-            <section class="control-section">
+            <section class="control-section control-section--primary">
               <div class="section-heading">
                 <span class="section-index">01</span>
                 <div>
@@ -81,6 +81,76 @@
                   />
                 </label>
               </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Roll mode</span>
+                  <select id="roll-mode" name="roll-mode">
+                    <option value="presimulated" selected>Presimulated / controlled</option>
+                    <option value="direct">Direct physical / instant</option>
+                  </select>
+                </label>
+
+                <label id="expected-total-field" class="field">
+                  <span>
+                    Expected dice total
+                    <output id="expected-total-range">0 = Auto · 2..12</output>
+                  </span>
+                  <input
+                    id="expected-total"
+                    name="expected-total"
+                    type="number"
+                    min="0"
+                    max="12"
+                    step="1"
+                    value="0"
+                  />
+                </label>
+              </div>
+              <p id="roll-mode-hint" class="hint">
+                Presimulated mode decides the result first. Set 0 for Auto or choose a valid dice
+                total. Direct mode starts visible physics immediately and reads the result after
+                the dice settle.
+              </p>
+
+              <label class="field">
+                <span>Throw force <output id="throw-force-value">1.00×</output></span>
+                <input
+                  id="throw-force"
+                  name="throw-force"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1"
+                />
+              </label>
+              <button id="reset-throw-force-button" class="button button--ghost" type="button">
+                Reset throw force
+              </button>
+              <p class="hint">
+                1.00× keeps the current default animation. Lower or higher values change the
+                physical launch energy while preserving the selected roll mode.
+              </p>
+
+              <label class="field">
+                <span>Dice size <output id="dice-scale-value">1.00×</output></span>
+                <input
+                  id="dice-scale"
+                  name="dice-scale"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1"
+                />
+              </label>
+              <button id="reset-dice-scale-button" class="button button--ghost" type="button">
+                Reset dice size
+              </button>
+              <p class="hint">
+                Scales the visual mesh and its physical collider together on the next roll.
+              </p>
             </section>
 
             <section class="control-section">
@@ -108,6 +178,122 @@
                     <output id="markings-color-value">#191919</output>
                   </span>
                 </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Numeral font</span>
+                  <select id="font-preset" name="font-preset">
+                    <option value="default" selected>Cinzel 700 (bundled)</option>
+                    <option value="georgia">Georgia (system)</option>
+                    <option value="trebuchet">Trebuchet MS (system)</option>
+                    <option value="custom">Custom font</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>D6 markings</span>
+                  <select id="d6-label-mode" name="d6-label-mode">
+                    <option value="dots" selected>Dots</option>
+                    <option value="numbers">Numbers</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="field">
+                <span>Numeral size <output id="font-size-value">1.00×</output></span>
+                <input
+                  id="font-size"
+                  name="font-size"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1"
+                />
+                <button id="reset-font-size-button" class="button button--ghost" type="button">
+                  Reset numeral size
+                </button>
+                <p class="hint">
+                  Relative scale of generated numeric markings. D6 dots are intentionally unchanged.
+                </p>
+              </div>
+
+              <div class="field">
+                <span>Engraving depth <output id="engraving-depth-value">1.00×</output></span>
+                <input
+                  id="engraving-depth"
+                  name="engraving-depth"
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  value="1"
+                />
+                <button
+                  id="reset-engraving-depth-button"
+                  class="button button--ghost"
+                  type="button"
+                >
+                  Reset engraving depth
+                </button>
+                <p class="hint">
+                  0 is flat, 1 is the default recessed numeric engraving. D6 dots are unchanged.
+                </p>
+              </div>
+
+              <details class="settings-group settings-group--nested">
+                <summary class="settings-summary settings-summary--nested">
+                  <span>
+                    <strong>Advanced appearance & assets</strong>
+                    <small>Custom font, global texture and per-face overrides</small>
+                  </span>
+                </summary>
+                <div class="settings-group__body settings-group__body--nested">
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Custom font family</span>
+                  <input
+                    id="font-family"
+                    name="font-family"
+                    type="text"
+                    placeholder="Roboto Slab"
+                    disabled
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Font weight</span>
+                  <input
+                    id="font-weight"
+                    name="font-weight"
+                    type="number"
+                    value="700"
+                    min="1"
+                    max="1000"
+                    step="1"
+                    disabled
+                  />
+                </label>
+              </div>
+
+              <div class="field">
+                <span>Custom font URL <small>optional</small></span>
+                <input
+                  id="font-url"
+                  name="font-url"
+                  type="url"
+                  inputmode="url"
+                  placeholder="/fonts/RobotoSlab.woff2"
+                  disabled
+                />
+                <button id="reset-font-button" class="button button--ghost" type="button">
+                  Reset font to bundled default
+                </button>
+                <p class="hint">
+                  D6 keeps dots by default. Switch it to Numbers to verify the same font and the
+                  orientation marker under 6. D10/D20 also make 9/19 easy to inspect.
+                </p>
               </div>
 
               <div class="field">
@@ -141,17 +327,249 @@
                   <label class="field"><span>Face 6</span><input id="face-6" type="url" placeholder="URL" /></label>
                 </div>
               </details>
+                </div>
+              </details>
             </section>
 
-            <section class="control-section control-section--actions">
-              <label class="toggle">
-                <input id="debug-mode" type="checkbox" />
-                <span>Show debug pipeline</span>
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Table</strong>
+                  <small>Surface color and optional texture</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
+              <div class="section-heading">
+                <span class="section-index">03</span>
+                <div>
+                  <h2>Table</h2>
+                  <p>Configure the visible table material without changing dice physics.</p>
+                </div>
+              </div>
+
+              <label class="field field--color">
+                <span>Table color</span>
+                <span class="color-control">
+                  <input id="table-color" name="table-color" type="color" value="#292d33" />
+                  <output id="table-color-value">#292D33</output>
+                </span>
               </label>
 
-              <button id="compare-button" class="button button--ghost" type="button">
-                Roll D4 + D6 + D8 together
+              <div class="field">
+                <span>Table texture URL <small>optional</small></span>
+                <input
+                  id="table-texture"
+                  name="table-texture"
+                  type="url"
+                  inputmode="url"
+                  placeholder="https://example.com/table-texture.jpg"
+                  aria-label="Table texture URL"
+                />
+                <div class="actions">
+                  <button id="sample-table-texture-button" class="button button--ghost" type="button">
+                    Use test texture
+                  </button>
+                  <button id="reset-table-button" class="button button--ghost" type="button">
+                    Reset table
+                  </button>
+                </div>
+                <p class="hint">
+                  The texture affects only the rendered table. The cannon-es collision plane and
+                  logical dice result stay unchanged.
+                </p>
+              </div>
+              </div>
+            </details>
+
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Camera</strong>
+                  <small>Orbit, tilt and distance</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
+              <div class="section-heading">
+                <span class="section-index">04</span>
+                <div>
+                  <h2>Camera</h2>
+                  <p>X orbits around the table, Y tilts away from top-down, Z controls distance.</p>
+                </div>
+              </div>
+
+              <label class="field">
+                <span>X / orbit <output id="camera-x-value">0°</output></span>
+                <input
+                  id="camera-x"
+                  name="camera-x"
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value="0"
+                />
+              </label>
+
+              <label class="field">
+                <span>Y / tilt from top <output id="camera-y-value">54°</output></span>
+                <input
+                  id="camera-y"
+                  name="camera-y"
+                  type="range"
+                  min="0"
+                  max="85"
+                  step="1"
+                  value="53.75"
+                />
+              </label>
+
+              <label class="field">
+                <span>Z / distance <output id="camera-z-value">9.3</output></span>
+                <input
+                  id="camera-z"
+                  name="camera-z"
+                  type="range"
+                  min="4"
+                  max="20"
+                  step="0.1"
+                  value="9.3"
+                />
+              </label>
+
+              <button id="reset-camera-button" class="button button--ghost" type="button">
+                Reset camera
               </button>
+              <p class="hint">
+                Set X = 0° and Y = 0° for an exact vertical top-down view. At Y = 0°, changing X
+                does not change the view because the camera is directly above the table center.
+              </p>
+              </div>
+            </details>
+
+            <details class="settings-group">
+              <summary class="settings-summary">
+                <span>
+                  <strong>Lighting</strong>
+                  <small>Scene mood, key light and presets</small>
+                </span>
+              </summary>
+              <div class="settings-group__body">
+              <div class="section-heading">
+                <span class="section-index">05</span>
+                <div>
+                  <h2>Lighting</h2>
+                  <p>Change the scene mood without affecting dice physics or the logical result.</p>
+                </div>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field field--color">
+                  <span>Ambient color</span>
+                  <span class="color-control">
+                    <input id="ambient-color" name="ambient-color" type="color" value="#ffffff" />
+                    <output id="ambient-color-value">#FFFFFF</output>
+                  </span>
+                </label>
+
+                <label class="field">
+                  <span>Ambient intensity <output id="ambient-intensity-value">1.40</output></span>
+                  <input
+                    id="ambient-intensity"
+                    name="ambient-intensity"
+                    type="range"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="1.4"
+                  />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field field--color">
+                  <span>Key light color</span>
+                  <span class="color-control">
+                    <input id="key-light-color" name="key-light-color" type="color" value="#ffffff" />
+                    <output id="key-light-color-value">#FFFFFF</output>
+                  </span>
+                </label>
+
+                <label class="field">
+                  <span>Key intensity <output id="key-light-intensity-value">2.20</output></span>
+                  <input
+                    id="key-light-intensity"
+                    name="key-light-intensity"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.05"
+                    value="2.2"
+                  />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Key X</span>
+                  <input id="key-light-x" name="key-light-x" type="number" value="4" step="0.5" />
+                </label>
+                <label class="field">
+                  <span>Key Y</span>
+                  <input id="key-light-y" name="key-light-y" type="number" value="8" step="0.5" />
+                </label>
+              </div>
+
+              <div class="field-grid field-grid--two">
+                <label class="field">
+                  <span>Key Z</span>
+                  <input id="key-light-z" name="key-light-z" type="number" value="5" step="0.5" />
+                </label>
+                <label class="toggle">
+                  <input id="key-light-shadow" type="checkbox" />
+                  <span>Cast shadows</span>
+                </label>
+              </div>
+
+              <div class="actions">
+                <button id="lighting-neutral-button" class="button button--ghost" type="button">
+                  Neutral
+                </button>
+                <button id="lighting-warm-button" class="button button--ghost" type="button">
+                  Warm
+                </button>
+                <button id="lighting-moody-button" class="button button--ghost" type="button">
+                  Dark / Moody
+                </button>
+                <button id="reset-lighting-button" class="button button--ghost" type="button">
+                  Reset lighting
+                </button>
+              </div>
+              <p class="hint">
+                Neutral matches the previous DiceKit defaults. Presets only change rendering.
+                Directional and point lights can also be mixed through the public API.
+              </p>
+              </div>
+            </details>
+
+            <section class="control-section control-section--actions control-footer">
+              <details class="developer-tools">
+                <summary class="settings-summary settings-summary--compact">
+                  <span>
+                    <strong>Developer tools</strong>
+                    <small>Debug pipeline and all-dice comparison</small>
+                  </span>
+                </summary>
+                <div class="developer-tools__body">
+                  <label class="toggle">
+                    <input id="debug-mode" type="checkbox" />
+                    <span>Show debug pipeline</span>
+                  </label>
+
+                  <button id="compare-button" class="button button--ghost" type="button">
+                    Roll D4 + D6 + D8 + D10 + D12 + D20 together
+                  </button>
+                </div>
+              </details>
 
               <div class="actions">
                 <button id="roll-button" class="button button--primary" type="submit">Roll dice</button>
@@ -180,6 +598,17 @@
               <strong>Press Roll dice</strong>
               <span>The renderer is created lazily and reused between rolls.</span>
             </div>
+          </div>
+
+          <div class="mobile-roll-actions">
+            <button
+              id="mobile-roll-button"
+              class="button button--primary"
+              type="submit"
+              form="dice-form"
+            >
+              Roll dice
+            </button>
           </div>
 
           <div class="result-grid">

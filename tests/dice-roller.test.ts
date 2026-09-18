@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DiceRoller,
+  getDiceTotalRange,
   type DiceDefinition,
   type DiceRollRequest,
   type RandomProvider
@@ -54,6 +55,36 @@ describe("DiceRoller", () => {
     });
   });
 
+  it("can build an authoritative mixed-dice result for an exact dice total", () => {
+    const roller = new DiceRoller({
+      randomProvider: new SequenceRandomProvider([0.5, 0.25]),
+      rollIdProvider: () => "forced-total"
+    });
+
+    const result = roller.rollToDiceTotal(
+      { dice: [{ sides: 6 }, { sides: 8 }, { sides: 20 }], modifier: 2 },
+      19
+    );
+
+    expect(result.dice.reduce((sum, die) => sum + die.value, 0)).toBe(19);
+    expect(result.total).toBe(21);
+    expect(result.rollId).toBe("forced-total");
+  });
+
+  it("rejects an exact dice total outside the current dice range", () => {
+    const roller = new DiceRoller({
+      randomProvider: new SequenceRandomProvider([]),
+      rollIdProvider: () => "unused"
+    });
+
+    expect(() =>
+      roller.rollToDiceTotal({ dice: [{ sides: 10 }, { sides: 10 }, { sides: 10 }] }, 2)
+    ).toThrowError(RangeError);
+    expect(() =>
+      roller.rollToDiceTotal({ dice: [{ sides: 10 }, { sides: 10 }, { sides: 10 }] }, 31)
+    ).toThrowError(RangeError);
+  });
+
   it("normalizes a missing modifier to zero", () => {
     const roller = new DiceRoller({
       randomProvider: new SequenceRandomProvider([0.25]),
@@ -78,6 +109,13 @@ describe("DiceRoller", () => {
       });
 
     expect(createRoller().roll(request)).toEqual(createRoller().roll(request));
+  });
+
+  it("calculates the dynamic valid dice-total range for mixed dice", () => {
+    expect(getDiceTotalRange([{ sides: 6 }, { sides: 8 }, { sides: 20 }])).toEqual({
+      min: 3,
+      max: 34
+    });
   });
 
   it("rejects rolls without dice", () => {

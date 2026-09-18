@@ -15,6 +15,28 @@ describe("DicePhysicsWorld", () => {
     world.dispose();
   });
 
+  it("creates invisible walls from an arbitrary viewport polygon", () => {
+    const boundary = [
+      { x: -4, z: -2 },
+      { x: 5, z: -3 },
+      { x: 4, z: 3 },
+      { x: -3, z: 2 }
+    ] as const;
+    const world = new DicePhysicsWorld({ arenaBoundary: boundary });
+
+    expect(world.config.arenaBoundary).toEqual(boundary);
+    expect(world.world.bodies).toHaveLength(5);
+    expect(world.world.bodies.slice(1).some((body) => Math.abs(body.quaternion.y) > 1e-3)).toBe(true);
+
+    world.dispose();
+  });
+
+  it("rejects malformed viewport polygons", () => {
+    expect(
+      () => new DicePhysicsWorld({ arenaBoundary: [{ x: 0, z: 0 }, { x: 1, z: 0 }] })
+    ).toThrowError(RangeError);
+  });
+
   it("detects stable and moving D6 bodies from velocities", () => {
     const world = new DicePhysicsWorld();
     const body = world.addD6(stableState);

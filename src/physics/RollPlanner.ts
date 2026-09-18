@@ -14,6 +14,7 @@ import {
   type StabilityOptions
 } from "./DicePhysicsWorld.js";
 import type {
+  DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
   RollInitialState,
@@ -21,6 +22,23 @@ import type {
   RollPlanDie,
   StabilityConfig
 } from "./RollModels.js";
+
+export const MIN_THROW_FORCE = 0.5;
+export const DEFAULT_THROW_FORCE = 1;
+export const MAX_THROW_FORCE = 1.5;
+export const MIN_DICE_SCALE = 0.5;
+export const DEFAULT_DICE_SCALE = 1;
+export const MAX_DICE_SCALE = 1.5;
+export const MAX_DICE_PER_ROLL = 6;
+
+export interface RollPlanningOptions {
+  /** Multiplier applied to initial linear and angular velocity. Defaults to 1. */
+  readonly throwForce?: number;
+  /** Relative visual + physical size multiplier. Defaults to 1. */
+  readonly diceScale?: number;
+  /** Camera/table viewport polygon used as invisible physical walls for this roll. */
+  readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
+}
 
 export interface RollInitialStateContext {
   readonly attempt: number;
@@ -71,6 +89,30 @@ function requirePositiveFinite(name: string, value: number): number {
   }
 
   return value;
+}
+
+function resolveThrowForce(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_THROW_FORCE;
+
+  if (!Number.isFinite(resolved) || resolved < MIN_THROW_FORCE || resolved > MAX_THROW_FORCE) {
+    throw new RangeError(
+      `throwForce must be between ${MIN_THROW_FORCE} and ${MAX_THROW_FORCE}; received ${String(resolved)}.`
+    );
+  }
+
+  return resolved;
+}
+
+function resolveDiceScale(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_DICE_SCALE;
+
+  if (!Number.isFinite(resolved) || resolved < MIN_DICE_SCALE || resolved > MAX_DICE_SCALE) {
+    throw new RangeError(
+      `diceScale must be between ${MIN_DICE_SCALE} and ${MAX_DICE_SCALE}; received ${String(resolved)}.`
+    );
+  }
+
+  return resolved;
 }
 
 function normalizeQuaternion(quaternion: PhysicsQuaternion): PhysicsQuaternion {
@@ -184,7 +226,15 @@ export class RollPlanner {
     );
   }
 
-  plan(result: DiceRollResult): RollPlan {
+  plan(result: DiceRollResult, options: RollPlanningOptions = {}): RollPlan {
+    const throwForce = resolveThrowForce(options.throwForce);
+    const diceScale = resolveDiceScale(options.diceScale);
+    const baseDiceSize = this.physicsOptions.diceSize ?? DEFAULT_DICE_PHYSICS_CONFIG.diceSize;
+    const physicsOptions: DicePhysicsWorldOptions = {
+      ...this.physicsOptions,
+      diceSize: baseDiceSize * diceScale,
+      ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
+    };
     const expectedDice = this.validateResult(result);
     const startedAt = this.nowProvider();
     let lastFailure = "No matching physical plan was found.";
@@ -200,14 +250,16 @@ export class RollPlanner {
           throw new RollPlanningError(`Missing die result at index ${dieIndex}.`);
         }
 
-        const slotX = this.slotX(dieIndex, expectedDice.length);
+        const slotX = this.slotX(dieIndex, expectedDice.length, diceScale);
         const initialState = this.findInitialState(
           expectedDie.sides,
           expectedDie.value,
           dieIndex,
           expectedDice.length,
           slotX,
-          startedAt
+          startedAt,
+          throwForce,
+          physicsOptions
         );
 
         plannedDice.push({
@@ -217,7 +269,7 @@ export class RollPlanner {
         });
       }
 
-      const verification = this.verifyCombinedPlan(plannedDice);
+      const verification = this.verifyCombinedPlan(plannedDice, physicsOptions);
 
       if (verification.matches) {
         return {
@@ -241,22 +293,27 @@ export class RollPlanner {
     dieIndex: number,
     diceCount: number,
     slotX: number,
-    startedAt: number
+    startedAt: number,
+    throwForce: number,
+    physicsOptions: DicePhysicsWorldOptions
   ): RollInitialState {
     for (let attempt = 1; attempt <= this.maxAttemptsPerDie; attempt += 1) {
       this.assertWithinDeadline(startedAt);
-      const probeWorld = new DicePhysicsWorld(this.physicsOptions);
+      const probeWorld = new DicePhysicsWorld(physicsOptions);
 
       try {
-        const state = this.initialStateProvider({
-          attempt,
-          dieIndex,
-          diceCount,
-          sides,
-          expectedValue,
-          slotX,
-          diceSize: probeWorld.config.diceSize
-        });
+        const state = this.applyThrowForce(
+          this.initialStateProvider({
+            attempt,
+            dieIndex,
+            diceCount,
+            sides,
+            expectedValue,
+            slotX,
+            diceSize: probeWorld.config.diceSize
+          }),
+          throwForce
+        );
         const body = probeWorld.addDie(sides, state);
         const simulation = probeWorld.simulateUntilStable([body], this.stabilityConfig);
 
@@ -273,13 +330,16 @@ export class RollPlanner {
     );
   }
 
-  private verifyCombinedPlan(plannedDice: readonly RollPlanDie[]): {
+  private verifyCombinedPlan(
+    plannedDice: readonly RollPlanDie[],
+    physicsOptions: DicePhysicsWorldOptions
+  ): {
     readonly matches: boolean;
     readonly reason: string;
     readonly steps: number;
     readonly physics: DicePhysicsConfig;
   } {
-    const world = new DicePhysicsWorld(this.physicsOptions);
+    const world = new DicePhysicsWorld(physicsOptions);
 
     try {
       const bodies = plannedDice.map((die) => world.addDie(die.sides, die.initialState));
@@ -324,8 +384,10 @@ export class RollPlanner {
   }
 
   private validateResult(result: DiceRollResult): readonly DieResult[] {
-    if (result.dice.length < 1 || result.dice.length > 3) {
-      throw new RangeError("RollPlanner currently supports between one and three dice.");
+    if (result.dice.length < 1 || result.dice.length > MAX_DICE_PER_ROLL) {
+      throw new RangeError(
+        `RollPlanner currently supports between one and ${MAX_DICE_PER_ROLL} dice.`
+      );
     }
 
     for (let index = 0; index < result.dice.length; index += 1) {
@@ -343,6 +405,32 @@ export class RollPlanner {
     }
 
     return result.dice;
+  }
+
+  private applyThrowForce(state: RollInitialState, throwForce: number): RollInitialState {
+    if (throwForce === DEFAULT_THROW_FORCE) {
+      return state;
+    }
+
+    const forceDelta = throwForce - DEFAULT_THROW_FORCE;
+    const tumbleScale = DEFAULT_THROW_FORCE + forceDelta * 0.35;
+    const yawScale = DEFAULT_THROW_FORCE + forceDelta * 0.75;
+
+    return {
+      ...state,
+      velocity: {
+        x: state.velocity.x * throwForce,
+        y: state.velocity.y * throwForce,
+        z: state.velocity.z * throwForce
+      },
+      angularVelocity: {
+        // Strong throws keep their extra translational energy without destroying the
+        // target-face bias through equally aggressive uncontrolled X/Z tumble.
+        x: state.angularVelocity.x * tumbleScale,
+        y: state.angularVelocity.y * yawScale,
+        z: state.angularVelocity.z * tumbleScale
+      }
+    };
   }
 
   private createRandomInitialState(context: RollInitialStateContext): RollInitialState {
@@ -446,8 +534,8 @@ export class RollPlanner {
     return sample;
   }
 
-  private slotX(index: number, count: number): number {
-    return (index - (count - 1) / 2) * this.slotSpacing;
+  private slotX(index: number, count: number, diceScale: number): number {
+    return (index - (count - 1) / 2) * this.slotSpacing * diceScale;
   }
 
   private assertWithinDeadline(startedAt: number): void {

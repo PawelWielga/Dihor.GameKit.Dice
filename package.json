@@ -19,7 +19,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
@@ -32,6 +33,7 @@
     "preview:demo": "vite preview --config vite.demo.config.ts"
   },
   "dependencies": {
+    "@fontsource/cinzel": "5.3.0",
     "cannon-es": "0.20.0",
     "three": "0.186.0"
   },

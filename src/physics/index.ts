@@ -9,16 +9,34 @@ export type {
   StabilityOptions,
   StabilityResult
 } from "./DicePhysicsWorld.js";
+export { BackgroundRollPlanner } from "./BackgroundRollPlanner.js";
+export { DirectRollPlanner } from "./DirectRollPlanner.js";
+export type { DirectRollPlannerOptions } from "./DirectRollPlanner.js";
+export type {
+  BackgroundRollPlannerOptions,
+  BackgroundRollPlanningTiming,
+  RollPlanningWorkerFactory,
+  RollPlanningWorkerLike
+} from "./BackgroundRollPlanner.js";
 export {
+  DEFAULT_DICE_SCALE,
+  DEFAULT_THROW_FORCE,
+  MAX_DICE_PER_ROLL,
+  MAX_DICE_SCALE,
+  MAX_THROW_FORCE,
+  MIN_DICE_SCALE,
+  MIN_THROW_FORCE,
   RollPlanner,
   RollPlanningError
 } from "./RollPlanner.js";
 export type {
   RollInitialStateContext,
   RollInitialStateProvider,
-  RollPlannerOptions
+  RollPlannerOptions,
+  RollPlanningOptions
 } from "./RollPlanner.js";
 export type {
+  DiceArenaBoundaryPoint,
   DicePhysicsConfig,
   PhysicsQuaternion,
   PhysicsVector3,
