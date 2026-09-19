@@ -173,7 +173,7 @@ describe("dice audio", () => {
 
     const engine = new DiceAudioEngine();
 
-    await expect(engine.prepare()).resolves.toBeUndefined();
+    expect(engine.prepare()).toBeUndefined();
     await expect(engine.unlock()).resolves.toBeUndefined();
     expect(() => engine.attach([], 5)).not.toThrow();
     expect(() => engine.dispose()).not.toThrow();
