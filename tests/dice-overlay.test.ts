@@ -75,8 +75,13 @@ class FakeRenderer implements DiceOverlayRenderer {
 
 class FakePlayer implements DiceOverlayPlayer {
   readonly unlockAudio = vi.fn(async () => undefined);
+  appearanceGate?: Promise<void>;
   readonly setAppearances = vi.fn(
-    async (_appearances: readonly (DiceAppearance | undefined)[]) => undefined
+    async (_appearances: readonly (DiceAppearance | undefined)[]) => {
+      if (this.appearanceGate) {
+        await this.appearanceGate;
+      }
+    }
   );
   readonly cancel = vi.fn();
   readonly clear = vi.fn();
@@ -745,6 +750,50 @@ describe("DiceOverlay", () => {
       { color: "#112233" },
       undefined
     ]);
+
+    overlay.dispose();
+  });
+
+  it("serializes freeze appearance updates with roll and reroll operations", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    let releaseAppearance!: () => void;
+    player.appearanceGate = new Promise<void>((resolve) => {
+      releaseAppearance = resolve;
+    });
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner: { plan: createPlan },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }, { sides: 6 }] });
+    const freezing = overlay.freeze(first.dice[0]!.id, {
+      appearance: { textureUrl: "/slow-frozen.png" }
+    });
+
+    await expect(overlay.rerollUnfrozen()).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
+    await expect(overlay.roll({ dice: [{ sides: 6 }] })).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
+
+    releaseAppearance();
+    const frozen = await freezing;
+    expect(frozen.dice[0]?.frozen).toBe(true);
+
+    player.appearanceGate = undefined;
+    await expect(overlay.rerollUnfrozen()).resolves.toMatchObject({
+      dice: [
+        expect.objectContaining({ frozen: true }),
+        expect.objectContaining({ frozen: false })
+      ]
+    });
 
     overlay.dispose();
   });
