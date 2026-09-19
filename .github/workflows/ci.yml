@@ -81,6 +81,17 @@ jobs:
           test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.license')" = "MIT"
           tar -tzf "$PACKAGE" > package-files.txt
           grep -q '^package/dist/' package-files.txt
+          grep -Eq '^package/dist/assets/.*\\.ogg          for FILE in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
+            grep -q "^package/$FILE$" package-files.txt
+          done
+
+      - name: Upload npm prerelease artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dihor-gamekit-dice-${{ github.sha }}
+          path: artifacts/npm/*.tgz
+          if-no-files-found: error
+ package-files.txt
           for FILE in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
             grep -q "^package/$FILE$" package-files.txt
           done
