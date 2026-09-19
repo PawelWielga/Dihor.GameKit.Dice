@@ -44,12 +44,17 @@ export {
 export {
   DiceOverlay,
   DiceOverlayError,
+  type DiceFreezeOptions,
+  type DiceOverlayDieResult,
   type DiceOverlayErrorPhase,
   type DiceOverlayOptions,
-  type DiceOverlayRollOptions
+  type DiceOverlayRollOptions,
+  type DiceOverlayRollResult,
+  type FrozenDiceAppearance
 } from "./overlay/index.js";
 export type {
   DirectRollPlan,
+  FrozenDicePhysicsMode,
   PresimulatedRollPlan,
   RollPlan
 } from "./physics/index.js";
