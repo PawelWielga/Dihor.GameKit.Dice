@@ -66,6 +66,8 @@ export interface DiceOverlayRenderer extends DiceRenderTarget {
 }
 
 export interface DiceOverlayPlayer {
+  /** Optional browser-audio unlock hook. Should be invoked directly from a user gesture when available. */
+  unlockAudio?(): Promise<void>;
   play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult>;
   cancel(): void;
   clear(): void;
@@ -129,6 +131,18 @@ const createDefaultPlayer = (
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function unlockPlayerAudio(player: DiceOverlayPlayer): void {
+  try {
+    const unlock = player.unlockAudio?.();
+
+    if (unlock) {
+      void unlock.catch(() => undefined);
+    }
+  } catch {
+    // Audio policy/integration failures must never fail the dice roll.
+  }
 }
 
 function formatResult(result: DiceRollResult): string {
@@ -231,6 +245,8 @@ export class DiceOverlay {
       throw this.wrapError("rendering", error);
     }
 
+    unlockPlayerAudio(surface.player);
+
     let plan: RollPlan;
     try {
       this.presentRolling(surface, request.reason ?? logicalResult.reason);
@@ -302,6 +318,8 @@ export class DiceOverlay {
     } catch (error) {
       throw this.wrapError("rendering", error);
     }
+
+    unlockPlayerAudio(surface.player);
 
     let plan: RollPlan;
     try {
