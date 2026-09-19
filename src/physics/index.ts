@@ -5,6 +5,7 @@ export {
   resolveStabilityConfig
 } from "./DicePhysicsWorld.js";
 export type {
+  DiceBodyOptions,
   DicePhysicsWorldOptions,
   StabilityOptions,
   StabilityResult
@@ -41,6 +42,8 @@ export type {
   DicePhysicsConfig,
   DirectRollPlan,
   DirectRollPlanDie,
+  FrozenDicePhysicsMode,
+  FrozenRollDieState,
   PhysicsQuaternion,
   PhysicsVector3,
   PresimulatedRollPlan,
