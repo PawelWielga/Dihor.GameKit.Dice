@@ -159,6 +159,17 @@ export class DiceRollPlayer {
     }
   }
 
+  /**
+   * Attempts to unlock browser audio.
+   *
+   * Call from a direct user gesture when later rolls may be triggered
+   * programmatically (for example by a multiplayer event).
+   */
+  unlockAudio(): Promise<void> {
+    this.assertActive();
+    return this.audio?.unlock() ?? Promise.resolve();
+  }
+
   async play(
     plan: RollPlan,
     options: DiceRollPlaybackOptions = {}
@@ -183,6 +194,12 @@ export class DiceRollPlayer {
     const meshes: DiceMesh[] = [];
     const preparation = createPlaybackPreparation();
     this.activePreparation = preparation;
+
+    // Start resume synchronously while play() may still be executing inside
+    // a user gesture, and load samples in parallel with mesh preparation.
+    void this.audio?.unlock();
+    const audioPreparation = this.audio?.prepare();
+
     let world: DicePhysicsWorld | undefined;
 
     try {
@@ -216,6 +233,10 @@ export class DiceRollPlayer {
         }
 
         meshes.push(mesh);
+      }
+
+      if (audioPreparation) {
+        await Promise.race([audioPreparation, preparation.cancellation]);
       }
 
       if (preparation.cancelled || this.disposed) {
