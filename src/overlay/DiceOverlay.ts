@@ -440,6 +440,7 @@ export class DiceOverlay {
     ids: string | readonly string[],
     options: DiceFreezeOptions = {}
   ): Promise<DiceOverlayRollResult> {
+    this.assertActive();
     this.assertIdleState();
     const state = this.requireRollState();
     const surface = this.requireSurface();
@@ -452,27 +453,34 @@ export class DiceOverlay {
       frozenAppearance: die.frozenAppearance
     }));
 
-    for (const die of selected) {
-      die.frozen = true;
-      die.frozenPhysicsMode = resolved.physicsMode;
-      die.frozenAppearance = resolved.appearance;
-    }
+    this.activeRoll = true;
 
     try {
-      await this.applyCurrentAppearances(surface, state);
-    } catch (error) {
-      for (const snapshot of previous) {
-        snapshot.die.frozen = snapshot.frozen;
-        snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
-        snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+      for (const die of selected) {
+        die.frozen = true;
+        die.frozenPhysicsMode = resolved.physicsMode;
+        die.frozenAppearance = resolved.appearance;
       }
-      throw this.wrapError("rendering", error);
-    }
 
-    return this.getCurrentResult();
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        for (const snapshot of previous) {
+          snapshot.die.frozen = snapshot.frozen;
+          snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
+          snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+        }
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
   }
 
   async unfreeze(id: string): Promise<DiceOverlayRollResult> {
+    this.assertActive();
     this.assertIdleState();
     const state = this.requireRollState();
     const surface = this.requireSurface();
@@ -483,23 +491,30 @@ export class DiceOverlay {
       frozenAppearance: die!.frozenAppearance
     };
 
-    die!.frozen = false;
-    die!.frozenPhysicsMode = undefined;
-    die!.frozenAppearance = undefined;
+    this.activeRoll = true;
 
     try {
-      await this.applyCurrentAppearances(surface, state);
-    } catch (error) {
-      die!.frozen = previous.frozen;
-      die!.frozenPhysicsMode = previous.frozenPhysicsMode;
-      die!.frozenAppearance = previous.frozenAppearance;
-      throw this.wrapError("rendering", error);
-    }
+      die!.frozen = false;
+      die!.frozenPhysicsMode = undefined;
+      die!.frozenAppearance = undefined;
 
-    return this.getCurrentResult();
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        die!.frozen = previous.frozen;
+        die!.frozenPhysicsMode = previous.frozenPhysicsMode;
+        die!.frozenAppearance = previous.frozenAppearance;
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
   }
 
   async unfreezeAll(): Promise<DiceOverlayRollResult> {
+    this.assertActive();
     this.assertIdleState();
     const state = this.requireRollState();
     const surface = this.requireSurface();
@@ -510,30 +525,38 @@ export class DiceOverlay {
       frozenAppearance: die.frozenAppearance
     }));
 
-    for (const die of state.dice) {
-      die.frozen = false;
-      die.frozenPhysicsMode = undefined;
-      die.frozenAppearance = undefined;
-    }
+    this.activeRoll = true;
 
     try {
-      await this.applyCurrentAppearances(surface, state);
-    } catch (error) {
-      for (const snapshot of previous) {
-        snapshot.die.frozen = snapshot.frozen;
-        snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
-        snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+      for (const die of state.dice) {
+        die.frozen = false;
+        die.frozenPhysicsMode = undefined;
+        die.frozenAppearance = undefined;
       }
-      throw this.wrapError("rendering", error);
-    }
 
-    return this.getCurrentResult();
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        for (const snapshot of previous) {
+          snapshot.die.frozen = snapshot.frozen;
+          snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
+          snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+        }
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
   }
 
   async toggleFreeze(
     id: string,
     options: DiceFreezeOptions = {}
   ): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
     const state = this.requireRollState();
     const [die] = this.resolveDiceByIds(state, id);
     return die!.frozen ? this.unfreeze(id) : this.freeze(id, options);
