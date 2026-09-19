@@ -9,6 +9,8 @@ import {
   DicePhysicsWorld,
   MAX_DICE_PER_ROLL,
   resolveStabilityConfig,
+  type PhysicsQuaternion,
+  type PhysicsVector3,
   type RollPlan,
   type StabilityConfig
 } from "../physics/index.js";
@@ -44,6 +46,8 @@ export interface DiceRollPlaybackOptions {
 export interface DiceRollPlaybackDieResult {
   readonly sides: DiceSides;
   readonly value: number;
+  readonly position: PhysicsVector3;
+  readonly rotation: PhysicsQuaternion;
 }
 
 export interface DiceRollPlaybackResult {
@@ -142,6 +146,8 @@ export class DiceRollPlayer {
   private activePreparation?: PlaybackPreparation;
   private activeSession?: PlaybackSession;
   private visibleMeshes: DiceMesh[] = [];
+  private visibleSides: DiceSides[] = [];
+  private visibleDiceSize?: number;
   private disposed = false;
 
   constructor(target: DiceRenderTarget, options: DiceRollPlayerOptions = {}) {
@@ -211,26 +217,12 @@ export class DiceRollPlayer {
         }
 
         const appearance = options.appearances?.[index];
-        const meshOptions = {
-          size: plan.physics.diceSize,
+        const mesh = await this.createPreparedMesh(
+          preparation,
+          die.sides,
+          plan.physics.diceSize,
           appearance
-        };
-        const usesTextureAssets = hasDiceTextureSources(appearance);
-        const mesh = usesTextureAssets
-          ? await this.awaitPreparedMesh(
-              preparation,
-              die.sides === 6
-                ? this.meshFactory.createD6Async(meshOptions)
-                : this.meshFactory.createAsync(die.sides, meshOptions)
-            )
-          : die.sides === 6
-            ? this.meshFactory.createD6(meshOptions)
-            : this.meshFactory.create(die.sides, meshOptions);
-
-        if (preparation.cancelled || this.disposed) {
-          mesh.dispose();
-          throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
-        }
+        );
 
         meshes.push(mesh);
       }
@@ -245,7 +237,11 @@ export class DiceRollPlayer {
 
       this.activePreparation = undefined;
       world = new DicePhysicsWorld(plan.physics);
-      const bodies = plan.dice.map((die) => world!.addDie(die.sides, die.initialState));
+      const bodies = plan.dice.map((die) =>
+        world!.addDie(die.sides, die.initialState, {
+          frozenPhysicsMode: die.frozenPhysicsMode
+        })
+      );
       this.audio?.attach(bodies, plan.physics.arenaHalfExtent);
 
       for (const mesh of meshes) {
@@ -253,6 +249,8 @@ export class DiceRollPlayer {
       }
 
       this.visibleMeshes = meshes;
+      this.visibleSides = plan.dice.map((die) => die.sides);
+      this.visibleDiceSize = plan.physics.diceSize;
       this.syncMeshes(bodies, meshes);
       this.target.render();
 
@@ -285,6 +283,91 @@ export class DiceRollPlayer {
 
       if (preparation.cancelled || this.disposed) {
         throw new DiceRollPlaybackError("Dice roll playback was cancelled.", { cause: error });
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Rebuilds the currently visible dice with new appearance settings while preserving
+   * their settled transforms. Used by high-level freeze/unfreeze controls.
+   */
+  async setAppearances(
+    appearances: readonly (DiceAppearance | undefined)[]
+  ): Promise<void> {
+    this.assertActive();
+
+    if (this.activeSession || this.activePreparation) {
+      throw new DiceRollPlaybackError(
+        "Dice appearances cannot be changed while playback is active."
+      );
+    }
+
+    if (this.visibleMeshes.length === 0) {
+      return;
+    }
+
+    if (
+      appearances.length !== this.visibleMeshes.length ||
+      this.visibleSides.length !== this.visibleMeshes.length ||
+      this.visibleDiceSize === undefined
+    ) {
+      throw new RangeError(
+        `Received ${appearances.length} appearance entries for ${this.visibleMeshes.length} visible dice.`
+      );
+    }
+
+    const previousMeshes = this.visibleMeshes;
+    const preparation = createPlaybackPreparation();
+    const replacements: DiceMesh[] = [];
+    this.activePreparation = preparation;
+
+    try {
+      for (let index = 0; index < previousMeshes.length; index += 1) {
+        const sides = this.visibleSides[index];
+        const previous = previousMeshes[index];
+
+        if (!sides || !previous) {
+          throw new DiceRollPlaybackError(`Visible die state is missing at index ${index}.`);
+        }
+
+        const replacement = await this.createPreparedMesh(
+          preparation,
+          sides,
+          this.visibleDiceSize,
+          appearances[index]
+        );
+        replacement.object.position.copy(previous.object.position);
+        replacement.object.quaternion.copy(previous.object.quaternion);
+        replacements.push(replacement);
+      }
+
+      if (preparation.cancelled || this.disposed) {
+        throw new DiceRollPlaybackError("Dice appearance update was cancelled.");
+      }
+
+      this.activePreparation = undefined;
+
+      for (let index = 0; index < previousMeshes.length; index += 1) {
+        const previous = previousMeshes[index]!;
+        const replacement = replacements[index]!;
+        this.target.diceScene.remove(previous.object);
+        this.target.diceScene.add(replacement.object);
+        previous.dispose();
+      }
+
+      this.visibleMeshes = replacements;
+      this.target.render();
+    } catch (error) {
+      if (this.activePreparation === preparation) {
+        this.activePreparation = undefined;
+      }
+
+      this.removeAndDisposeMeshes(replacements);
+
+      if (preparation.cancelled || this.disposed) {
+        throw new DiceRollPlaybackError("Dice appearance update was cancelled.", { cause: error });
       }
 
       throw error;
@@ -328,6 +411,33 @@ export class DiceRollPlayer {
     }
 
     this.disposed = true;
+  }
+
+  private async createPreparedMesh(
+    preparation: PlaybackPreparation,
+    sides: DiceSides,
+    size: number,
+    appearance: DiceAppearance | undefined
+  ): Promise<DiceMesh> {
+    const meshOptions = { size, appearance };
+    const usesTextureAssets = hasDiceTextureSources(appearance);
+    const mesh = usesTextureAssets
+      ? await this.awaitPreparedMesh(
+          preparation,
+          sides === 6
+            ? this.meshFactory.createD6Async(meshOptions)
+            : this.meshFactory.createAsync(sides, meshOptions)
+        )
+      : sides === 6
+        ? this.meshFactory.createD6(meshOptions)
+        : this.meshFactory.create(sides, meshOptions);
+
+    if (preparation.cancelled || this.disposed) {
+      mesh.dispose();
+      throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
+    }
+
+    return mesh;
   }
 
   private async awaitPreparedMesh(
@@ -475,10 +585,24 @@ export class DiceRollPlayer {
     this.activeSession = undefined;
     session.resolve({
       rollId: session.plan.rollId,
-      dice: observed.map((value, index) => ({
-        sides: session.plan.dice[index]!.sides,
-        value
-      })),
+      dice: observed.map((value, index) => {
+        const body = session.bodies[index]!;
+        return {
+          sides: session.plan.dice[index]!.sides,
+          value,
+          position: {
+            x: body.position.x,
+            y: body.position.y,
+            z: body.position.z
+          },
+          rotation: {
+            x: body.quaternion.x,
+            y: body.quaternion.y,
+            z: body.quaternion.z,
+            w: body.quaternion.w
+          }
+        };
+      }),
       simulationSteps: session.simulationSteps
     });
   }
@@ -569,6 +693,8 @@ export class DiceRollPlayer {
   private clearVisibleMeshes(): void {
     this.removeAndDisposeMeshes(this.visibleMeshes);
     this.visibleMeshes = [];
+    this.visibleSides = [];
+    this.visibleDiceSize = undefined;
   }
 
   private removeAndDisposeMeshes(meshes: readonly DiceMesh[]): void {
