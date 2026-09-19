@@ -27,6 +27,7 @@ export {
   DICE_ROLL_EVENT_LIMITS,
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
+  DICE_ROLL_REPLAY_V1_VERSION,
   DICE_ROLL_REPLAY_VERSION,
   createDiceRollEvent,
   diceRollResultFromEvent,
@@ -39,7 +40,9 @@ export {
   type DiceRollEventAssetPolicy,
   type DiceRollEvent,
   type DiceRollEventDie,
-  type DiceRollReplayV1
+  type DiceRollReplay,
+  type DiceRollReplayV1,
+  type DiceRollReplayV2
 } from "./events/index.js";
 export {
   DiceOverlay,
