@@ -957,6 +957,7 @@ async function rerollUnfrozenDice(): Promise<void> {
     resultValue.textContent = "!";
     resultDice.textContent = "Reroll failed";
     resultJson.textContent = JSON.stringify({ error: message }, null, 2);
+    renderFreezeControls(undefined);
     updateDebugPanel();
     setStatus("Reroll failed", "error");
     console.error("Dihor.GameKit.Dice demo partial reroll failed", error);
