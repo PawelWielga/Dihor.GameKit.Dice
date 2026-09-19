@@ -13,6 +13,7 @@ import {
 } from "../core/index.js";
 import {
   BackgroundRollPlanner,
+  DEFAULT_DICE_SCALE,
   DirectRollPlanner,
   type DirectRollPlan,
   type FrozenDicePhysicsMode,
@@ -167,6 +168,7 @@ interface OverlayDieState {
 
 interface OverlayRollState {
   rollId: string;
+  diceScale: number;
   readonly modifier: number;
   readonly reason?: string;
   readonly dice: OverlayDieState[];
@@ -360,7 +362,7 @@ export class DiceOverlay {
       throw this.wrapError("playback", error);
     }
 
-    this.captureRollState(request, returnedResult, playback);
+    this.captureRollState(request, returnedResult, playback, options.diceScale ?? DEFAULT_DICE_SCALE);
 
     if (this.surface === surface) {
       this.presentResult(surface, returnedResult);
@@ -424,7 +426,7 @@ export class DiceOverlay {
       ...(request.reason === undefined ? {} : { reason: request.reason })
     };
 
-    this.captureRollState(request, logicalResult, playback);
+    this.captureRollState(request, logicalResult, playback, options.diceScale ?? DEFAULT_DICE_SCALE);
 
     if (this.surface === surface) {
       this.presentResult(surface, logicalResult);
@@ -587,6 +589,7 @@ export class DiceOverlay {
       const frozenDice = this.createFrozenPlanningState(state);
       const planningOptions: RollPlanningOptions = {
         ...options,
+        diceScale: options.diceScale ?? state.diceScale,
         frozenDice,
         arenaBoundary: surface.renderer.diceScene.getTableBoundary()
       };
@@ -673,6 +676,7 @@ export class DiceOverlay {
       }
 
       this.updateRollStateFromPlayback(state, finalResult, playback);
+      state.diceScale = planningOptions.diceScale ?? DEFAULT_DICE_SCALE;
 
       if (this.surface === surface) {
         this.presentResult(surface, finalResult);
@@ -897,7 +901,8 @@ export class DiceOverlay {
   private captureRollState(
     request: DiceRollRequest,
     result: DiceRollResult,
-    playback: DiceRollPlaybackResult
+    playback: DiceRollPlaybackResult,
+    diceScale: number
   ): void {
     if (request.dice.length !== playback.dice.length || result.dice.length !== playback.dice.length) {
       throw new Error("Visible playback did not return state for every requested die.");
@@ -905,6 +910,7 @@ export class DiceOverlay {
 
     this.rollState = {
       rollId: result.rollId,
+      diceScale,
       modifier: result.modifier,
       ...(result.reason === undefined ? {} : { reason: result.reason }),
       dice: playback.dice.map((playedDie, index) => {
