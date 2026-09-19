@@ -590,10 +590,22 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
       );
     }
 
+    const frozenPhysicsMode = die.frozenPhysicsMode;
+    if (
+      frozenPhysicsMode !== undefined &&
+      frozenPhysicsMode !== "fully-frozen" &&
+      frozenPhysicsMode !== "translation-only"
+    ) {
+      throw new RangeError(
+        `DiceRollEvent replay plan die at index ${index} contains an unsupported frozenPhysicsMode.`
+      );
+    }
+
     return {
       sides: sides as DiceSides,
       expectedValue,
-      initialState: validateInitialStateFromUnknown(die.initialState, index)
+      initialState: validateInitialStateFromUnknown(die.initialState, index),
+      ...(frozenPhysicsMode === undefined ? {} : { frozenPhysicsMode })
     };
   });
 
