@@ -659,6 +659,7 @@ export class DiceOverlay {
     } catch (error) {
       if (this.surface === surface) {
         if (phase === "playback") {
+          this.rollState = undefined;
           surface.resultElement && (surface.resultElement.textContent = "Roll failed");
           surface.player.clear();
         } else {
