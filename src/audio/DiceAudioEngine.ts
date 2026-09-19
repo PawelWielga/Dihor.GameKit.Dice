@@ -274,18 +274,18 @@ export class DiceAudioEngine {
    * Resolves once bundled/custom samples have finished their best-effort fetch/decode.
    * Failed samples are ignored so audio can never fail a dice roll.
    */
-  prepare(): Promise<void> {
+  prepare(): Promise<void> | undefined {
     if (!this.options.enabled || this.disposed) {
-      return Promise.resolve();
+      return undefined;
     }
 
     const context = this.ensureContext();
 
     if (!context) {
-      return Promise.resolve();
+      return undefined;
     }
 
-    return this.preloadPromise ?? Promise.resolve();
+    return this.preloadPromise;
   }
 
   attach(bodies: readonly Body[], arenaHalfExtent: number): void {
@@ -356,9 +356,17 @@ export class DiceAudioEngine {
     }
 
     try {
-      this.context = new AudioContextClass();
-      this.preloadPromise = this.preloadSamples(this.context);
-      return this.context;
+      const context = new AudioContextClass();
+      this.context = context;
+
+      const preload = this.preloadSamples(context).finally(() => {
+        if (this.context === context && this.preloadPromise === preload) {
+          this.preloadPromise = undefined;
+        }
+      });
+      this.preloadPromise = preload;
+
+      return context;
     } catch {
       return undefined;
     }
