@@ -25,7 +25,7 @@ export interface BackgroundRollPlanningTiming {
 
 export interface BackgroundRollPlannerOptions {
   /**
-   * Behavior when a planning Worker cannot be created.
+   * Behavior when a planning Worker cannot be created or fails before producing a plan.
    * Defaults to "direct" so interactive browser consumers never unexpectedly block the UI thread.
    */
   readonly fallbackStrategy?: BackgroundRollFallbackStrategy;
@@ -43,7 +43,7 @@ interface ActivePlanning {
   readonly id: number;
   readonly reject: (reason: Error) => void;
   readonly startedAt: number;
-  readonly worker?: RollPlanningWorkerLike;
+  worker?: RollPlanningWorkerLike;
   fallbackHandle?: ReturnType<typeof setTimeout>;
 }
 
@@ -84,9 +84,18 @@ function toDirectRequest(result: DiceRollResult): DiceRollRequest {
   };
 }
 
+function workerFailureError(error: unknown): RollPlanningError {
+  const detail = error instanceof Error ? error.message : String(error);
+  return new RollPlanningError(
+    detail.length > 0
+      ? `Background roll planning worker failed: ${detail}`
+      : "Background roll planning worker failed."
+  );
+}
+
 /**
  * Runs hidden presimulation away from the browser main thread whenever Worker is available.
- * When Worker creation is unavailable, the fallback behavior is explicit and configurable.
+ * When Worker creation/startup is unavailable, the fallback behavior is explicit and configurable.
  */
 export class BackgroundRollPlanner {
   private readonly fallbackStrategy: BackgroundRollFallbackStrategy;
@@ -131,13 +140,27 @@ export class BackgroundRollPlanner {
       const active: ActivePlanning = { id, reject, startedAt, ...(worker ? { worker } : {}) };
       this.active = active;
 
+      const stopWorker = (): void => {
+        const currentWorker = worker ?? active.worker;
+
+        if (!currentWorker) {
+          return;
+        }
+
+        currentWorker.onmessage = null;
+        currentWorker.onerror = null;
+        currentWorker.terminate();
+        worker = undefined;
+        active.worker = undefined;
+      };
+
       const finish = (plan: RollPlan, usedWorker: boolean): void => {
         if (this.active !== active) {
           return;
         }
 
         this.active = undefined;
-        worker?.terminate();
+        stopWorker();
         this.onTiming?.({
           durationMs: Math.max(0, this.nowProvider() - startedAt),
           usedWorker
@@ -151,8 +174,49 @@ export class BackgroundRollPlanner {
         }
 
         this.active = undefined;
-        worker?.terminate();
+        stopWorker();
         reject(error);
+      };
+
+      const scheduleFallback = (workerError?: Error): void => {
+        if (this.active !== active) {
+          return;
+        }
+
+        stopWorker();
+
+        if (this.fallbackStrategy === "error") {
+          fail(
+            workerError ??
+              new RollPlanningError(
+                "Background roll planning requires a Web Worker; no Worker could be created."
+              )
+          );
+          return;
+        }
+
+        active.fallbackHandle = setTimeout(() => {
+          if (this.active !== active) {
+            return;
+          }
+
+          try {
+            if (this.fallbackStrategy === "direct") {
+              finish(
+                this.directPlanner.plan(toDirectRequest(result), result.rollId, options),
+                false
+              );
+            } else {
+              finish(this.fallbackPlanner.plan(result, options), false);
+            }
+          } catch (error) {
+            fail(
+              error instanceof Error
+                ? error
+                : new RollPlanningError(`Background roll planning failed: ${String(error)}.`)
+            );
+          }
+        }, 0);
       };
 
       if (worker) {
@@ -170,43 +234,21 @@ export class BackgroundRollPlanner {
           }
         };
         worker.onerror = (event) => {
-          fail(new RollPlanningError(event.message ?? "Background roll planning worker failed."));
+          const message = event.message?.trim();
+          scheduleFallback(
+            new RollPlanningError(message || "Background roll planning worker failed.")
+          );
         };
-        worker.postMessage({ id, result, options });
-        return;
-      }
-
-      if (this.fallbackStrategy === "error") {
-        fail(
-          new RollPlanningError(
-            "Background roll planning requires a Web Worker; no Worker could be created."
-          )
-        );
-        return;
-      }
-
-      active.fallbackHandle = setTimeout(() => {
-        if (this.active !== active) {
-          return;
-        }
 
         try {
-          if (this.fallbackStrategy === "direct") {
-            finish(
-              this.directPlanner.plan(toDirectRequest(result), result.rollId, options),
-              false
-            );
-          } else {
-            finish(this.fallbackPlanner.plan(result, options), false);
-          }
+          worker.postMessage({ id, result, options });
         } catch (error) {
-          fail(
-            error instanceof Error
-              ? error
-              : new RollPlanningError(`Background roll planning failed: ${String(error)}.`)
-          );
+          scheduleFallback(workerFailureError(error));
         }
-      }, 0);
+        return;
+      }
+
+      scheduleFallback();
     });
   }
 

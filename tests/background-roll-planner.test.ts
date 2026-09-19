@@ -97,6 +97,7 @@ describe("BackgroundRollPlanner", () => {
     expect(timings).toEqual([{ durationMs: 5, usedWorker: true }]);
     planner.dispose();
   });
+
   it("uses direct physics by default when Worker creation is unavailable", async () => {
     const planner = new BackgroundRollPlanner({
       workerFactory: () => undefined,
@@ -112,6 +113,104 @@ describe("BackgroundRollPlanner", () => {
     expect(plan.dice).toHaveLength(result.dice.length);
     expect(plan.dice[0]?.sides).toBe(10);
     expect(plan.dice[0]?.expectedValue).toBe(0);
+    planner.dispose();
+  });
+
+  it("falls back to direct physics when a created Worker fails at runtime", async () => {
+    const worker = new FakeWorker();
+    const timings: Array<{ durationMs: number; usedWorker: boolean }> = [];
+    worker.postMessage.mockImplementation(() => {
+      worker.onerror?.({ message: "" });
+    });
+    const planner = new BackgroundRollPlanner({
+      workerFactory: () => worker,
+      directPlanner: new DirectRollPlanner({
+        randomProvider: { next: () => 0.5 }
+      }),
+      onTiming: (timing) => timings.push(timing)
+    });
+
+    const plan = await planner.plan(result);
+
+    expect(plan.preSimulated).toBe(false);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(timings).toHaveLength(1);
+    expect(timings[0]?.usedWorker).toBe(false);
+    planner.dispose();
+  });
+
+  it("uses synchronous fallback when a created Worker fails at runtime", async () => {
+    const fallbackPlan: PresimulatedRollPlan = {
+      rollId: result.rollId,
+      dice: [{
+        sides: 10,
+        expectedValue: 7,
+        initialState: {
+          position: { x: 0, y: 1, z: 0 },
+          quaternion: { x: 0, y: 0, z: 0, w: 1 },
+          velocity: { x: 0, y: 0, z: 0 },
+          angularVelocity: { x: 0, y: 0, z: 0 }
+        }
+      }],
+      physics: DEFAULT_DICE_PHYSICS_CONFIG,
+      stability: DEFAULT_STABILITY_CONFIG,
+      simulationSteps: 1,
+      preSimulated: true
+    };
+    const fallbackPlanner = {
+      plan: vi.fn(() => fallbackPlan)
+    };
+    const worker = new FakeWorker();
+    worker.postMessage.mockImplementation(() => {
+      worker.onerror?.({ message: "Worker startup failed" });
+    });
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "synchronous",
+      workerFactory: () => worker,
+      fallbackPlanner: fallbackPlanner as never
+    });
+
+    const plan = await planner.plan(result);
+
+    expect(plan).toBe(fallbackPlan);
+    expect(fallbackPlanner.plan).toHaveBeenCalledTimes(1);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    planner.dispose();
+  });
+
+  it("preserves Worker runtime failures with the explicit error fallback", async () => {
+    const worker = new FakeWorker();
+    worker.postMessage.mockImplementation(() => {
+      worker.onerror?.({ message: "Worker startup failed" });
+    });
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "error",
+      workerFactory: () => worker
+    });
+
+    await expect(planner.plan(result)).rejects.toThrowError(/Worker startup failed/i);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    planner.dispose();
+  });
+
+  it("falls back when postMessage throws and remains reusable", async () => {
+    const worker = new FakeWorker();
+    worker.postMessage.mockImplementation(() => {
+      throw new Error("DataCloneError");
+    });
+    const planner = new BackgroundRollPlanner({
+      workerFactory: () => worker,
+      directPlanner: new DirectRollPlanner({
+        randomProvider: { next: () => 0.5 }
+      })
+    });
+
+    const firstPlan = await planner.plan(result);
+    const secondPlan = await planner.plan(result);
+
+    expect(firstPlan.preSimulated).toBe(false);
+    expect(secondPlan.preSimulated).toBe(false);
+    expect(worker.terminate).toHaveBeenCalledTimes(2);
     planner.dispose();
   });
 
@@ -212,5 +311,4 @@ describe("BackgroundRollPlanner", () => {
       vi.useRealTimers();
     }
   });
-
 });
