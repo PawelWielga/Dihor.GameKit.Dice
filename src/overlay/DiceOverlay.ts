@@ -1,3 +1,4 @@
+import type { DiceAudioOptions } from "../audio/index.js";
 import {
   DiceRoller,
   resolveDiceRollModifier,
@@ -91,6 +92,9 @@ export interface DiceOverlayOptions {
   /** Options forwarded to the default DiceRenderer. */
   readonly renderer?: DiceRendererOptions;
 
+  /** Collision-driven visible-roll audio. Enabled with bundled CC0 samples by default. */
+  readonly audio?: DiceAudioOptions | false;
+
   /** Advanced dependency hooks for deterministic tests or custom host integrations. */
   readonly roller?: DiceOverlayRoller;
   readonly planner?: DiceOverlayPlanner;
@@ -119,7 +123,9 @@ interface OverlaySurface {
 const createDefaultRenderer: DiceOverlayRendererFactory = (container, options) =>
   new DiceRenderer(container, options);
 
-const createDefaultPlayer: DiceOverlayPlayerFactory = (target) => new DiceRollPlayer(target);
+const createDefaultPlayer = (
+  audio: DiceAudioOptions | false | undefined
+): DiceOverlayPlayerFactory => (target) => new DiceRollPlayer(target, { audio });
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -169,7 +175,7 @@ export class DiceOverlay {
     this.planner = options.planner ?? new BackgroundRollPlanner();
     this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.rendererFactory = options.rendererFactory ?? createDefaultRenderer;
-    this.playerFactory = options.playerFactory ?? createDefaultPlayer;
+    this.playerFactory = options.playerFactory ?? createDefaultPlayer(options.audio);
   }
 
   get isOpen(): boolean {
