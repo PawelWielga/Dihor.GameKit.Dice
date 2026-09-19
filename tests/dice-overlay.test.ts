@@ -692,7 +692,7 @@ describe("DiceOverlay", () => {
       ],
       modifier: 2,
       reason: "Keep one"
-    });
+    }, { diceScale: 1.4 });
     const originalIds = first.dice.map((die) => die.id);
 
     expect(new Set(originalIds).size).toBe(3);
@@ -726,6 +726,7 @@ describe("DiceOverlay", () => {
     expect(rollRequests).toHaveLength(2);
     expect(rollRequests[1]?.dice).toHaveLength(2);
     expect(planningCalls[1]?.options).toMatchObject({
+      diceScale: 1.4,
       frozenDice: [
         expect.objectContaining({
           dieIndex: 0,
