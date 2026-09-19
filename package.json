@@ -1,6 +1,6 @@
 {
   "name": "@dihor/gamekit-dice",
-  "version": "0.1.0-preview.1",
+  "version": "0.1.0-preview.2",
   "description": "Reusable framework-agnostic 3D dice rolling library for games and applications.",
   "type": "module",
   "sideEffects": false,
