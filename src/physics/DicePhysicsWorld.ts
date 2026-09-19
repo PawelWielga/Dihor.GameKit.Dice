@@ -8,6 +8,7 @@ import { createDiceCollider } from "./dice/index.js";
 import type {
   DiceArenaBoundaryPoint,
   DicePhysicsConfig,
+  FrozenDicePhysicsMode,
   PhysicsQuaternion,
   PhysicsVector3,
   RollInitialState,
@@ -24,6 +25,10 @@ export interface DicePhysicsWorldOptions {
   readonly diceSize?: number;
   readonly arenaHalfExtent?: number;
   readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
+}
+
+export interface DiceBodyOptions {
+  readonly frozenPhysicsMode?: FrozenDicePhysicsMode;
 }
 
 export interface StabilityOptions {
@@ -156,6 +161,18 @@ function createSquareArenaBoundary(extent: number): readonly DiceArenaBoundaryPo
   ];
 }
 
+function resolveFrozenPhysicsMode(
+  value: FrozenDicePhysicsMode | undefined
+): FrozenDicePhysicsMode | undefined {
+  if (value === undefined || value === "fully-frozen" || value === "translation-only") {
+    return value;
+  }
+
+  throw new RangeError(
+    `frozenPhysicsMode must be "fully-frozen" or "translation-only"; received ${String(value)}.`
+  );
+}
+
 function validateQuaternion(name: string, quaternion: PhysicsQuaternion): void {
   requireFinite(`${name}.x`, quaternion.x);
   requireFinite(`${name}.y`, quaternion.y);
@@ -272,14 +289,19 @@ export class DicePhysicsWorld {
     return true;
   }
 
-  addDie(sides: DiceSides, initialState: RollInitialState): Body {
+  addDie(
+    sides: DiceSides,
+    initialState: RollInitialState,
+    options: DiceBodyOptions = {}
+  ): Body {
     this.assertActive();
     validateVector("position", initialState.position);
     validateQuaternion("quaternion", initialState.quaternion);
     validateVector("velocity", initialState.velocity);
     validateVector("angularVelocity", initialState.angularVelocity);
+    const frozenPhysicsMode = resolveFrozenPhysicsMode(options.frozenPhysicsMode);
 
-    const body = new Body({ mass: 1 });
+    const body = new Body({ mass: frozenPhysicsMode === "fully-frozen" ? 0 : 1 });
     body.addShape(createDiceCollider(sides, this.config.diceSize));
     body.position.set(
       initialState.position.x,
@@ -293,12 +315,24 @@ export class DicePhysicsWorld {
       initialState.quaternion.w
     );
     body.quaternion.normalize();
-    body.velocity.set(initialState.velocity.x, initialState.velocity.y, initialState.velocity.z);
-    body.angularVelocity.set(
-      initialState.angularVelocity.x,
-      initialState.angularVelocity.y,
-      initialState.angularVelocity.z
-    );
+    if (frozenPhysicsMode === "fully-frozen") {
+      body.velocity.setZero();
+      body.angularVelocity.setZero();
+    } else {
+      body.velocity.set(initialState.velocity.x, initialState.velocity.y, initialState.velocity.z);
+      body.angularVelocity.set(
+        initialState.angularVelocity.x,
+        initialState.angularVelocity.y,
+        initialState.angularVelocity.z
+      );
+    }
+
+    if (frozenPhysicsMode === "translation-only") {
+      body.fixedRotation = true;
+      body.angularVelocity.setZero();
+      body.updateMassProperties();
+    }
+
     body.linearDamping = this.config.linearDamping;
     body.angularDamping = this.config.angularDamping;
 
@@ -307,8 +341,8 @@ export class DicePhysicsWorld {
   }
 
   /** Backward-compatible D6 convenience wrapper. */
-  addD6(initialState: RollInitialState): Body {
-    return this.addDie(6, initialState);
+  addD6(initialState: RollInitialState, options: DiceBodyOptions = {}): Body {
+    return this.addDie(6, initialState, options);
   }
 
   step(): void {
