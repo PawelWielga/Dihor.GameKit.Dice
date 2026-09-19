@@ -14,6 +14,7 @@ Keep these layers separate:
 
 ```text
 src/
+├── audio/       # Browser audio driven by visible playback collisions
 ├── core/        # Domain models, RNG abstraction and logical results
 ├── physics/     # cannon-es adapter, pre-simulation and RollPlanner
 ├── three/       # Three.js scene, rendering and dice meshes
@@ -23,6 +24,13 @@ src/
 ├── advanced.ts  # Explicit opt-in entry point for supported low-level APIs
 └── index.ts     # Intentionally small recommended package root
 ```
+
+### `audio`
+
+- Owns browser-side sound playback and audio asset selection.
+- Audio must react only to the visible playback simulation; hidden planning/presimulation stays silent.
+- Audio failures, missing Web Audio support and autoplay restrictions must never change or fail a dice result.
+- Keep bundled third-party sound provenance and licensing documented.
 
 ### `core`
 
