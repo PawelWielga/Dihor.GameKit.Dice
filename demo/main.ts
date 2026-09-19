@@ -1021,6 +1021,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
   debugPlan = undefined;
   debugFinalResult = undefined;
   updateDebugPanel();
+  renderFreezeControls(undefined);
   setRollingState(true, comparison);
   const preSimulation = comparison || isPreSimulatedMode();
   setStatus(
