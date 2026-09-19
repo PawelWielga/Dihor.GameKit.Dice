@@ -87,6 +87,28 @@ describe("DiceRollEvent", () => {
     expect(validateDiceRollEvent(restored)).toEqual(event);
   });
 
+  it("preserves frozen dice physics mode through JSON replay validation", () => {
+    const result = logicalResult();
+    const plan = replayPlan(result);
+    const frozenPlan: PresimulatedRollPlan = {
+      ...plan,
+      dice: plan.dice.map((die, index) =>
+        index === 0
+          ? { ...die, frozenPhysicsMode: "translation-only" as const }
+          : die
+      )
+    };
+
+    const event = createDiceRollEvent(result, { plan: frozenPlan });
+    const restored = validateDiceRollEvent(JSON.parse(JSON.stringify(event)));
+
+    expect(restored.replay?.plan.dice[0]?.frozenPhysicsMode).toBe("translation-only");
+
+    const invalid = JSON.parse(JSON.stringify(event));
+    invalid.replay.plan.dice[0].frozenPhysicsMode = "spin-only";
+    expect(() => validateDiceRollEvent(invalid)).toThrowError(RangeError);
+  });
+
   it("reconstructs the host result without rolling locally", () => {
     const result = logicalResult();
     const event = createDiceRollEvent(result);
