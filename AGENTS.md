@@ -104,11 +104,14 @@ Public repositories, examples, articles and demos may be inspected to learn gene
 Rules:
 
 - Do not copy external source code into this repository.
-- Do not copy external geometries, models, textures, sounds or other assets.
+- Prefer project-owned, procedurally generated or otherwise independently created geometries, models, textures, sounds and other assets.
+- CC0 assets may be added when an equivalent asset cannot reasonably be created or generated within the project, or doing so would add disproportionate complexity for little practical benefit.
+- The CC0 exception applies to assets only, not to external source code or distinctive implementations.
+- Before adding a CC0 asset, verify that the specific source explicitly grants CC0/public-domain rights and record its source and license in `THIRD_PARTY_NOTICES.md`.
+- Do not use assets with attribution, non-commercial, share-alike, royalty, paid or otherwise restrictive terms unless the task explicitly changes this policy.
 - Do not port distinctive implementations line-for-line into another language or abstraction.
 - Implement project code independently from the requirements and architecture defined here and in GitHub Issues.
 - Do not add attribution to external authors merely because their public work was studied as reference material.
-- If a future task intentionally introduces third-party code or assets, stop and verify its license and attribution requirements before adding it.
 
 ## Dependencies
 
