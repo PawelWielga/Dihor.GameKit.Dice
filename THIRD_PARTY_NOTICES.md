@@ -99,3 +99,21 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER
 DEALINGS IN THE FONT SOFTWARE.
+
+
+## Kenney Casino Audio
+
+Dihor.GameKit.Dice bundles the following dice sound effects from Kenney's Casino Audio pack:
+
+- `dieThrow1.ogg`
+- `dieThrow2.ogg`
+- `dieThrow3.ogg`
+- `dieShuffle1.ogg`
+- `dieShuffle2.ogg`
+- `dieShuffle3.ogg`
+
+Source: https://kenney.nl/assets/casino-audio
+
+License: Creative Commons CC0 1.0 Universal (public domain dedication).
+
+The original files are redistributed as audio assets and may be used, modified and redistributed, including commercially, without attribution.

@@ -1,3 +1,4 @@
+import type { DiceAudioOptions } from "../audio/index.js";
 import {
   DiceRoller,
   resolveDiceRollModifier,
@@ -65,6 +66,8 @@ export interface DiceOverlayRenderer extends DiceRenderTarget {
 }
 
 export interface DiceOverlayPlayer {
+  /** Optional browser-audio unlock hook. Should be invoked directly from a user gesture when available. */
+  unlockAudio?(): Promise<void>;
   play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult>;
   cancel(): void;
   clear(): void;
@@ -90,6 +93,9 @@ export interface DiceOverlayOptions {
 
   /** Options forwarded to the default DiceRenderer. */
   readonly renderer?: DiceRendererOptions;
+
+  /** Collision-driven visible-roll audio. Enabled with bundled CC0 samples by default. */
+  readonly audio?: DiceAudioOptions | false;
 
   /** Advanced dependency hooks for deterministic tests or custom host integrations. */
   readonly roller?: DiceOverlayRoller;
@@ -119,10 +125,24 @@ interface OverlaySurface {
 const createDefaultRenderer: DiceOverlayRendererFactory = (container, options) =>
   new DiceRenderer(container, options);
 
-const createDefaultPlayer: DiceOverlayPlayerFactory = (target) => new DiceRollPlayer(target);
+const createDefaultPlayer = (
+  audio: DiceAudioOptions | false | undefined
+): DiceOverlayPlayerFactory => (target) => new DiceRollPlayer(target, { audio });
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function unlockPlayerAudio(player: DiceOverlayPlayer): void {
+  try {
+    const unlock = player.unlockAudio?.();
+
+    if (unlock) {
+      void unlock.catch(() => undefined);
+    }
+  } catch {
+    // Audio policy/integration failures must never fail the dice roll.
+  }
 }
 
 function formatResult(result: DiceRollResult): string {
@@ -169,7 +189,7 @@ export class DiceOverlay {
     this.planner = options.planner ?? new BackgroundRollPlanner();
     this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.rendererFactory = options.rendererFactory ?? createDefaultRenderer;
-    this.playerFactory = options.playerFactory ?? createDefaultPlayer;
+    this.playerFactory = options.playerFactory ?? createDefaultPlayer(options.audio);
   }
 
   get isOpen(): boolean {
@@ -224,6 +244,8 @@ export class DiceOverlay {
     } catch (error) {
       throw this.wrapError("rendering", error);
     }
+
+    unlockPlayerAudio(surface.player);
 
     let plan: RollPlan;
     try {
@@ -296,6 +318,8 @@ export class DiceOverlay {
     } catch (error) {
       throw this.wrapError("rendering", error);
     }
+
+    unlockPlayerAudio(surface.player);
 
     let plan: RollPlan;
     try {

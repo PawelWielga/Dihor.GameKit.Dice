@@ -1,3 +1,4 @@
+export type { DiceAudioOptions, DiceAudioSampleSet } from "./audio/index.js";
 export {
   DEFAULT_DICE_APPEARANCE,
   DEFAULT_DICE_FACE_LABEL_MODE,

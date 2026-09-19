@@ -15,6 +15,7 @@ The library supports:
 - reusable dice rolls across multiple games,
 - Three.js rendering,
 - cannon-es physics,
+- collision-driven dice audio synchronized with visible physics,
 - direct physical outcomes decided after visible settling,
 - optional predetermined physical outcomes with background presimulation,
 - D4, D6, D8, D10, D12 and D20 dice,
@@ -153,6 +154,7 @@ The project is split into independent layers:
 
 ```text
 src/
+├── audio/       # Browser audio driven by visible physics collisions
 ├── core/        # Public domain models and logical dice results
 ├── physics/     # cannon-es integration and predetermined roll planning
 ├── three/       # Three.js scene, renderer and dice meshes
@@ -243,6 +245,8 @@ const result = await dice.roll({
 console.log(result.dice);
 console.log(result.total);
 ```
+
+Visible playback includes collision-driven dice audio by default. The bundled profile uses CC0 Kenney Casino Audio samples and varies gain, stereo position and playback rate from the real cannon-es contacts. The player waits for the initial sample preload before visible physics starts, so the first impacts are not lost. `DiceOverlay` attempts to unlock Web Audio before asynchronous planning. When using `DiceRollPlayer` directly and later rolls may be triggered programmatically or by multiplayer events, call `player.unlockAudio()` from an earlier user gesture. Set `audio: false` to disable audio completely, or provide `audio.samples.impact` / `audio.samples.roll` URL arrays to use your own sounds. Browser audio failures remain best-effort and never fail a dice roll.
 
 The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
 

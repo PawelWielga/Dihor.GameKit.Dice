@@ -1,4 +1,5 @@
 import type { Body } from "cannon-es";
+import { DiceAudioEngine, type DiceAudioOptions } from "../audio/index.js";
 import {
   hasDiceTextureSources,
   type DiceAppearance
@@ -29,6 +30,8 @@ export interface DiceAnimationScheduler {
 
 export interface DiceRollPlayerOptions {
   readonly meshFactory?: DiceMeshFactory;
+  /** Collision-driven visible-roll audio. Use false to disable it completely. */
+  readonly audio?: DiceAudioOptions | false;
   readonly scheduler?: DiceAnimationScheduler;
   readonly maxSubStepsPerFrame?: number;
 }
@@ -134,6 +137,7 @@ export class DiceRollPlayer {
   private readonly ownsMeshFactory: boolean;
   private readonly scheduler?: DiceAnimationScheduler;
   private readonly maxSubStepsPerFrame: number;
+  private readonly audio?: DiceAudioEngine;
 
   private activePreparation?: PlaybackPreparation;
   private activeSession?: PlaybackSession;
@@ -149,6 +153,21 @@ export class DiceRollPlayer {
       "maxSubStepsPerFrame",
       options.maxSubStepsPerFrame ?? 5
     );
+
+    if (options.audio !== false) {
+      this.audio = new DiceAudioEngine(options.audio);
+    }
+  }
+
+  /**
+   * Attempts to unlock browser audio.
+   *
+   * Call from a direct user gesture when later rolls may be triggered
+   * programmatically (for example by a multiplayer event).
+   */
+  unlockAudio(): Promise<void> {
+    this.assertActive();
+    return this.audio?.unlock() ?? Promise.resolve();
   }
 
   async play(
@@ -175,6 +194,12 @@ export class DiceRollPlayer {
     const meshes: DiceMesh[] = [];
     const preparation = createPlaybackPreparation();
     this.activePreparation = preparation;
+
+    // Start resume synchronously while play() may still be executing inside
+    // a user gesture, and load samples in parallel with mesh preparation.
+    void this.audio?.unlock();
+    const audioPreparation = this.audio?.prepare();
+
     let world: DicePhysicsWorld | undefined;
 
     try {
@@ -210,6 +235,10 @@ export class DiceRollPlayer {
         meshes.push(mesh);
       }
 
+      if (audioPreparation) {
+        await Promise.race([audioPreparation, preparation.cancellation]);
+      }
+
       if (preparation.cancelled || this.disposed) {
         throw new DiceRollPlaybackError("Dice roll playback was cancelled.");
       }
@@ -217,6 +246,7 @@ export class DiceRollPlayer {
       this.activePreparation = undefined;
       world = new DicePhysicsWorld(plan.physics);
       const bodies = plan.dice.map((die) => world!.addDie(die.sides, die.initialState));
+      this.audio?.attach(bodies, plan.physics.arenaHalfExtent);
 
       for (const mesh of meshes) {
         this.target.diceScene.add(mesh.object);
@@ -249,6 +279,7 @@ export class DiceRollPlayer {
         this.activePreparation = undefined;
       }
 
+      this.audio?.detach();
       world?.dispose();
       this.removeAndDisposeMeshes(meshes);
 
@@ -289,6 +320,8 @@ export class DiceRollPlayer {
     }
 
     this.clear();
+
+    this.audio?.dispose();
 
     if (this.ownsMeshFactory) {
       this.meshFactory.dispose();
@@ -437,6 +470,7 @@ export class DiceRollPlayer {
     }
 
     this.cancelScheduledFrame(session);
+    this.audio?.detach();
     session.world.dispose();
     this.activeSession = undefined;
     session.resolve({
@@ -455,6 +489,7 @@ export class DiceRollPlayer {
     }
 
     this.cancelScheduledFrame(session);
+    this.audio?.detach();
     session.world.dispose();
     this.removeAndDisposeMeshes(session.meshes);
     this.visibleMeshes = [];

@@ -81,6 +81,7 @@ jobs:
           test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.license')" = "MIT"
           tar -tzf "$PACKAGE" > package-files.txt
           grep -q '^package/dist/' package-files.txt
+          grep -Eq '^package/dist/.*\.ogg$' package-files.txt
           for FILE in README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md; do
             grep -q "^package/$FILE$" package-files.txt
           done

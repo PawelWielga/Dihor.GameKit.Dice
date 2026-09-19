@@ -1,5 +1,6 @@
 import { Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
+import { DiceAudioEngine } from "../src/audio/index.js";
 import {
   DiceMeshFactory,
   DicePhysicsWorld,
@@ -126,6 +127,51 @@ function createTarget() {
 }
 
 describe("DiceRollPlayer", () => {
+  it("waits for audio preparation before starting visible physics", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, render, target } = createTarget();
+    let resolveAudio!: () => void;
+    const audioReady = new Promise<void>((resolve) => {
+      resolveAudio = resolve;
+    });
+    const prepareAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "prepare")
+      .mockReturnValue(audioReady);
+    const unlockAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "unlock")
+      .mockResolvedValue();
+    const attachAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "attach")
+      .mockImplementation(() => undefined);
+    const player = new DiceRollPlayer(target, { scheduler });
+
+    try {
+      const playback = player.play(createPlan());
+      await flushMicrotasks();
+
+      scheduler.runFrames(20);
+
+      expect(unlockAudio).toHaveBeenCalledTimes(1);
+      expect(prepareAudio).toHaveBeenCalledTimes(1);
+      expect(attachAudio).not.toHaveBeenCalled();
+      expect(render).not.toHaveBeenCalled();
+
+      resolveAudio();
+      await flushMicrotasks();
+
+      expect(attachAudio).toHaveBeenCalledTimes(1);
+
+      scheduler.runFrames(20);
+      await expect(playback).resolves.toMatchObject({ rollId: "visible-roll" });
+    } finally {
+      player.dispose();
+      diceScene.dispose();
+      prepareAudio.mockRestore();
+      unlockAudio.mockRestore();
+      attachAudio.mockRestore();
+    }
+  });
+
   it("replays a RollPlan with real physics and resolves after stabilization", async () => {
     const scheduler = new ManualScheduler();
     const { diceScene, render, target } = createTarget();
