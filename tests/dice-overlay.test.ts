@@ -72,6 +72,7 @@ class FakeRenderer implements DiceOverlayRenderer {
 }
 
 class FakePlayer implements DiceOverlayPlayer {
+  readonly unlockAudio = vi.fn(async () => undefined);
   readonly cancel = vi.fn();
   readonly clear = vi.fn();
   readonly dispose = vi.fn();
@@ -239,6 +240,30 @@ describe("DiceOverlay", () => {
     overlay.dispose();
   });
 
+  it("unlocks audio before awaiting presimulation planning", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const planner: DiceOverlayPlanner = {
+      async plan(result) {
+        expect(player.unlockAudio).toHaveBeenCalledTimes(1);
+        await Promise.resolve();
+        return createPlan(result);
+      }
+    };
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner,
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    await overlay.roll({ dice: [{ sides: 6 }] });
+
+    expect(player.unlockAudio).toHaveBeenCalledTimes(1);
+    overlay.dispose();
+  });
+
   it("supports renderer-only mode without creating modal UI or inerting the host", async () => {
     const documentRef = new FakeDocument();
     const host = documentRef.createElement();
@@ -400,6 +425,7 @@ describe("DiceOverlay", () => {
     expect(roll).not.toHaveBeenCalled();
     expect(plannerPlan).not.toHaveBeenCalled();
     expect(directPlans[0]?.simulationSteps).toBe(0);
+    expect(player.unlockAudio).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       rollId: "direct-roll",
       dice: [{ sides: 6, value: 2 }, { sides: 6, value: 5 }],
