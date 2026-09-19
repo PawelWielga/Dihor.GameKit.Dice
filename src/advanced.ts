@@ -73,6 +73,8 @@ export {
 export {
   DiceOverlay,
   DiceOverlayError,
+  type DiceFreezeOptions,
+  type DiceOverlayDieResult,
   type DiceOverlayDirectPlanner,
   type DiceOverlayErrorPhase,
   type DiceOverlayOptions,
@@ -82,7 +84,9 @@ export {
   type DiceOverlayRenderer,
   type DiceOverlayRendererFactory,
   type DiceOverlayRollOptions,
-  type DiceOverlayRoller
+  type DiceOverlayRollResult,
+  type DiceOverlayRoller,
+  type FrozenDiceAppearance
 } from "./overlay/index.js";
 export {
   BackgroundRollPlanner,
@@ -106,11 +110,14 @@ export {
   type BackgroundRollPlannerOptions,
   type BackgroundRollPlanningTiming,
   type DiceArenaBoundaryPoint,
+  type DiceBodyOptions,
   type DicePhysicsConfig,
   type DirectRollPlan,
   type DirectRollPlanDie,
   type DirectRollPlannerOptions,
   type DicePhysicsWorldOptions,
+  type FrozenDicePhysicsMode,
+  type FrozenRollDieState,
   type PhysicsQuaternion,
   type PhysicsVector3,
   type RollInitialState,
