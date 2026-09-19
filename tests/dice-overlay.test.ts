@@ -12,6 +12,7 @@ import {
   type DiceOverlayRenderer,
   type DiceRollPlaybackOptions,
   type DiceRollPlaybackResult,
+  type DiceRollRequest,
   type DirectRollPlan,
   type PresimulatedRollPlan,
   type RollPlan
