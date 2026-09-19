@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added configurable dice freezing with stable die IDs, fully-frozen and translation-only physics modes, optional frozen appearance overrides, and partial rerolls that preserve frozen values, transforms and the active dice scale.
+- Added collision-driven browser audio for visible dice rolls, with bundled CC0 Kenney samples, impact-sensitive gain, stereo positioning, pitch variation, overlap limiting, first-roll preload protection, user-gesture audio unlocking and custom sample URL support.
+
 ## 0.1.0-preview.1 - 2026-09-18
 
 - First packaged prerelease.

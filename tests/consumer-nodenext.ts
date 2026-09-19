@@ -4,6 +4,8 @@ import {
   SUPPORTED_DICE_SIDES,
   createDiceRollEvent,
   type DiceAppearance,
+  type DiceFreezeOptions,
+  type DiceOverlayRollResult,
   type DiceRollRequest,
   type DiceRollResult,
   type DirectRollPlan,
@@ -67,6 +69,13 @@ declare const directPlanner: DirectRollPlanner;
 declare const presimulatedPlanner: RollPlanner;
 declare const backgroundPlanner: BackgroundRollPlanner;
 declare const player: DiceRollPlayer;
+declare const overlayInstance: DiceOverlay;
+declare const overlayResult: DiceOverlayRollResult;
+
+const freezeOptions: DiceFreezeOptions = {
+  physicsMode: "translation-only",
+  appearance: { color: "#4da3ff", textureUrl: "/frozen.png" }
+};
 
 const directPlan: DirectRollPlan = directPlanner.plan(request, "consumer-direct");
 const presimulatedPlan: PresimulatedRollPlan = presimulatedPlanner.plan(result);
@@ -78,6 +87,8 @@ createDiceRollEvent(result, { plan: directPlan });
 
 void player.play(directPlan);
 void player.play(presimulatedPlan);
+void overlayInstance.freeze(overlayResult.dice[0]!.id, freezeOptions);
+void overlayInstance.rerollUnfrozen();
 void DiceOverlay;
 void OverlayDiceOverlay;
 void DiceOverlayError;
@@ -89,3 +100,4 @@ void missingFaceTexture;
 void resolvedAppearance;
 void validatedEvent;
 void backgroundPlan;
+void freezeOptions;

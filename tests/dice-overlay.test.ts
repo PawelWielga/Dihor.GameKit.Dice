@@ -6,11 +6,13 @@ import {
   DiceOverlayError,
   DiceRoller,
   DiceScene,
+  type DiceAppearance,
   type DiceOverlayPlanner,
   type DiceOverlayPlayer,
   type DiceOverlayRenderer,
   type DiceRollPlaybackOptions,
   type DiceRollPlaybackResult,
+  type DiceRollRequest,
   type DirectRollPlan,
   type PresimulatedRollPlan,
   type RollPlan
@@ -72,15 +74,30 @@ class FakeRenderer implements DiceOverlayRenderer {
 }
 
 class FakePlayer implements DiceOverlayPlayer {
+  readonly unlockAudio = vi.fn(async () => undefined);
+  appearanceGate?: Promise<void>;
+  readonly setAppearances = vi.fn(
+    async (_appearances: readonly (DiceAppearance | undefined)[]) => {
+      if (this.appearanceGate) {
+        await this.appearanceGate;
+      }
+    }
+  );
   readonly cancel = vi.fn();
   readonly clear = vi.fn();
   readonly dispose = vi.fn();
   readonly calls: Array<{ plan: RollPlan; options?: DiceRollPlaybackOptions }> = [];
   mismatch = false;
+  failNext = false;
   directValues: number[] = [];
 
   async play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult> {
     this.calls.push({ plan, options });
+
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("playback failed");
+    }
 
     return {
       rollId: plan.rollId,
@@ -90,7 +107,9 @@ class FakePlayer implements DiceOverlayPlayer {
           ? (this.directValues[index] ?? 1)
           : this.mismatch && index === 0
             ? (die.expectedValue === 1 ? 2 : 1)
-            : die.expectedValue
+            : die.expectedValue,
+        position: { ...die.initialState.position },
+        rotation: { ...die.initialState.quaternion }
       })),
       simulationSteps: 12
     };
@@ -202,7 +221,7 @@ describe("DiceOverlay", () => {
     };
     const result = await overlay.roll(request);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       rollId: "overlay-roll",
       dice: [
         { sides: 6, value: 2 },
@@ -236,6 +255,30 @@ describe("DiceOverlay", () => {
     expect(players).toHaveLength(2);
     expect(findByAttribute(documentRef.body, "data-dihor-gamekit-dice-overlay")).toBeDefined();
 
+    overlay.dispose();
+  });
+
+  it("unlocks audio before awaiting presimulation planning", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const planner: DiceOverlayPlanner = {
+      async plan(result) {
+        expect(player.unlockAudio).toHaveBeenCalledTimes(1);
+        await Promise.resolve();
+        return createPlan(result);
+      }
+    };
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner,
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    await overlay.roll({ dice: [{ sides: 6 }] });
+
+    expect(player.unlockAudio).toHaveBeenCalledTimes(1);
     overlay.dispose();
   });
 
@@ -313,7 +356,7 @@ describe("DiceOverlay", () => {
       reason: "Fallback"
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       rollId: "overlay-roll",
       dice: [{ sides: 6, value: 4 }, { sides: 6, value: 2 }],
       modifier: 3,
@@ -400,7 +443,8 @@ describe("DiceOverlay", () => {
     expect(roll).not.toHaveBeenCalled();
     expect(plannerPlan).not.toHaveBeenCalled();
     expect(directPlans[0]?.simulationSteps).toBe(0);
-    expect(result).toEqual({
+    expect(player.unlockAudio).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
       rollId: "direct-roll",
       dice: [{ sides: 6, value: 2 }, { sides: 6, value: 5 }],
       modifier: 2,
@@ -593,5 +637,222 @@ describe("DiceOverlay", () => {
 
     overlay.close();
     expect(documentRef.body.children).toHaveLength(0);
+  });
+
+  it("keeps stable die ids while rerolling only unfrozen dice", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const planningCalls: Array<{ result: ReturnType<DiceRoller["roll"]>; options: unknown }> = [];
+    const rollRequests: DiceRollRequest[] = [];
+    let rollNumber = 0;
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: {
+        roll(request) {
+          rollRequests.push(request);
+          rollNumber += 1;
+          const values = rollNumber === 1 ? [2, 5, 3] : [6, 1];
+          const dice = request.dice.map((die, index) => ({
+            sides: die.sides,
+            value: values[index] ?? 1
+          }));
+          const modifier = request.modifier ?? 0;
+          return {
+            rollId: rollNumber === 1 ? "freeze-first" : "freeze-reroll",
+            dice,
+            modifier,
+            total: dice.reduce((sum, die) => sum + die.value, 0) + modifier,
+            ...(request.reason === undefined ? {} : { reason: request.reason })
+          };
+        },
+        createRollId: () => "direct-unused"
+      },
+      planner: {
+        plan(result, options) {
+          planningCalls.push({ result, options });
+          return createPlan(result);
+        }
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({
+      dice: [
+        {
+          sides: 6,
+          appearance: {
+            color: "#eeeeee",
+            markingsColor: "#222222",
+            texture: "/original.png"
+          }
+        },
+        { sides: 6, appearance: { color: "#112233" } },
+        { sides: 6 }
+      ],
+      modifier: 2,
+      reason: "Keep one"
+    }, { diceScale: 1.4 });
+    const originalIds = first.dice.map((die) => die.id);
+
+    expect(new Set(originalIds).size).toBe(3);
+
+    const frozen = await overlay.freeze(first.dice[0]!.id, {
+      physicsMode: "translation-only",
+      appearance: {
+        color: "#4da3ff",
+        textureUrl: "/frozen.png"
+      }
+    });
+
+    expect(frozen.dice[0]).toMatchObject({
+      id: originalIds[0],
+      value: 2,
+      frozen: true,
+      frozenPhysicsMode: "translation-only"
+    });
+    expect(player.setAppearances).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        color: "#4da3ff",
+        markingsColor: "#222222",
+        texture: "/frozen.png"
+      }),
+      { color: "#112233" },
+      undefined
+    ]);
+
+    const rerolled = await overlay.rerollUnfrozen();
+
+    expect(rollRequests).toHaveLength(2);
+    expect(rollRequests[1]?.dice).toHaveLength(2);
+    expect(planningCalls[1]?.options).toMatchObject({
+      diceScale: 1.4,
+      frozenDice: [
+        expect.objectContaining({
+          dieIndex: 0,
+          expectedValue: 2,
+          physicsMode: "translation-only"
+        })
+      ]
+    });
+    expect(rerolled.dice.map((die) => die.id)).toEqual(originalIds);
+    expect(rerolled.dice.map((die) => die.value)).toEqual([2, 6, 1]);
+    expect(rerolled.total).toBe(11);
+    expect(rerolled.dice[0]?.frozen).toBe(true);
+
+    const unfrozen = await overlay.unfreeze(first.dice[0]!.id);
+    expect(unfrozen.dice[0]?.frozen).toBe(false);
+    expect(player.setAppearances).toHaveBeenLastCalledWith([
+      {
+        color: "#eeeeee",
+        markingsColor: "#222222",
+        texture: "/original.png"
+      },
+      { color: "#112233" },
+      undefined
+    ]);
+
+    overlay.dispose();
+  });
+
+  it("serializes freeze appearance updates with roll and reroll operations", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    let releaseAppearance!: () => void;
+    player.appearanceGate = new Promise<void>((resolve) => {
+      releaseAppearance = resolve;
+    });
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner: { plan: createPlan },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }, { sides: 6 }] });
+    const freezing = overlay.freeze(first.dice[0]!.id, {
+      appearance: { textureUrl: "/slow-frozen.png" }
+    });
+
+    await expect(overlay.rerollUnfrozen()).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
+    await expect(overlay.roll({ dice: [{ sides: 6 }] })).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
+
+    releaseAppearance();
+    const frozen = await freezing;
+    expect(frozen.dice[0]?.frozen).toBe(true);
+
+    player.appearanceGate = undefined;
+    await expect(overlay.rerollUnfrozen()).resolves.toMatchObject({
+      dice: [
+        expect.objectContaining({ frozen: true }),
+        expect.objectContaining({ frozen: false })
+      ]
+    });
+
+    overlay.dispose();
+  });
+
+  it("invalidates frozen state when a partial reroll playback fails", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: new DiceRoller({
+        randomProvider: { next: () => 0 },
+        rollIdProvider: (() => {
+          let index = 0;
+          return () => `reroll-failure-${++index}`;
+        })()
+      }),
+      planner: { plan: createPlan },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }, { sides: 6 }] });
+    await overlay.freeze(first.dice[0]!.id);
+    player.failNext = true;
+
+    await expect(overlay.rerollUnfrozen()).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "playback"
+    } satisfies Partial<DiceOverlayError>);
+    expect(player.clear).toHaveBeenCalledTimes(1);
+
+    await expect(overlay.freeze(first.dice[0]!.id)).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
+
+    overlay.dispose();
+  });
+
+  it("uses fully-frozen as the default freeze mode", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: new DiceRoller({
+        randomProvider: { next: () => 0 },
+        rollIdProvider: () => "default-freeze"
+      }),
+      planner: { plan: createPlan },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }] });
+    const frozen = await overlay.freeze(first.dice[0]!.id);
+
+    expect(frozen.dice[0]?.frozenPhysicsMode).toBe("fully-frozen");
+
+    overlay.dispose();
   });
 });

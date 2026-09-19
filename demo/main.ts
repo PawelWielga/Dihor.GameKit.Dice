@@ -25,7 +25,9 @@ import {
   type DiceCameraOptions,
   type DiceFaceLabelMode,
   type DiceFontAppearance,
+  type DiceFreezeOptions,
   type DiceLightingOptions,
+  type DiceOverlayRollResult,
   type DiceRollRequest,
   type DiceRollResult,
   type DiceSides,
@@ -229,6 +231,15 @@ const arenaRegressionButton = requireElement<HTMLButtonElement>("#arena-regressi
 const rollButton = requireElement<HTMLButtonElement>("#roll-button");
 const mobileRollButton = requireElement<HTMLButtonElement>("#mobile-roll-button");
 const resetButton = requireElement<HTMLButtonElement>("#reset-button");
+const freezePanel = requireElement<HTMLElement>("#freeze-panel");
+const freezePhysicsMode = requireElement<HTMLSelectElement>("#freeze-physics-mode");
+const freezeColorEnabled = requireElement<HTMLInputElement>("#freeze-color-enabled");
+const freezeColor = requireElement<HTMLInputElement>("#freeze-color");
+const freezeColorValue = requireElement<HTMLOutputElement>("#freeze-color-value");
+const freezeTexture = requireElement<HTMLInputElement>("#freeze-texture");
+const rerollUnfrozenButton = requireElement<HTMLButtonElement>("#reroll-unfrozen-button");
+const unfreezeAllButton = requireElement<HTMLButtonElement>("#unfreeze-all-button");
+const freezeDiceList = requireElement<HTMLElement>("#freeze-dice-list");
 const stage = requireElement<HTMLElement>("#stage");
 const stagePlaceholder = requireElement<HTMLElement>("#stage-placeholder");
 const status = requireElement<HTMLElement>("#status");
@@ -258,7 +269,8 @@ const comparisonPlanner = new RollPlanner({
 });
 let debugLogicalResult: DiceRollResult | undefined;
 let debugPlan: RollPlan | undefined;
-let debugFinalResult: DiceRollResult | undefined;
+let debugFinalResult: DiceOverlayRollResult | undefined;
+let lastOverlayResult: DiceOverlayRollResult | undefined;
 let rolling = false;
 let comparisonMode = false;
 let demoRenderer: DiceRenderer | undefined;
@@ -795,10 +807,164 @@ function formatDiceExpression(result: DiceRollResult): string {
   return `${expression} · total ${result.total}`;
 }
 
-function showResult(result: DiceRollResult): void {
+function readFreezeOptions(): DiceFreezeOptions {
+  const physicsMode = freezePhysicsMode.value;
+
+  if (physicsMode !== "fully-frozen" && physicsMode !== "translation-only") {
+    throw new Error(`Unknown frozen physics mode: ${physicsMode}.`);
+  }
+
+  const textureUrl = optionalValue(freezeTexture);
+  const appearance =
+    freezeColorEnabled.checked || textureUrl
+      ? {
+          ...(freezeColorEnabled.checked ? { color: freezeColor.value } : {}),
+          ...(textureUrl ? { textureUrl } : {})
+        }
+      : undefined;
+
+  return {
+    physicsMode,
+    ...(appearance ? { appearance } : {})
+  };
+}
+
+function updateFreezeColorControl(): void {
+  freezeColor.disabled = !freezeColorEnabled.checked;
+  freezeColorValue.value = freezeColor.value.toUpperCase();
+}
+
+function renderFreezeControls(result: DiceOverlayRollResult | undefined): void {
+  lastOverlayResult = result;
+  freezePanel.hidden = result === undefined;
+  freezeDiceList.replaceChildren();
+
+  if (!result) {
+    rerollUnfrozenButton.disabled = true;
+    unfreezeAllButton.disabled = true;
+    return;
+  }
+
+  for (const [index, die] of result.dice.entries()) {
+    const card = document.createElement("article");
+    card.className = "freeze-die";
+    card.dataset.frozen = String(die.frozen);
+
+    const meta = document.createElement("div");
+    meta.className = "freeze-die__meta";
+
+    const identity = document.createElement("div");
+    identity.className = "freeze-die__identity";
+    const label = document.createElement("strong");
+    label.textContent = `#${index + 1} · D${die.sides} → ${die.value}`;
+    const id = document.createElement("small");
+    id.textContent = die.id;
+    id.title = die.id;
+    identity.append(label, id);
+
+    const badge = document.createElement("span");
+    badge.className = "freeze-badge";
+    badge.textContent = die.frozen
+      ? die.frozenPhysicsMode === "translation-only"
+        ? "Frozen · movable"
+        : "Frozen"
+      : "Active";
+
+    meta.append(identity, badge);
+
+    const button = document.createElement("button");
+    button.className = `button ${die.frozen ? "button--ghost" : "button--primary"}`;
+    button.type = "button";
+    button.textContent = die.frozen ? "Unfreeze" : "Freeze";
+    button.disabled = rolling;
+    button.addEventListener("click", () => {
+      void toggleDieFreeze(die.id);
+    });
+
+    card.append(meta, button);
+    freezeDiceList.append(card);
+  }
+
+  rerollUnfrozenButton.disabled = rolling || result.dice.every((die) => die.frozen);
+  unfreezeAllButton.disabled = rolling || !result.dice.some((die) => die.frozen);
+}
+
+function showResult(result: DiceOverlayRollResult): void {
   resultValue.textContent = String(result.total);
   resultDice.textContent = formatDiceExpression(result);
   resultJson.textContent = JSON.stringify(result, null, 2);
+  renderFreezeControls(result);
+}
+
+async function toggleDieFreeze(id: string): Promise<void> {
+  if (rolling || !lastOverlayResult) {
+    return;
+  }
+
+  const die = lastOverlayResult.dice.find((candidate) => candidate.id === id);
+
+  if (!die) {
+    return;
+  }
+
+  setRollingState(true);
+  setStatus(die.frozen ? "Unfreezing die…" : "Freezing die…", "busy");
+
+  try {
+    const result = die.frozen
+      ? await overlay.unfreeze(id)
+      : await overlay.freeze(id, readFreezeOptions());
+    debugFinalResult = result;
+    showResult(result);
+    updateDebugPanel();
+    setStatus(die.frozen ? "Die unfrozen" : "Die frozen");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(message, "error");
+    console.error("Dihor.GameKit.Dice demo freeze update failed", error);
+  } finally {
+    setRollingState(false);
+    renderFreezeControls(lastOverlayResult);
+  }
+}
+
+async function rerollUnfrozenDice(): Promise<void> {
+  if (rolling || !lastOverlayResult) {
+    return;
+  }
+
+  setRollingState(true);
+  setStatus("Rerolling unfrozen dice…", "busy");
+  debugLogicalResult = undefined;
+  debugPlan = undefined;
+  updateDebugPanel();
+
+  try {
+    await nextPaint();
+    renderedFontSize = readFontSize();
+    const result = await overlay.rerollUnfrozen({
+      throwForce: readThrowForce(),
+      diceScale: readDiceScale(),
+      preSimulation: comparisonMode || isPreSimulatedMode(),
+      expectedDiceTotal: 0
+    });
+    debugFinalResult = result;
+    showResult(result);
+    updateDebugPanel();
+    setStatus("Unfrozen dice rerolled");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resultValue.textContent = "!";
+    resultDice.textContent = "Reroll failed";
+    resultJson.textContent = JSON.stringify({ error: message }, null, 2);
+    renderFreezeControls(undefined);
+    updateDebugPanel();
+    setStatus("Reroll failed", "error");
+    console.error("Dihor.GameKit.Dice demo partial reroll failed", error);
+  } finally {
+    setRollingState(false);
+    renderFreezeControls(lastOverlayResult);
+  }
 }
 
 function updateDebugPanel(): void {
@@ -826,6 +992,17 @@ function setRollingState(isRolling: boolean, comparison = false): void {
   compareButton.disabled = isRolling;
   arenaRegressionButton.disabled = isRolling;
   resetButton.disabled = isRolling;
+  rerollUnfrozenButton.disabled =
+    isRolling ||
+    !lastOverlayResult ||
+    lastOverlayResult.dice.every((die) => die.frozen);
+  unfreezeAllButton.disabled =
+    isRolling ||
+    !lastOverlayResult ||
+    !lastOverlayResult.dice.some((die) => die.frozen);
+  for (const button of freezeDiceList.querySelectorAll<HTMLButtonElement>("button")) {
+    button.disabled = isRolling;
+  }
   const rollLabel = isRolling && !comparison ? "Rolling…" : "Roll dice";
   rollButton.textContent = rollLabel;
   mobileRollButton.textContent = rollLabel;
@@ -845,6 +1022,7 @@ async function runRequest(request: DiceRollRequest, comparison = false): Promise
   debugPlan = undefined;
   debugFinalResult = undefined;
   updateDebugPanel();
+  renderFreezeControls(undefined);
   setRollingState(true, comparison);
   const preSimulation = comparison || isPreSimulatedMode();
   setStatus(
@@ -939,6 +1117,7 @@ function resetOutput(): void {
   debugPlan = undefined;
   debugFinalResult = undefined;
   debugJson.textContent = "Enable a roll to inspect the pipeline.";
+  renderFreezeControls(undefined);
   setStatus("Ready to roll");
 }
 
@@ -1024,6 +1203,36 @@ sampleTextureButton.addEventListener("click", () => {
   globalTexture.focus();
 });
 debugMode.addEventListener("change", updateDebugPanel);
+freezeColorEnabled.addEventListener("change", updateFreezeColorControl);
+freezeColor.addEventListener("input", updateFreezeColorControl);
+rerollUnfrozenButton.addEventListener("click", () => {
+  void rerollUnfrozenDice();
+});
+unfreezeAllButton.addEventListener("click", () => {
+  if (rolling || !lastOverlayResult) {
+    return;
+  }
+
+  void (async () => {
+    setRollingState(true);
+    setStatus("Unfreezing all dice…", "busy");
+
+    try {
+      const result = await overlay.unfreezeAll();
+      debugFinalResult = result;
+      showResult(result);
+      updateDebugPanel();
+      setStatus("All dice unfrozen");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message, "error");
+      console.error("Dihor.GameKit.Dice demo unfreeze-all failed", error);
+    } finally {
+      setRollingState(false);
+      renderFreezeControls(lastOverlayResult);
+    }
+  })();
+});
 resetButton.addEventListener("click", resetOutput);
 compareButton.addEventListener("click", () => {
   void runRequest(createComparisonRequest(), true);
@@ -1048,6 +1257,8 @@ window.addEventListener(
 
 updateThrowForceOutput();
 updateDiceScaleOutput();
+updateFreezeColorControl();
+renderFreezeControls(undefined);
 updateColorOutputs();
 updateTableColorOutput();
 updateCameraOutputs();

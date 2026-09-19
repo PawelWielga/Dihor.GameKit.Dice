@@ -26,6 +26,21 @@ export interface RollInitialState {
   readonly angularVelocity: PhysicsVector3;
 }
 
+export type FrozenDicePhysicsMode = "fully-frozen" | "translation-only";
+
+/**
+ * Captured state of a die that must keep its visible result while the remaining dice are rerolled.
+ * dieIndex refers to the original roll ordering and makes the payload worker/JSON friendly.
+ */
+export interface FrozenRollDieState {
+  readonly dieIndex: number;
+  readonly sides: DiceSides;
+  readonly expectedValue: number;
+  readonly physicsMode: FrozenDicePhysicsMode;
+  readonly position: PhysicsVector3;
+  readonly quaternion: PhysicsQuaternion;
+}
+
 export interface DicePhysicsConfig {
   readonly gravity: PhysicsVector3;
   readonly timeStep: number;
@@ -50,6 +65,7 @@ export interface RollPlanDie {
   readonly sides: DiceSides;
   readonly expectedValue: number;
   readonly initialState: RollInitialState;
+  readonly frozenPhysicsMode?: FrozenDicePhysicsMode;
 }
 
 /** Direct rolls do not have an authoritative result before visible physics finishes. */

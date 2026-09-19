@@ -17,6 +17,7 @@ import { resolveDiceSpawnLayout, type DiceSpawnPoint } from "./DiceSpawnLayout.j
 import type {
   DiceArenaBoundaryPoint,
   DicePhysicsConfig,
+  FrozenRollDieState,
   PhysicsQuaternion,
   PresimulatedRollPlan,
   RollInitialState,
@@ -39,6 +40,11 @@ export interface RollPlanningOptions {
   readonly diceScale?: number;
   /** Camera/table viewport polygon used as invisible physical walls for this roll. */
   readonly arenaBoundary?: readonly DiceArenaBoundaryPoint[];
+  /**
+   * Existing dice that keep their value/orientation while the other dice are replanned.
+   * Entries are indexed against the complete logical result.
+   */
+  readonly frozenDice?: readonly FrozenRollDieState[];
 }
 
 export interface RollInitialStateContext {
@@ -112,6 +118,43 @@ function resolveDiceScale(value: number | undefined): number {
     throw new RangeError(
       `diceScale must be between ${MIN_DICE_SCALE} and ${MAX_DICE_SCALE}; received ${String(resolved)}.`
     );
+  }
+
+  return resolved;
+}
+
+function resolveFrozenDice(
+  frozenDice: readonly FrozenRollDieState[] | undefined,
+  expectedDice: readonly DieResult[]
+): ReadonlyMap<number, FrozenRollDieState> {
+  const resolved = new Map<number, FrozenRollDieState>();
+
+  for (const frozen of frozenDice ?? []) {
+    if (!Number.isInteger(frozen.dieIndex) || frozen.dieIndex < 0 || frozen.dieIndex >= expectedDice.length) {
+      throw new RangeError(
+        `frozenDice dieIndex must reference an existing die; received ${String(frozen.dieIndex)}.`
+      );
+    }
+
+    if (resolved.has(frozen.dieIndex)) {
+      throw new RangeError(`frozenDice contains duplicate dieIndex ${frozen.dieIndex}.`);
+    }
+
+    const expected = expectedDice[frozen.dieIndex];
+
+    if (!expected || expected.sides !== frozen.sides || expected.value !== frozen.expectedValue) {
+      throw new RangeError(
+        `frozenDice[${frozen.dieIndex}] must match the logical die sides and value.`
+      );
+    }
+
+    if (frozen.physicsMode !== "fully-frozen" && frozen.physicsMode !== "translation-only") {
+      throw new RangeError(
+        `Unsupported frozen dice physics mode: ${String(frozen.physicsMode)}.`
+      );
+    }
+
+    resolved.set(frozen.dieIndex, frozen);
   }
 
   return resolved;
@@ -237,6 +280,7 @@ export class RollPlanner {
       ...(options.arenaBoundary ? { arenaBoundary: options.arenaBoundary } : {})
     };
     const expectedDice = this.validateResult(result);
+    const frozenDice = resolveFrozenDice(options.frozenDice, expectedDice);
     const resolvedWorld = new DicePhysicsWorld(physicsOptions);
     const physics = resolvedWorld.config;
     resolvedWorld.dispose();
@@ -269,6 +313,23 @@ export class RollPlanner {
 
         if (!spawnPoint) {
           throw new RollPlanningError(`Missing spawn point at index ${dieIndex}.`);
+        }
+
+        const frozen = frozenDice.get(dieIndex);
+
+        if (frozen) {
+          plannedDice.push({
+            sides: expectedDie.sides,
+            expectedValue: expectedDie.value,
+            initialState: {
+              position: { ...frozen.position },
+              quaternion: { ...frozen.quaternion },
+              velocity: { x: 0, y: 0, z: 0 },
+              angularVelocity: { x: 0, y: 0, z: 0 }
+            },
+            frozenPhysicsMode: frozen.physicsMode
+          });
+          continue;
         }
 
         const initialState = this.findInitialState(
@@ -364,7 +425,11 @@ export class RollPlanner {
     const world = new DicePhysicsWorld(physicsOptions);
 
     try {
-      const bodies = plannedDice.map((die) => world.addDie(die.sides, die.initialState));
+      const bodies = plannedDice.map((die) =>
+        world.addDie(die.sides, die.initialState, {
+          frozenPhysicsMode: die.frozenPhysicsMode
+        })
+      );
       const simulation = world.simulateUntilStable(bodies, this.stabilityConfig);
 
       if (!simulation.stable) {

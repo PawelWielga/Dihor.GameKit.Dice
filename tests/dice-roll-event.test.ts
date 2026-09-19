@@ -3,6 +3,7 @@ import {
   DICE_ROLL_EVENT_LIMITS,
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
+  DICE_ROLL_REPLAY_V1_VERSION,
   DICE_ROLL_REPLAY_VERSION,
   RollPlanner,
   createDiceRollEvent,
@@ -87,6 +88,33 @@ describe("DiceRollEvent", () => {
     expect(validateDiceRollEvent(restored)).toEqual(event);
   });
 
+  it("preserves frozen dice physics mode through JSON replay validation", () => {
+    const result = logicalResult();
+    const plan = replayPlan(result);
+    const frozenPlan: PresimulatedRollPlan = {
+      ...plan,
+      dice: plan.dice.map((die, index) =>
+        index === 0
+          ? { ...die, frozenPhysicsMode: "translation-only" as const }
+          : die
+      )
+    };
+
+    const event = createDiceRollEvent(result, { plan: frozenPlan });
+    const restored = validateDiceRollEvent(JSON.parse(JSON.stringify(event)));
+
+    expect(event.replay?.version).toBe(2);
+    expect(restored.replay?.plan.dice[0]?.frozenPhysicsMode).toBe("translation-only");
+
+    const legacyVersion = JSON.parse(JSON.stringify(event));
+    legacyVersion.replay.version = DICE_ROLL_REPLAY_V1_VERSION;
+    expect(() => validateDiceRollEvent(legacyVersion)).toThrowError(/v1.*frozenPhysicsMode/i);
+
+    const invalid = JSON.parse(JSON.stringify(event));
+    invalid.replay.plan.dice[0].frozenPhysicsMode = "spin-only";
+    expect(() => validateDiceRollEvent(invalid)).toThrowError(RangeError);
+  });
+
   it("reconstructs the host result without rolling locally", () => {
     const result = logicalResult();
     const event = createDiceRollEvent(result);
@@ -158,13 +186,22 @@ describe("DiceRollEvent", () => {
     ).toThrowError(RangeError);
   });
 
-  it("accepts legacy presimulated replay payloads without the discriminator", () => {
+  it("accepts replay v1 payloads without the historical discriminator", () => {
     const payload = replayPayload();
+    payload.replay.version = DICE_ROLL_REPLAY_V1_VERSION;
     delete payload.replay.plan.preSimulated;
 
     const validated = validateDiceRollEvent(payload);
 
+    expect(validated.replay?.version).toBe(DICE_ROLL_REPLAY_V1_VERSION);
     expect(validated.replay?.plan.preSimulated).toBe(true);
+  });
+
+  it("requires the presimulated discriminator in replay v2", () => {
+    const payload = replayPayload();
+    delete payload.replay.plan.preSimulated;
+
+    expect(() => validateDiceRollEvent(payload)).toThrowError(/presimulated/i);
   });
 
   it("rejects direct physical plans received as authoritative replay data", () => {

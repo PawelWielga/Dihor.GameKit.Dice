@@ -619,6 +619,61 @@
             </button>
           </div>
 
+          <section id="freeze-panel" class="freeze-panel" hidden>
+            <div class="freeze-panel__heading">
+              <div>
+                <span class="result-label">Partial reroll</span>
+                <h3>Freeze selected dice</h3>
+                <p class="hint">
+                  Frozen dice keep their value and orientation. Reroll affects only the remaining dice.
+                </p>
+              </div>
+              <div class="freeze-panel__actions">
+                <button id="reroll-unfrozen-button" class="button button--primary" type="button">
+                  Reroll unfrozen
+                </button>
+                <button id="unfreeze-all-button" class="button button--ghost" type="button">
+                  Unfreeze all
+                </button>
+              </div>
+            </div>
+
+            <div class="freeze-settings">
+              <label class="field">
+                <span>Frozen physics</span>
+                <select id="freeze-physics-mode">
+                  <option value="fully-frozen">Fully frozen</option>
+                  <option value="translation-only" selected>Translation only</option>
+                </select>
+              </label>
+
+              <label class="toggle freeze-color-toggle">
+                <input id="freeze-color-enabled" type="checkbox" checked />
+                <span>Override frozen color</span>
+              </label>
+
+              <label class="field field--color">
+                <span>Frozen color</span>
+                <span class="color-control">
+                  <input id="freeze-color" type="color" value="#4da3ff" />
+                  <output id="freeze-color-value">#4DA3FF</output>
+                </span>
+              </label>
+
+              <label class="field">
+                <span>Frozen texture URL <small>optional</small></span>
+                <input
+                  id="freeze-texture"
+                  type="url"
+                  inputmode="url"
+                  placeholder="/textures/frozen-die.png"
+                />
+              </label>
+            </div>
+
+            <div id="freeze-dice-list" class="freeze-dice-list" aria-live="polite"></div>
+          </section>
+
           <div class="result-grid">
             <article class="result-card result-card--primary">
               <span class="result-label">Result</span>

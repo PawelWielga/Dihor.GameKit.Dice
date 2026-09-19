@@ -15,6 +15,7 @@ The library supports:
 - reusable dice rolls across multiple games,
 - Three.js rendering,
 - cannon-es physics,
+- collision-driven dice audio synchronized with visible physics,
 - direct physical outcomes decided after visible settling,
 - optional predetermined physical outcomes with background presimulation,
 - D4, D6, D8, D10, D12 and D20 dice,
@@ -24,6 +25,9 @@ The library supports:
 - optional global and per-face textures,
 - a framework-agnostic overlay API,
 - multiple dice in a single roll,
+- stable per-die IDs with freeze/unfreeze and partial rerolls,
+- fully locked or translation-only frozen dice physics,
+- optional frozen color/texture overrides that restore the original appearance on unfreeze,
 - opt-in deterministic random streams for tests and replays,
 - JSON-serializable `RollPlan` replay inputs without stored animation frames,
 - versioned host-authoritative `DiceRollEvent` payloads for multiplayer integration,
@@ -153,6 +157,7 @@ The project is split into independent layers:
 
 ```text
 src/
+├── audio/       # Browser audio driven by visible physics collisions
 ├── core/        # Public domain models and logical dice results
 ├── physics/     # cannon-es integration and predetermined roll planning
 ├── three/       # Three.js scene, renderer and dice meshes
@@ -243,6 +248,46 @@ const result = await dice.roll({
 console.log(result.dice);
 console.log(result.total);
 ```
+
+### Freezing dice and partial rerolls
+
+`DiceOverlay.roll()` returns stable IDs for the visible dice. Those IDs stay unchanged across
+`rerollUnfrozen()`, so a game can keep selected results while rerolling the rest:
+
+```ts
+const first = await dice.roll({
+  dice: [{ sides: 6 }, { sides: 6 }, { sides: 6 }]
+});
+
+await dice.freeze([first.dice[0].id, first.dice[2].id], {
+  physicsMode: "translation-only",
+  appearance: {
+    color: "#4da3ff",
+    textureUrl: "/textures/frozen-die.png"
+  }
+});
+
+const second = await dice.rerollUnfrozen();
+
+console.log(second.dice[0].id === first.dice[0].id); // true
+console.log(second.dice[0].value === first.dice[0].value); // true
+
+await dice.unfreeze(first.dice[0].id);
+await dice.unfreezeAll();
+```
+
+Two frozen physics modes are available. `"fully-frozen"` keeps both position and rotation fixed
+while still acting as collision geometry. `"translation-only"` locks rotation and therefore the
+visible value, but allows other dice to push the frozen die across the table. A freeze operation can
+override the die body color and/or texture; unfreezing rebuilds the die from its exact original
+appearance configuration.
+
+For presimulated partial rerolls, only unfrozen dice receive new logical values and new throw states.
+Frozen dice are still inserted into the combined hidden physics world, so collisions are verified
+before visible playback. If `expectedDiceTotal` is used with `rerollUnfrozen()`, it refers only to
+the unfrozen dice being rerolled. A normal `roll()` starts a new freeze/reroll session.
+
+Visible playback includes collision-driven dice audio by default. The bundled profile uses CC0 Kenney Casino Audio samples and varies gain, stereo position and playback rate from the real cannon-es contacts. The player waits for the initial sample preload before visible physics starts, so the first impacts are not lost. `DiceOverlay` attempts to unlock Web Audio before asynchronous planning. When using `DiceRollPlayer` directly and later rolls may be triggered programmatically or by multiplayer events, call `player.unlockAudio()` from an earlier user gesture. Set `audio: false` to disable audio completely, or provide `audio.samples.impact` / `audio.samples.roll` URL arrays to use your own sounds. Browser audio failures remain best-effort and never fail a dice roll.
 
 The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
 

@@ -1,5 +1,6 @@
 import { Texture } from "three";
 import { describe, expect, it, vi } from "vitest";
+import { DiceAudioEngine } from "../src/audio/index.js";
 import {
   DiceMeshFactory,
   DicePhysicsWorld,
@@ -126,6 +127,51 @@ function createTarget() {
 }
 
 describe("DiceRollPlayer", () => {
+  it("waits for audio preparation before starting visible physics", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, render, target } = createTarget();
+    let resolveAudio!: () => void;
+    const audioReady = new Promise<void>((resolve) => {
+      resolveAudio = resolve;
+    });
+    const prepareAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "prepare")
+      .mockReturnValue(audioReady);
+    const unlockAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "unlock")
+      .mockResolvedValue();
+    const attachAudio = vi
+      .spyOn(DiceAudioEngine.prototype, "attach")
+      .mockImplementation(() => undefined);
+    const player = new DiceRollPlayer(target, { scheduler });
+
+    try {
+      const playback = player.play(createPlan());
+      await flushMicrotasks();
+
+      scheduler.runFrames(20);
+
+      expect(unlockAudio).toHaveBeenCalledTimes(1);
+      expect(prepareAudio).toHaveBeenCalledTimes(1);
+      expect(attachAudio).not.toHaveBeenCalled();
+      expect(render).not.toHaveBeenCalled();
+
+      resolveAudio();
+      await flushMicrotasks();
+
+      expect(attachAudio).toHaveBeenCalledTimes(1);
+
+      scheduler.runFrames(20);
+      await expect(playback).resolves.toMatchObject({ rollId: "visible-roll" });
+    } finally {
+      player.dispose();
+      diceScene.dispose();
+      prepareAudio.mockRestore();
+      unlockAudio.mockRestore();
+      attachAudio.mockRestore();
+    }
+  });
+
   it("replays a RollPlan with real physics and resolves after stabilization", async () => {
     const scheduler = new ManualScheduler();
     const { diceScene, render, target } = createTarget();
@@ -211,6 +257,63 @@ describe("DiceRollPlayer", () => {
 
     player.dispose();
     diceScene.dispose();
+  });
+
+  it("rebuilds visible appearances without moving settled dice", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const meshFactory = new DiceMeshFactory();
+    const createD6 = vi.spyOn(meshFactory, "createD6");
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const playbackPromise = player.play(createPlan(), {
+      appearances: [{ color: "#eeeeee" }, { color: "#dddddd" }]
+    });
+
+    scheduler.runFrames(20);
+    const playback = await playbackPromise;
+    const before = [...diceScene.content.children];
+    const beforePositions = before.map((object) => object.position.clone());
+    const beforeQuaternions = before.map((object) => object.quaternion.clone());
+
+    expect(playback.dice[0]?.position).toBeDefined();
+    expect(playback.dice[0]?.rotation).toBeDefined();
+
+    await player.setAppearances([
+      { color: "#4da3ff" },
+      { color: "#dddddd" }
+    ]);
+
+    expect(createD6).toHaveBeenLastCalledWith({
+      size: createPlan().physics.diceSize,
+      appearance: { color: "#dddddd" }
+    });
+    expect(diceScene.content.children[0]).not.toBe(before[0]);
+    expect(diceScene.content.children[1]).not.toBe(before[1]);
+
+    diceScene.content.children.forEach((object, index) => {
+      const position = beforePositions[index]!;
+      const quaternion = beforeQuaternions[index]!;
+      expect([object.position.x, object.position.y, object.position.z]).toEqual([
+        position.x,
+        position.y,
+        position.z
+      ]);
+      expect([
+        object.quaternion.x,
+        object.quaternion.y,
+        object.quaternion.z,
+        object.quaternion.w
+      ]).toEqual([
+        quaternion.x,
+        quaternion.y,
+        quaternion.z,
+        quaternion.w
+      ]);
+    });
+
+    player.dispose();
+    diceScene.dispose();
+    meshFactory.dispose();
   });
 
   it("uses the async mesh path only for dice that need texture assets", async () => {

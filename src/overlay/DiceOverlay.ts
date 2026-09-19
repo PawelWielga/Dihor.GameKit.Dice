@@ -1,13 +1,25 @@
+import type { DiceAudioOptions } from "../audio/index.js";
+import {
+  mergeDiceAppearances,
+  type DiceAppearance
+} from "../appearance/index.js";
 import {
   DiceRoller,
   resolveDiceRollModifier,
+  type DiceDefinition,
   type DiceRollRequest,
-  type DiceRollResult
+  type DiceRollResult,
+  type DiceSides
 } from "../core/index.js";
 import {
   BackgroundRollPlanner,
+  DEFAULT_DICE_SCALE,
   DirectRollPlanner,
   type DirectRollPlan,
+  type FrozenDicePhysicsMode,
+  type FrozenRollDieState,
+  type PhysicsQuaternion,
+  type PhysicsVector3,
   type RollPlan,
   type RollPlanningOptions
 } from "../physics/index.js";
@@ -60,12 +72,43 @@ export interface DiceOverlayRollOptions extends RollPlanningOptions {
   readonly expectedDiceTotal?: number;
 }
 
+export interface FrozenDiceAppearance {
+  /** Optional body color used only while a die is frozen. */
+  readonly color?: string;
+  /** Optional body texture URL used only while a die is frozen. */
+  readonly textureUrl?: string;
+}
+
+export interface DiceFreezeOptions {
+  /** Defaults to the overlay-level setting, then to fully-frozen. */
+  readonly physicsMode?: FrozenDicePhysicsMode;
+  readonly appearance?: FrozenDiceAppearance;
+}
+
+export interface DiceOverlayDieResult {
+  readonly id: string;
+  readonly sides: DiceSides;
+  readonly value: number;
+  readonly frozen: boolean;
+  readonly position: PhysicsVector3;
+  readonly rotation: PhysicsQuaternion;
+  readonly frozenPhysicsMode?: FrozenDicePhysicsMode;
+}
+
+export interface DiceOverlayRollResult extends Omit<DiceRollResult, "dice"> {
+  readonly dice: readonly DiceOverlayDieResult[];
+}
+
 export interface DiceOverlayRenderer extends DiceRenderTarget {
   dispose(): void;
 }
 
 export interface DiceOverlayPlayer {
+  /** Optional browser-audio unlock hook. Should be invoked directly from a user gesture when available. */
+  unlockAudio?(): Promise<void>;
   play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult>;
+  /** Rebuilds visible dice materials while preserving their settled transforms. */
+  setAppearances?(appearances: readonly (DiceAppearance | undefined)[]): Promise<void>;
   cancel(): void;
   clear(): void;
   dispose(): void;
@@ -91,6 +134,12 @@ export interface DiceOverlayOptions {
   /** Options forwarded to the default DiceRenderer. */
   readonly renderer?: DiceRendererOptions;
 
+  /** Collision-driven visible-roll audio. Enabled with bundled CC0 samples by default. */
+  readonly audio?: DiceAudioOptions | false;
+
+  /** Default behavior/appearance applied when dice are frozen. */
+  readonly freeze?: DiceFreezeOptions;
+
   /** Advanced dependency hooks for deterministic tests or custom host integrations. */
   readonly roller?: DiceOverlayRoller;
   readonly planner?: DiceOverlayPlanner;
@@ -103,6 +152,26 @@ export interface DiceOverlayOptions {
 interface InertState {
   readonly element: HTMLElement;
   readonly previous: boolean;
+}
+
+interface OverlayDieState {
+  readonly id: string;
+  readonly definition: DiceDefinition;
+  sides: DiceSides;
+  value: number;
+  position: PhysicsVector3;
+  rotation: PhysicsQuaternion;
+  frozen: boolean;
+  frozenPhysicsMode?: FrozenDicePhysicsMode;
+  frozenAppearance?: FrozenDiceAppearance;
+}
+
+interface OverlayRollState {
+  rollId: string;
+  diceScale: number;
+  readonly modifier: number;
+  readonly reason?: string;
+  readonly dice: OverlayDieState[];
 }
 
 interface OverlaySurface {
@@ -119,10 +188,24 @@ interface OverlaySurface {
 const createDefaultRenderer: DiceOverlayRendererFactory = (container, options) =>
   new DiceRenderer(container, options);
 
-const createDefaultPlayer: DiceOverlayPlayerFactory = (target) => new DiceRollPlayer(target);
+const createDefaultPlayer = (
+  audio: DiceAudioOptions | false | undefined
+): DiceOverlayPlayerFactory => (target) => new DiceRollPlayer(target, { audio });
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function unlockPlayerAudio(player: DiceOverlayPlayer): void {
+  try {
+    const unlock = player.unlockAudio?.();
+
+    if (unlock) {
+      void unlock.catch(() => undefined);
+    }
+  } catch {
+    // Audio policy/integration failures must never fail the dice roll.
+  }
 }
 
 function formatResult(result: DiceRollResult): string {
@@ -160,6 +243,7 @@ export class DiceOverlay {
   private readonly playerFactory: DiceOverlayPlayerFactory;
 
   private surface?: OverlaySurface;
+  private rollState?: OverlayRollState;
   private activeRoll = false;
   private disposed = false;
 
@@ -169,7 +253,7 @@ export class DiceOverlay {
     this.planner = options.planner ?? new BackgroundRollPlanner();
     this.directPlanner = options.directPlanner ?? new DirectRollPlanner();
     this.rendererFactory = options.rendererFactory ?? createDefaultRenderer;
-    this.playerFactory = options.playerFactory ?? createDefaultPlayer;
+    this.playerFactory = options.playerFactory ?? createDefaultPlayer(options.audio);
   }
 
   get isOpen(): boolean {
@@ -179,13 +263,15 @@ export class DiceOverlay {
   async roll(
     request: DiceRollRequest,
     options: DiceOverlayRollOptions = {}
-  ): Promise<DiceRollResult> {
+  ): Promise<DiceOverlayRollResult> {
     this.assertActive();
 
     if (this.activeRoll) {
       throw new DiceOverlayError("roll", "A dice roll is already in progress.");
     }
 
+    // A normal roll replaces the previous high-level freeze/reroll session.
+    this.rollState = undefined;
     this.activeRoll = true;
 
     try {
@@ -202,7 +288,7 @@ export class DiceOverlay {
   private async rollPreSimulated(
     request: DiceRollRequest,
     options: DiceOverlayRollOptions
-  ): Promise<DiceRollResult> {
+  ): Promise<DiceOverlayRollResult> {
     const expectedDiceTotal = options.expectedDiceTotal ?? 0;
     let logicalResult: DiceRollResult;
 
@@ -225,6 +311,8 @@ export class DiceOverlay {
       throw this.wrapError("rendering", error);
     }
 
+    unlockPlayerAudio(surface.player);
+
     let plan: RollPlan;
     try {
       this.presentRolling(surface, request.reason ?? logicalResult.reason);
@@ -246,9 +334,10 @@ export class DiceOverlay {
     }
 
     let returnedResult = logicalResult;
+    let playback: DiceRollPlaybackResult;
 
     try {
-      const playback = await surface.player.play(plan, {
+      playback = await surface.player.play(plan, {
         appearances: request.dice.map((die) => die.appearance)
       });
 
@@ -273,16 +362,18 @@ export class DiceOverlay {
       throw this.wrapError("playback", error);
     }
 
+    this.captureRollState(request, returnedResult, playback, options.diceScale ?? DEFAULT_DICE_SCALE);
+
     if (this.surface === surface) {
       this.presentResult(surface, returnedResult);
     }
-    return returnedResult;
+    return this.getCurrentResult();
   }
 
   private async rollDirect(
     request: DiceRollRequest,
     options: DiceOverlayRollOptions
-  ): Promise<DiceRollResult> {
+  ): Promise<DiceOverlayRollResult> {
     let modifier: number;
     try {
       modifier = resolveDiceRollModifier(request.modifier);
@@ -296,6 +387,8 @@ export class DiceOverlay {
     } catch (error) {
       throw this.wrapError("rendering", error);
     }
+
+    unlockPlayerAudio(surface.player);
 
     let plan: RollPlan;
     try {
@@ -333,10 +426,281 @@ export class DiceOverlay {
       ...(request.reason === undefined ? {} : { reason: request.reason })
     };
 
+    this.captureRollState(request, logicalResult, playback, options.diceScale ?? DEFAULT_DICE_SCALE);
+
     if (this.surface === surface) {
       this.presentResult(surface, logicalResult);
     }
-    return logicalResult;
+    return this.getCurrentResult();
+  }
+
+  /**
+   * Freezes selected dice by stable id. Calling it again for an already frozen die updates
+   * its freeze mode/appearance without changing its value or transform.
+   */
+  async freeze(
+    ids: string | readonly string[],
+    options: DiceFreezeOptions = {}
+  ): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
+    const state = this.requireRollState();
+    const surface = this.requireSurface();
+    const selected = this.resolveDiceByIds(state, ids);
+    const resolved = this.resolveFreezeOptions(options);
+    const previous = selected.map((die) => ({
+      die,
+      frozen: die.frozen,
+      frozenPhysicsMode: die.frozenPhysicsMode,
+      frozenAppearance: die.frozenAppearance
+    }));
+
+    this.activeRoll = true;
+
+    try {
+      for (const die of selected) {
+        die.frozen = true;
+        die.frozenPhysicsMode = resolved.physicsMode;
+        die.frozenAppearance = resolved.appearance;
+      }
+
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        for (const snapshot of previous) {
+          snapshot.die.frozen = snapshot.frozen;
+          snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
+          snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+        }
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
+  }
+
+  async unfreeze(id: string): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
+    const state = this.requireRollState();
+    const surface = this.requireSurface();
+    const [die] = this.resolveDiceByIds(state, id);
+    const previous = {
+      frozen: die!.frozen,
+      frozenPhysicsMode: die!.frozenPhysicsMode,
+      frozenAppearance: die!.frozenAppearance
+    };
+
+    this.activeRoll = true;
+
+    try {
+      die!.frozen = false;
+      die!.frozenPhysicsMode = undefined;
+      die!.frozenAppearance = undefined;
+
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        die!.frozen = previous.frozen;
+        die!.frozenPhysicsMode = previous.frozenPhysicsMode;
+        die!.frozenAppearance = previous.frozenAppearance;
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
+  }
+
+  async unfreezeAll(): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
+    const state = this.requireRollState();
+    const surface = this.requireSurface();
+    const previous = state.dice.map((die) => ({
+      die,
+      frozen: die.frozen,
+      frozenPhysicsMode: die.frozenPhysicsMode,
+      frozenAppearance: die.frozenAppearance
+    }));
+
+    this.activeRoll = true;
+
+    try {
+      for (const die of state.dice) {
+        die.frozen = false;
+        die.frozenPhysicsMode = undefined;
+        die.frozenAppearance = undefined;
+      }
+
+      try {
+        await this.applyCurrentAppearances(surface, state);
+      } catch (error) {
+        for (const snapshot of previous) {
+          snapshot.die.frozen = snapshot.frozen;
+          snapshot.die.frozenPhysicsMode = snapshot.frozenPhysicsMode;
+          snapshot.die.frozenAppearance = snapshot.frozenAppearance;
+        }
+        throw this.wrapError("rendering", error);
+      }
+
+      return this.getCurrentResult();
+    } finally {
+      this.activeRoll = false;
+    }
+  }
+
+  async toggleFreeze(
+    id: string,
+    options: DiceFreezeOptions = {}
+  ): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
+    const state = this.requireRollState();
+    const [die] = this.resolveDiceByIds(state, id);
+    return die!.frozen ? this.unfreeze(id) : this.freeze(id, options);
+  }
+
+  /**
+   * Rerolls only unfrozen dice while frozen dice remain collision geometry in the same world.
+   * expectedDiceTotal, when supplied, targets only the dice being rerolled.
+   */
+  async rerollUnfrozen(
+    options: DiceOverlayRollOptions = {}
+  ): Promise<DiceOverlayRollResult> {
+    this.assertActive();
+    this.assertIdleState();
+    const state = this.requireRollState();
+    const surface = this.requireSurface();
+    const unfrozen = state.dice.filter((die) => !die.frozen);
+
+    if (unfrozen.length === 0) {
+      return this.getCurrentResult();
+    }
+
+    this.activeRoll = true;
+    let phase: DiceOverlayErrorPhase = "roll";
+
+    try {
+      unlockPlayerAudio(surface.player);
+      const frozenDice = this.createFrozenPlanningState(state);
+      const planningOptions: RollPlanningOptions = {
+        ...options,
+        diceScale: options.diceScale ?? state.diceScale,
+        frozenDice,
+        arenaBoundary: surface.renderer.diceScene.getTableBoundary()
+      };
+      const completeRequest: DiceRollRequest = {
+        dice: state.dice.map((die) => die.definition),
+        modifier: state.modifier,
+        ...(state.reason === undefined ? {} : { reason: state.reason })
+      };
+      let plan: RollPlan;
+      let logicalResult: DiceRollResult | undefined;
+
+      this.presentRolling(surface, state.reason);
+
+      if (options.preSimulation === false) {
+        phase = "planning";
+        const rollId = this.roller.createRollId?.() ?? new DiceRoller().createRollId();
+        plan = this.directPlanner.plan(completeRequest, rollId, planningOptions);
+      } else {
+        const partialRequest: DiceRollRequest = {
+          dice: unfrozen.map((die) => die.definition),
+          modifier: 0,
+          ...(state.reason === undefined ? {} : { reason: state.reason })
+        };
+        const expectedDiceTotal = options.expectedDiceTotal ?? 0;
+        let partialResult: DiceRollResult;
+
+        if (expectedDiceTotal === 0) {
+          partialResult = this.roller.roll(partialRequest);
+        } else if (this.roller.rollToDiceTotal) {
+          partialResult = this.roller.rollToDiceTotal(partialRequest, expectedDiceTotal);
+        } else {
+          throw new Error("The configured DiceOverlayRoller does not support expectedDiceTotal.");
+        }
+
+        let partialIndex = 0;
+        const dice = state.dice.map((die) => {
+          if (die.frozen) {
+            return { sides: die.sides, value: die.value };
+          }
+
+          const next = partialResult.dice[partialIndex++];
+          if (!next) {
+            throw new Error("The reroll result is missing an unfrozen die.");
+          }
+          return next;
+        });
+
+        logicalResult = {
+          rollId: partialResult.rollId,
+          dice,
+          modifier: state.modifier,
+          total: dice.reduce((sum, die) => sum + die.value, 0) + state.modifier,
+          ...(state.reason === undefined ? {} : { reason: state.reason })
+        };
+        phase = "planning";
+        plan = await this.planner.plan(logicalResult, planningOptions);
+
+        if (plan.preSimulated === false && expectedDiceTotal !== 0) {
+          throw new Error(
+            "expectedDiceTotal requires presimulation. The configured planner fell back to direct physics."
+          );
+        }
+      }
+
+      phase = "playback";
+      const playback = await surface.player.play(plan, {
+        appearances: this.getCurrentAppearances(state)
+      });
+
+      let finalResult: DiceRollResult;
+      if (logicalResult && plan.preSimulated !== false) {
+        this.assertPlaybackMatches(logicalResult, playback);
+        finalResult = logicalResult;
+      } else {
+        finalResult = {
+          rollId: playback.rollId,
+          dice: playback.dice.map((die) => ({ sides: die.sides, value: die.value })),
+          modifier: state.modifier,
+          total:
+            playback.dice.reduce((sum, die) => sum + die.value, 0) +
+            state.modifier,
+          ...(state.reason === undefined ? {} : { reason: state.reason })
+        };
+      }
+
+      this.updateRollStateFromPlayback(state, finalResult, playback);
+      state.diceScale = planningOptions.diceScale ?? DEFAULT_DICE_SCALE;
+
+      if (this.surface === surface) {
+        this.presentResult(surface, finalResult);
+      }
+
+      return this.getCurrentResult();
+    } catch (error) {
+      if (this.surface === surface) {
+        if (phase === "playback") {
+          this.rollState = undefined;
+          surface.resultElement && (surface.resultElement.textContent = "Roll failed");
+          surface.player.clear();
+        } else {
+          this.presentResult(surface, this.getCurrentResult());
+        }
+      }
+
+      throw this.wrapError(
+        error instanceof DiceOverlayError ? error.phase : phase,
+        error
+      );
+    } finally {
+      this.activeRoll = false;
+    }
   }
 
   /** Removes current overlay/canvas and cancels an active visible roll. The instance remains reusable. */
@@ -349,6 +713,7 @@ export class DiceOverlay {
     }
 
     this.surface = undefined;
+    this.rollState = undefined;
     surface.player.dispose();
     surface.renderer.dispose();
     this.restoreInert(surface.inertStates);
@@ -530,6 +895,200 @@ export class DiceOverlay {
   private presentResult(surface: OverlaySurface, result: DiceRollResult): void {
     if (surface.resultElement) {
       surface.resultElement.textContent = formatResult(result);
+    }
+  }
+
+  private captureRollState(
+    request: DiceRollRequest,
+    result: DiceRollResult,
+    playback: DiceRollPlaybackResult,
+    diceScale: number
+  ): void {
+    if (request.dice.length !== playback.dice.length || result.dice.length !== playback.dice.length) {
+      throw new Error("Visible playback did not return state for every requested die.");
+    }
+
+    this.rollState = {
+      rollId: result.rollId,
+      diceScale,
+      modifier: result.modifier,
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+      dice: playback.dice.map((playedDie, index) => {
+        const definition = request.dice[index];
+        const logicalDie = result.dice[index];
+
+        if (!definition || !logicalDie) {
+          throw new Error(`Missing die state at index ${index}.`);
+        }
+
+        return {
+          id: `${result.rollId}:die-${index + 1}`,
+          definition,
+          sides: logicalDie.sides,
+          value: logicalDie.value,
+          position: { ...playedDie.position },
+          rotation: { ...playedDie.rotation },
+          frozen: false
+        };
+      })
+    };
+  }
+
+  private updateRollStateFromPlayback(
+    state: OverlayRollState,
+    result: DiceRollResult,
+    playback: DiceRollPlaybackResult
+  ): void {
+    if (state.dice.length !== playback.dice.length || result.dice.length !== state.dice.length) {
+      throw new Error("Reroll playback did not return state for every die.");
+    }
+
+    state.rollId = result.rollId;
+
+    for (let index = 0; index < state.dice.length; index += 1) {
+      const stateDie = state.dice[index]!;
+      const logicalDie = result.dice[index]!;
+      const playedDie = playback.dice[index]!;
+      stateDie.sides = logicalDie.sides;
+      stateDie.value = logicalDie.value;
+      stateDie.position = { ...playedDie.position };
+      stateDie.rotation = { ...playedDie.rotation };
+    }
+  }
+
+  private getCurrentResult(): DiceOverlayRollResult {
+    const state = this.requireRollState();
+
+    return {
+      rollId: state.rollId,
+      dice: state.dice.map((die) => ({
+        id: die.id,
+        sides: die.sides,
+        value: die.value,
+        frozen: die.frozen,
+        position: { ...die.position },
+        rotation: { ...die.rotation },
+        ...(die.frozenPhysicsMode
+          ? { frozenPhysicsMode: die.frozenPhysicsMode }
+          : {})
+      })),
+      modifier: state.modifier,
+      total: state.dice.reduce((sum, die) => sum + die.value, 0) + state.modifier,
+      ...(state.reason === undefined ? {} : { reason: state.reason })
+    };
+  }
+
+  private createFrozenPlanningState(state: OverlayRollState): FrozenRollDieState[] {
+    return state.dice.flatMap((die, dieIndex) => {
+      if (!die.frozen) {
+        return [];
+      }
+
+      return [{
+        dieIndex,
+        sides: die.sides,
+        expectedValue: die.value,
+        physicsMode: die.frozenPhysicsMode ?? "fully-frozen",
+        position: { ...die.position },
+        quaternion: { ...die.rotation }
+      }];
+    });
+  }
+
+  private getCurrentAppearances(
+    state: OverlayRollState
+  ): readonly (DiceAppearance | undefined)[] {
+    return state.dice.map((die) => {
+      if (!die.frozen || !die.frozenAppearance) {
+        return die.definition.appearance;
+      }
+
+      const override: DiceAppearance = {
+        ...(die.frozenAppearance.color === undefined
+          ? {}
+          : { color: die.frozenAppearance.color }),
+        ...(die.frozenAppearance.textureUrl === undefined
+          ? {}
+          : { texture: die.frozenAppearance.textureUrl })
+      };
+      return mergeDiceAppearances(die.definition.appearance, override);
+    });
+  }
+
+  private async applyCurrentAppearances(
+    surface: OverlaySurface,
+    state: OverlayRollState
+  ): Promise<void> {
+    if (!surface.player.setAppearances) {
+      return;
+    }
+
+    await surface.player.setAppearances(this.getCurrentAppearances(state));
+  }
+
+  private resolveFreezeOptions(options: DiceFreezeOptions): Required<Pick<DiceFreezeOptions, "physicsMode">> & {
+    readonly appearance?: FrozenDiceAppearance;
+  } {
+    const physicsMode = options.physicsMode ?? this.options.freeze?.physicsMode ?? "fully-frozen";
+
+    if (physicsMode !== "fully-frozen" && physicsMode !== "translation-only") {
+      throw new RangeError(
+        `physicsMode must be "fully-frozen" or "translation-only"; received ${String(physicsMode)}.`
+      );
+    }
+
+    const appearance =
+      this.options.freeze?.appearance || options.appearance
+        ? {
+            ...this.options.freeze?.appearance,
+            ...options.appearance
+          }
+        : undefined;
+
+    return { physicsMode, ...(appearance ? { appearance } : {}) };
+  }
+
+  private resolveDiceByIds(
+    state: OverlayRollState,
+    ids: string | readonly string[]
+  ): OverlayDieState[] {
+    const requested = typeof ids === "string" ? [ids] : [...ids];
+
+    if (requested.length === 0) {
+      throw new RangeError("At least one die id is required.");
+    }
+
+    const unique = new Set(requested);
+    if (unique.size !== requested.length) {
+      throw new RangeError("Die ids must be unique.");
+    }
+
+    return requested.map((id) => {
+      const die = state.dice.find((candidate) => candidate.id === id);
+      if (!die) {
+        throw new RangeError(`Unknown die id: ${id}.`);
+      }
+      return die;
+    });
+  }
+
+  private requireRollState(): OverlayRollState {
+    if (!this.rollState) {
+      throw new DiceOverlayError("roll", "No completed dice roll is available.");
+    }
+    return this.rollState;
+  }
+
+  private requireSurface(): OverlaySurface {
+    if (!this.surface) {
+      throw new DiceOverlayError("rendering", "No dice surface is currently open.");
+    }
+    return this.surface;
+  }
+
+  private assertIdleState(): void {
+    if (this.activeRoll) {
+      throw new DiceOverlayError("roll", "A dice roll is already in progress.");
     }
   }
 

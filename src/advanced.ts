@@ -1,3 +1,4 @@
+export type { DiceAudioOptions, DiceAudioSampleSet } from "./audio/index.js";
 export {
   DEFAULT_DICE_APPEARANCE,
   DEFAULT_DICE_FACE_LABEL_MODE,
@@ -55,6 +56,7 @@ export {
   DICE_ROLL_EVENT_LIMITS,
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
+  DICE_ROLL_REPLAY_V1_VERSION,
   DICE_ROLL_REPLAY_VERSION,
   createDiceRollEvent,
   diceRollResultFromEvent,
@@ -67,11 +69,15 @@ export {
   type DiceRollEventAssetPolicy,
   type DiceRollEvent,
   type DiceRollEventDie,
-  type DiceRollReplayV1
+  type DiceRollReplay,
+  type DiceRollReplayV1,
+  type DiceRollReplayV2
 } from "./events/index.js";
 export {
   DiceOverlay,
   DiceOverlayError,
+  type DiceFreezeOptions,
+  type DiceOverlayDieResult,
   type DiceOverlayDirectPlanner,
   type DiceOverlayErrorPhase,
   type DiceOverlayOptions,
@@ -81,7 +87,9 @@ export {
   type DiceOverlayRenderer,
   type DiceOverlayRendererFactory,
   type DiceOverlayRollOptions,
-  type DiceOverlayRoller
+  type DiceOverlayRollResult,
+  type DiceOverlayRoller,
+  type FrozenDiceAppearance
 } from "./overlay/index.js";
 export {
   BackgroundRollPlanner,
@@ -105,11 +113,14 @@ export {
   type BackgroundRollPlannerOptions,
   type BackgroundRollPlanningTiming,
   type DiceArenaBoundaryPoint,
+  type DiceBodyOptions,
   type DicePhysicsConfig,
   type DirectRollPlan,
   type DirectRollPlanDie,
   type DirectRollPlannerOptions,
   type DicePhysicsWorldOptions,
+  type FrozenDicePhysicsMode,
+  type FrozenRollDieState,
   type PhysicsQuaternion,
   type PhysicsVector3,
   type RollInitialState,
