@@ -66,7 +66,7 @@ describe("dice audio", () => {
 
   it("keeps prepare pending until all samples finish loading and decoding", async () => {
     const fetchResolvers: Array<() => void> = [];
-    const decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
+    const decodeAudioData = vi.fn(async (_data: ArrayBuffer) => ({}) as AudioBuffer);
     const close = vi.fn(async () => undefined);
 
     class FakeAudioContext {
