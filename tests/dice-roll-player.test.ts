@@ -259,6 +259,63 @@ describe("DiceRollPlayer", () => {
     diceScene.dispose();
   });
 
+  it("rebuilds visible appearances without moving settled dice", async () => {
+    const scheduler = new ManualScheduler();
+    const { diceScene, target } = createTarget();
+    const meshFactory = new DiceMeshFactory();
+    const createD6 = vi.spyOn(meshFactory, "createD6");
+    const player = new DiceRollPlayer(target, { scheduler, meshFactory });
+    const playbackPromise = player.play(createPlan(), {
+      appearances: [{ color: "#eeeeee" }, { color: "#dddddd" }]
+    });
+
+    scheduler.runFrames(20);
+    const playback = await playbackPromise;
+    const before = [...diceScene.content.children];
+    const beforePositions = before.map((object) => object.position.clone());
+    const beforeQuaternions = before.map((object) => object.quaternion.clone());
+
+    expect(playback.dice[0]?.position).toBeDefined();
+    expect(playback.dice[0]?.rotation).toBeDefined();
+
+    await player.setAppearances([
+      { color: "#4da3ff" },
+      { color: "#dddddd" }
+    ]);
+
+    expect(createD6).toHaveBeenLastCalledWith({
+      size: createPlan().physics.diceSize,
+      appearance: { color: "#dddddd" }
+    });
+    expect(diceScene.content.children[0]).not.toBe(before[0]);
+    expect(diceScene.content.children[1]).not.toBe(before[1]);
+
+    diceScene.content.children.forEach((object, index) => {
+      const position = beforePositions[index]!;
+      const quaternion = beforeQuaternions[index]!;
+      expect([object.position.x, object.position.y, object.position.z]).toEqual([
+        position.x,
+        position.y,
+        position.z
+      ]);
+      expect([
+        object.quaternion.x,
+        object.quaternion.y,
+        object.quaternion.z,
+        object.quaternion.w
+      ]).toEqual([
+        quaternion.x,
+        quaternion.y,
+        quaternion.z,
+        quaternion.w
+      ]);
+    });
+
+    player.dispose();
+    diceScene.dispose();
+    meshFactory.dispose();
+  });
+
   it("uses the async mesh path only for dice that need texture assets", async () => {
     const scheduler = new ManualScheduler();
     const { diceScene, target } = createTarget();
