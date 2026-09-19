@@ -234,6 +234,7 @@ export class DiceAudioEngine {
   private readonly activeVoices = new Set<AudioBufferSourceNode>();
 
   private context?: AudioContext;
+  private preloadPromise?: Promise<void>;
   private arenaHalfExtent = 1;
   private disposed = false;
 
@@ -243,6 +244,48 @@ export class DiceAudioEngine {
     if (this.options.enabled) {
       this.ensureContext();
     }
+  }
+
+  /**
+   * Attempts to resume Web Audio immediately.
+   *
+   * Call this directly from a user gesture when the player can be triggered later
+   * by programmatic or multiplayer events. Rejections are swallowed by design.
+   */
+  unlock(): Promise<void> {
+    if (!this.options.enabled || this.disposed) {
+      return Promise.resolve();
+    }
+
+    const context = this.ensureContext();
+
+    if (!context || context.state !== "suspended") {
+      return Promise.resolve();
+    }
+
+    try {
+      return context.resume().catch(() => undefined);
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
+  /**
+   * Resolves once bundled/custom samples have finished their best-effort fetch/decode.
+   * Failed samples are ignored so audio can never fail a dice roll.
+   */
+  prepare(): Promise<void> {
+    if (!this.options.enabled || this.disposed) {
+      return Promise.resolve();
+    }
+
+    const context = this.ensureContext();
+
+    if (!context) {
+      return Promise.resolve();
+    }
+
+    return this.preloadPromise ?? Promise.resolve();
   }
 
   attach(bodies: readonly Body[], arenaHalfExtent: number): void {
@@ -293,6 +336,7 @@ export class DiceAudioEngine {
 
     const context = this.context;
     this.context = undefined;
+    this.preloadPromise = undefined;
     this.disposed = true;
 
     if (context && context.state !== "closed") {
@@ -313,7 +357,7 @@ export class DiceAudioEngine {
 
     try {
       this.context = new AudioContextClass();
-      void this.preloadSamples(this.context);
+      this.preloadPromise = this.preloadSamples(this.context);
       return this.context;
     } catch {
       return undefined;
@@ -413,10 +457,6 @@ export class DiceAudioEngine {
     }
 
     try {
-      if (context.state === "suspended") {
-        void context.resume().catch(() => undefined);
-      }
-
       while (this.activeVoices.size >= this.options.maxVoices) {
         const oldest = this.activeVoices.values().next().value as
           | AudioBufferSourceNode
