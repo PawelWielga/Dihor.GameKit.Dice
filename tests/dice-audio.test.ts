@@ -51,6 +51,7 @@ describe("dice audio", () => {
     });
 
     expect(resolveDiceAudioOptions().rollSamples).toEqual([]);
+    expect(resolveDiceAudioOptions({ samples: { roll: [] } }).rollSamples).toEqual([]);
     expect(custom.volume).toBe(0.4);
     expect(custom.impactSamples).toEqual(["/impact.ogg"]);
     expect(custom.rollSamples).toEqual(["/roll.ogg"]);
