@@ -2,6 +2,7 @@ export {
   DICE_ROLL_EVENT_LIMITS,
   DICE_ROLL_EVENT_TYPE,
   DICE_ROLL_EVENT_VERSION,
+  DICE_ROLL_REPLAY_V1_VERSION,
   DICE_ROLL_REPLAY_VERSION,
   createDiceRollEvent,
   diceRollResultFromEvent,
@@ -11,7 +12,9 @@ export type {
   CreateDiceRollEventOptions,
   DiceRollEvent,
   DiceRollEventDie,
-  DiceRollReplayV1
+  DiceRollReplay,
+  DiceRollReplayV1,
+  DiceRollReplayV2
 } from "./DiceRollEvent.js";
 
 export {
