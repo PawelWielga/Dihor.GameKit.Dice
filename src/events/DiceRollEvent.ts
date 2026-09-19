@@ -25,7 +25,10 @@ import {
 
 export const DICE_ROLL_EVENT_TYPE = "dice-roll" as const;
 export const DICE_ROLL_EVENT_VERSION = 1 as const;
-export const DICE_ROLL_REPLAY_VERSION = 1 as const;
+/** Legacy replay schema without frozen-dice physics semantics. */
+export const DICE_ROLL_REPLAY_V1_VERSION = 1 as const;
+/** Current replay schema. V2 adds per-die frozenPhysicsMode. */
+export const DICE_ROLL_REPLAY_VERSION = 2 as const;
 
 /** Operational limits applied when validating transport payloads. */
 export const DICE_ROLL_EVENT_LIMITS = Object.freeze({
@@ -53,9 +56,20 @@ export interface DiceRollEventDie {
 }
 
 export interface DiceRollReplayV1 {
+  readonly version: typeof DICE_ROLL_REPLAY_V1_VERSION;
+  readonly plan: Omit<PresimulatedRollPlan, "dice"> & {
+    readonly dice: readonly (Omit<RollPlanDie, "frozenPhysicsMode"> & {
+      readonly frozenPhysicsMode?: never;
+    })[];
+  };
+}
+
+export interface DiceRollReplayV2 {
   readonly version: typeof DICE_ROLL_REPLAY_VERSION;
   readonly plan: PresimulatedRollPlan;
 }
+
+export type DiceRollReplay = DiceRollReplayV1 | DiceRollReplayV2;
 
 /**
  * Transport-neutral host-authoritative dice event.
@@ -71,7 +85,7 @@ export interface DiceRollEvent {
   readonly modifier: number;
   readonly total: number;
   readonly reason?: string;
-  readonly replay?: DiceRollReplayV1;
+  readonly replay?: DiceRollReplay;
 }
 
 export interface CreateDiceRollEventOptions {
@@ -540,7 +554,10 @@ function validateInitialStateFromUnknown(value: unknown, index: number): RollIni
   };
 }
 
-function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
+function validateReplayPlanFromUnknown(
+  value: unknown,
+  replayVersion: typeof DICE_ROLL_REPLAY_V1_VERSION | typeof DICE_ROLL_REPLAY_VERSION
+): PresimulatedRollPlan {
   const plan = requireRecord("DiceRollEvent replay plan", value);
 
   const rollId = requireNonEmptyBoundedString(
@@ -559,9 +576,14 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
     );
   }
 
-  // Replay v1 historically omitted this flag for presimulated plans, so absence stays valid.
-  // A direct physical plan is never authoritative replay data.
-  if (plan.preSimulated !== undefined && plan.preSimulated !== true) {
+  // Replay v1 historically omitted this discriminator, so absence remains valid only there.
+  // V2 requires the explicit true discriminator. A direct physical plan is never replay data.
+  if (
+    (replayVersion === DICE_ROLL_REPLAY_V1_VERSION &&
+      plan.preSimulated !== undefined &&
+      plan.preSimulated !== true) ||
+    (replayVersion === DICE_ROLL_REPLAY_VERSION && plan.preSimulated !== true)
+  ) {
     throw new RangeError("DiceRollEvent replay plan must be presimulated.");
   }
 
@@ -591,7 +613,18 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
     }
 
     const frozenPhysicsMode = die.frozenPhysicsMode;
+
     if (
+      replayVersion === DICE_ROLL_REPLAY_V1_VERSION &&
+      frozenPhysicsMode !== undefined
+    ) {
+      throw new RangeError(
+        `DiceRollEvent replay v1 does not support frozenPhysicsMode at index ${index}.`
+      );
+    }
+
+    if (
+      replayVersion === DICE_ROLL_REPLAY_VERSION &&
       frozenPhysicsMode !== undefined &&
       frozenPhysicsMode !== "fully-frozen" &&
       frozenPhysicsMode !== "translation-only"
@@ -605,7 +638,9 @@ function validateReplayPlanFromUnknown(value: unknown): PresimulatedRollPlan {
       sides: sides as DiceSides,
       expectedValue,
       initialState: validateInitialStateFromUnknown(die.initialState, index),
-      ...(frozenPhysicsMode === undefined ? {} : { frozenPhysicsMode })
+      ...(replayVersion === DICE_ROLL_REPLAY_VERSION && frozenPhysicsMode !== undefined
+        ? { frozenPhysicsMode: frozenPhysicsMode as "fully-frozen" | "translation-only" }
+        : {})
     };
   });
 
@@ -741,19 +776,30 @@ function validatePlan(result: DiceRollResult, plan: PresimulatedRollPlan | undef
 function validateReplayFromUnknown(
   result: DiceRollResult,
   replay: unknown
-): DiceRollReplayV1 | undefined {
+): DiceRollReplay | undefined {
   if (replay === undefined) {
     return undefined;
   }
 
   const rawReplay = requireRecord("DiceRollEvent replay", replay);
+  const replayVersion = rawReplay.version;
 
-  if (rawReplay.version !== DICE_ROLL_REPLAY_VERSION) {
+  if (
+    replayVersion !== DICE_ROLL_REPLAY_V1_VERSION &&
+    replayVersion !== DICE_ROLL_REPLAY_VERSION
+  ) {
     throw new RangeError("Unsupported DiceRollEvent replay version.");
   }
 
-  const plan = validateReplayPlanFromUnknown(rawReplay.plan);
+  const plan = validateReplayPlanFromUnknown(rawReplay.plan, replayVersion);
   validatePlan(result, plan);
+
+  if (replayVersion === DICE_ROLL_REPLAY_V1_VERSION) {
+    return {
+      version: DICE_ROLL_REPLAY_V1_VERSION,
+      plan: plan as DiceRollReplayV1["plan"]
+    };
+  }
 
   return {
     version: DICE_ROLL_REPLAY_VERSION,
