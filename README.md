@@ -44,11 +44,11 @@ The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
 
 Dihor.GameKit.Dice prereleases follow the `0.1.0-preview.N` convention and are packaged with `npm pack` as a `.tgz` artifact attached to a GitHub Prerelease.
 
-The first release line is:
+The current prerelease is:
 
 ```text
-@dihor/gamekit-dice 0.1.0-preview.1
-tag: v0.1.0-preview.1
+@dihor/gamekit-dice 0.1.0-preview.2
+tag: v0.1.0-preview.2
 ```
 
 The prerelease workflow validates the manifest and package version, runs the full test/build suite, verifies package contents and MIT license metadata, creates SHA-256 checksums, uploads the npm artifact and creates or updates the matching GitHub Prerelease.
