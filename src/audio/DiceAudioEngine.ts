@@ -93,7 +93,7 @@ function resolveSampleList(
   const samples = value ?? fallback;
 
   if (samples.length === 0) {
-    if (value === undefined && fallback.length === 0) {
+    if (fallback.length === 0) {
       return [];
     }
 
