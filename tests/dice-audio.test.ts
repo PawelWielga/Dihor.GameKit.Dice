@@ -14,7 +14,11 @@ describe("dice audio", () => {
   it("maps light, strong and spatial collisions to bounded sound cues", () => {
     expect(resolveDiceCollisionSound(0.2, 0, 5)).toBeUndefined();
 
-    const rolling = resolveDiceCollisionSound(1.2, -2.5, 5);
+    expect(resolveDiceCollisionSound(1.2, -2.5, 5)).toBeUndefined();
+
+    const rolling = resolveDiceCollisionSound(1.2, -2.5, 5, {
+      samples: { roll: ["/roll.ogg"] }
+    });
     expect(rolling).toMatchObject({ kind: "roll", pan: -0.5 });
     expect(rolling!.gain).toBeGreaterThan(0);
     expect(rolling!.gain).toBeLessThanOrEqual(0.7);
@@ -46,6 +50,8 @@ describe("dice audio", () => {
       }
     });
 
+    expect(resolveDiceAudioOptions().rollSamples).toEqual([]);
+    expect(resolveDiceAudioOptions({ samples: { roll: [] } }).rollSamples).toEqual([]);
     expect(custom.volume).toBe(0.4);
     expect(custom.impactSamples).toEqual(["/impact.ogg"]);
     expect(custom.rollSamples).toEqual(["/roll.ogg"]);
@@ -115,7 +121,7 @@ describe("dice audio", () => {
 
     await Promise.resolve();
 
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(prepared).toBe(false);
 
     for (const resolveFetch of fetchResolvers) {
@@ -125,7 +131,7 @@ describe("dice audio", () => {
     await preparation;
 
     expect(prepared).toBe(true);
-    expect(decodeAudioData).toHaveBeenCalledTimes(6);
+    expect(decodeAudioData).toHaveBeenCalledTimes(3);
 
     engine.dispose();
     await Promise.resolve();

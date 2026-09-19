@@ -2,14 +2,11 @@ import type { Body } from "cannon-es";
 import impact1Url from "../assets/audio/kenney-casino/dieThrow1.ogg?no-inline";
 import impact2Url from "../assets/audio/kenney-casino/dieThrow2.ogg?no-inline";
 import impact3Url from "../assets/audio/kenney-casino/dieThrow3.ogg?no-inline";
-import roll1Url from "../assets/audio/kenney-casino/dieShuffle1.ogg?no-inline";
-import roll2Url from "../assets/audio/kenney-casino/dieShuffle2.ogg?no-inline";
-import roll3Url from "../assets/audio/kenney-casino/dieShuffle3.ogg?no-inline";
 
 export interface DiceAudioSampleSet {
   /** Samples used for stronger impacts, such as the first hit against the table. */
   readonly impact?: readonly string[];
-  /** Samples used for lighter repeated contacts while dice tumble and roll. */
+  /** Optional samples for lighter repeated contacts while dice tumble and roll. Disabled by default. */
   readonly roll?: readonly string[];
 }
 
@@ -63,7 +60,7 @@ interface DiceCollisionEvent {
 type CollisionListener = (event: DiceCollisionEvent) => void;
 
 const DEFAULT_IMPACT_SAMPLES = [impact1Url, impact2Url, impact3Url] as const;
-const DEFAULT_ROLL_SAMPLES = [roll1Url, roll2Url, roll3Url] as const;
+const DEFAULT_ROLL_SAMPLES: readonly string[] = [];
 
 const DEFAULT_VOLUME = 0.7;
 const DEFAULT_COLLISION_THRESHOLD = 0.35;
@@ -96,6 +93,10 @@ function resolveSampleList(
   const samples = value ?? fallback;
 
   if (samples.length === 0) {
+    if (fallback.length === 0) {
+      return [];
+    }
+
     throw new RangeError(`${name} must contain at least one sample URL.`);
   }
 
@@ -192,12 +193,20 @@ export function resolveDiceCollisionSound(
     0,
     1
   );
+  const kind = impact >= resolved.strongImpactThreshold ? "impact" : "roll";
+
+  // Light settling contacts are silent by default. This avoids the artificial
+  // rattling tail caused by repeatedly playing shuffle samples as dice come to rest.
+  if (kind === "roll" && resolved.rollSamples.length === 0) {
+    return undefined;
+  }
+
   const gain = resolved.volume * (0.18 + normalized * 0.82);
   const safeArenaHalfExtent =
     Number.isFinite(arenaHalfExtent) && arenaHalfExtent > 0 ? arenaHalfExtent : 1;
 
   return {
-    kind: impact >= resolved.strongImpactThreshold ? "impact" : "roll",
+    kind,
     gain,
     pan: resolved.spatial ? clamp(x / safeArenaHalfExtent, -1, 1) : 0
   };

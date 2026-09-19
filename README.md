@@ -44,11 +44,11 @@ The baseline follows the current Vitest 5 requirement and also satisfies Vite 8.
 
 Dihor.GameKit.Dice prereleases follow the `0.1.0-preview.N` convention and are packaged with `npm pack` as a `.tgz` artifact attached to a GitHub Prerelease.
 
-The first release line is:
+The current prerelease is:
 
 ```text
-@dihor/gamekit-dice 0.1.0-preview.1
-tag: v0.1.0-preview.1
+@dihor/gamekit-dice 0.1.0-preview.2
+tag: v0.1.0-preview.2
 ```
 
 The prerelease workflow validates the manifest and package version, runs the full test/build suite, verifies package contents and MIT license metadata, creates SHA-256 checksums, uploads the npm artifact and creates or updates the matching GitHub Prerelease.
@@ -287,7 +287,7 @@ Frozen dice are still inserted into the combined hidden physics world, so collis
 before visible playback. If `expectedDiceTotal` is used with `rerollUnfrozen()`, it refers only to
 the unfrozen dice being rerolled. A normal `roll()` starts a new freeze/reroll session.
 
-Visible playback includes collision-driven dice audio by default. The bundled profile uses CC0 Kenney Casino Audio samples and varies gain, stereo position and playback rate from the real cannon-es contacts. The player waits for the initial sample preload before visible physics starts, so the first impacts are not lost. `DiceOverlay` attempts to unlock Web Audio before asynchronous planning. When using `DiceRollPlayer` directly and later rolls may be triggered programmatically or by multiplayer events, call `player.unlockAudio()` from an earlier user gesture. Set `audio: false` to disable audio completely, or provide `audio.samples.impact` / `audio.samples.roll` URL arrays to use your own sounds. Browser audio failures remain best-effort and never fail a dice roll.
+Visible playback includes collision-driven dice audio by default. The bundled profile uses CC0 Kenney Casino Audio `dieThrow` samples for meaningful impacts and varies gain, stereo position and playback rate from the real cannon-es contacts. Lighter settling contacts are silent by default so the end of a roll does not turn into an artificial shuffle/rattle tail; games that want continuous rolling audio can opt in with `audio.samples.roll`. The player waits for the initial sample preload before visible physics starts, so the first impacts are not lost. `DiceOverlay` attempts to unlock Web Audio before asynchronous planning. When using `DiceRollPlayer` directly and later rolls may be triggered programmatically or by multiplayer events, call `player.unlockAudio()` from an earlier user gesture. Set `audio: false` to disable audio completely, or provide `audio.samples.impact` / `audio.samples.roll` URL arrays to use your own sounds. Browser audio failures remain best-effort and never fail a dice roll.
 
 The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
 

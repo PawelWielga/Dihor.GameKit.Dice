@@ -77,7 +77,7 @@ jobs:
           npm pack --pack-destination artifacts/npm
           PACKAGE="$(find artifacts/npm -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE"
-          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.version')" = "0.1.0-preview.1"
+          test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.version')" = "0.1.0-preview.2"
           test "$(tar -xOf "$PACKAGE" package/package.json | jq -r '.license')" = "MIT"
           tar -tzf "$PACKAGE" > package-files.txt
           grep -q '^package/dist/' package-files.txt
