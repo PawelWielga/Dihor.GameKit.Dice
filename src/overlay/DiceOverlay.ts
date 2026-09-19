@@ -268,6 +268,8 @@ export class DiceOverlay {
       throw new DiceOverlayError("roll", "A dice roll is already in progress.");
     }
 
+    // A normal roll replaces the previous high-level freeze/reroll session.
+    this.rollState = undefined;
     this.activeRoll = true;
 
     try {
@@ -555,6 +557,7 @@ export class DiceOverlay {
     }
 
     this.activeRoll = true;
+    let phase: DiceOverlayErrorPhase = "roll";
 
     try {
       unlockPlayerAudio(surface.player);
@@ -575,6 +578,7 @@ export class DiceOverlay {
       this.presentRolling(surface, state.reason);
 
       if (options.preSimulation === false) {
+        phase = "planning";
         const rollId = this.roller.createRollId?.() ?? new DiceRoller().createRollId();
         plan = this.directPlanner.plan(completeRequest, rollId, planningOptions);
       } else {
@@ -614,6 +618,7 @@ export class DiceOverlay {
           total: dice.reduce((sum, die) => sum + die.value, 0) + state.modifier,
           ...(state.reason === undefined ? {} : { reason: state.reason })
         };
+        phase = "planning";
         plan = await this.planner.plan(logicalResult, planningOptions);
 
         if (plan.preSimulated === false && expectedDiceTotal !== 0) {
@@ -623,6 +628,7 @@ export class DiceOverlay {
         }
       }
 
+      phase = "playback";
       const playback = await surface.player.play(plan, {
         appearances: this.getCurrentAppearances(state)
       });
@@ -652,13 +658,18 @@ export class DiceOverlay {
       return this.getCurrentResult();
     } catch (error) {
       if (this.surface === surface) {
-        surface.resultElement && (surface.resultElement.textContent = "Roll failed");
-        surface.player.clear();
+        if (phase === "playback") {
+          surface.resultElement && (surface.resultElement.textContent = "Roll failed");
+          surface.player.clear();
+        } else {
+          this.presentResult(surface, this.getCurrentResult());
+        }
       }
 
-      const phase: DiceOverlayErrorPhase =
-        error instanceof DiceOverlayError ? error.phase : "playback";
-      throw this.wrapError(phase, error);
+      throw this.wrapError(
+        error instanceof DiceOverlayError ? error.phase : phase,
+        error
+      );
     } finally {
       this.activeRoll = false;
     }
