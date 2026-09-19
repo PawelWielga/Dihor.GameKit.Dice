@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DiceAudioEngine,
   resolveDiceAudioOptions,
   resolveDiceCollisionSound
 } from "../src/audio/index.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("dice audio", () => {
   it("maps light, strong and spatial collisions to bounded sound cues", () => {
@@ -59,8 +64,117 @@ describe("dice audio", () => {
     ).toThrowError(RangeError);
   });
 
-  it("is a safe no-op when Web Audio is unavailable", () => {
+  it("keeps prepare pending until all samples finish loading and decoding", async () => {
+    const fetchResolvers: Array<() => void> = [];
+    const decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
+    const close = vi.fn(async () => undefined);
+
+    class FakeAudioContext {
+      state: AudioContextState = "suspended";
+      readonly destination = {} as AudioDestinationNode;
+
+      decodeAudioData(data: ArrayBuffer): Promise<AudioBuffer> {
+        return decodeAudioData(data);
+      }
+
+      resume(): Promise<void> {
+        this.state = "running";
+        return Promise.resolve();
+      }
+
+      close(): Promise<void> {
+        this.state = "closed";
+        return close();
+      }
+    }
+
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          fetchResolvers.push(() =>
+            resolve({
+              ok: true,
+              arrayBuffer: async () => new ArrayBuffer(8)
+            } as Response)
+          );
+        })
+    );
+
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    vi.stubGlobal("fetch", fetchMock);
+
     const engine = new DiceAudioEngine();
+    let prepared = false;
+    const preparation = engine.prepare().then(() => {
+      prepared = true;
+    });
+
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(prepared).toBe(false);
+
+    for (const resolveFetch of fetchResolvers) {
+      resolveFetch();
+    }
+
+    await preparation;
+
+    expect(prepared).toBe(true);
+    expect(decodeAudioData).toHaveBeenCalledTimes(6);
+
+    engine.dispose();
+    await Promise.resolve();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes a suspended AudioContext when explicitly unlocked", async () => {
+    const resume = vi.fn(async () => undefined);
+
+    class FakeAudioContext {
+      state: AudioContextState = "suspended";
+      readonly destination = {} as AudioDestinationNode;
+
+      async decodeAudioData(): Promise<AudioBuffer> {
+        return {} as AudioBuffer;
+      }
+
+      async resume(): Promise<void> {
+        this.state = "running";
+        await resume();
+      }
+
+      async close(): Promise<void> {
+        this.state = "closed";
+      }
+    }
+
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(8)
+      } as Response))
+    );
+
+    const engine = new DiceAudioEngine();
+
+    await engine.unlock();
+
+    expect(resume).toHaveBeenCalledTimes(1);
+
+    await engine.prepare();
+    engine.dispose();
+  });
+
+  it("is a safe no-op when Web Audio is unavailable", async () => {
+    vi.stubGlobal("AudioContext", undefined);
+
+    const engine = new DiceAudioEngine();
+
+    await expect(engine.prepare()).resolves.toBeUndefined();
+    await expect(engine.unlock()).resolves.toBeUndefined();
     expect(() => engine.attach([], 5)).not.toThrow();
     expect(() => engine.dispose()).not.toThrow();
   });
