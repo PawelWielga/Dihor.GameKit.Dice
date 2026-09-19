@@ -117,6 +117,78 @@ describe("DicePhysicsWorld", () => {
     world.dispose();
   });
 
+  it("keeps fully frozen dice immovable even when initial velocities are supplied", () => {
+    const world = new DicePhysicsWorld({ gravity: { x: 0, y: 0, z: 0 } });
+    const body = world.addD6(
+      {
+        ...stableState,
+        position: { x: -1, y: 0.5, z: 0.25 },
+        velocity: { x: 4, y: 2, z: -3 },
+        angularVelocity: { x: 3, y: -4, z: 5 }
+      },
+      { frozenPhysicsMode: "fully-frozen" }
+    );
+    const position = body.position.clone();
+    const quaternion = body.quaternion.clone();
+
+    for (let step = 0; step < 30; step += 1) {
+      world.step();
+    }
+
+    expect(body.mass).toBe(0);
+    expect(body.velocity.lengthSquared()).toBe(0);
+    expect(body.angularVelocity.lengthSquared()).toBe(0);
+    expect([body.position.x, body.position.y, body.position.z]).toEqual([
+      position.x,
+      position.y,
+      position.z
+    ]);
+    expect([body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w]).toEqual([
+      quaternion.x,
+      quaternion.y,
+      quaternion.z,
+      quaternion.w
+    ]);
+
+    world.dispose();
+  });
+
+  it("allows translation-only frozen dice to move without rotating", () => {
+    const world = new DicePhysicsWorld({
+      gravity: { x: 0, y: 0, z: 0 },
+      linearDamping: 0,
+      angularDamping: 0
+    });
+    const body = world.addD6(
+      {
+        ...stableState,
+        position: { x: -2, y: 2, z: 0 },
+        velocity: { x: 2, y: 0, z: 0 },
+        angularVelocity: { x: 6, y: 4, z: -3 }
+      },
+      { frozenPhysicsMode: "translation-only" }
+    );
+    const initialX = body.position.x;
+    const quaternion = body.quaternion.clone();
+
+    for (let step = 0; step < 10; step += 1) {
+      world.step();
+    }
+
+    expect(body.mass).toBe(1);
+    expect(body.fixedRotation).toBe(true);
+    expect(body.position.x).toBeGreaterThan(initialX);
+    expect(body.angularVelocity.lengthSquared()).toBe(0);
+    expect([body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w]).toEqual([
+      quaternion.x,
+      quaternion.y,
+      quaternion.z,
+      quaternion.w
+    ]);
+
+    world.dispose();
+  });
+
   it("reads the physical top value from a D6 body orientation", () => {
     const world = new DicePhysicsWorld();
     const body = world.addD6(stableState);
