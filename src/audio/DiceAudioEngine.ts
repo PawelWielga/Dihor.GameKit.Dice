@@ -1,10 +1,10 @@
 import type { Body } from "cannon-es";
-import impact1Url from "../assets/audio/kenney-casino/dieThrow1.ogg?url";
-import impact2Url from "../assets/audio/kenney-casino/dieThrow2.ogg?url";
-import impact3Url from "../assets/audio/kenney-casino/dieThrow3.ogg?url";
-import roll1Url from "../assets/audio/kenney-casino/dieShuffle1.ogg?url";
-import roll2Url from "../assets/audio/kenney-casino/dieShuffle2.ogg?url";
-import roll3Url from "../assets/audio/kenney-casino/dieShuffle3.ogg?url";
+import impact1Url from "../assets/audio/kenney-casino/dieThrow1.ogg?no-inline";
+import impact2Url from "../assets/audio/kenney-casino/dieThrow2.ogg?no-inline";
+import impact3Url from "../assets/audio/kenney-casino/dieThrow3.ogg?no-inline";
+import roll1Url from "../assets/audio/kenney-casino/dieShuffle1.ogg?no-inline";
+import roll2Url from "../assets/audio/kenney-casino/dieShuffle2.ogg?no-inline";
+import roll3Url from "../assets/audio/kenney-casino/dieShuffle3.ogg?no-inline";
 
 export interface DiceAudioSampleSet {
   /** Samples used for stronger impacts, such as the first hit against the table. */
