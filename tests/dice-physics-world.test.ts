@@ -189,6 +189,49 @@ describe("DicePhysicsWorld", () => {
     world.dispose();
   });
 
+  it("lets another die push a translation-only frozen die without changing its rotation", () => {
+    const world = new DicePhysicsWorld({
+      gravity: { x: 0, y: 0, z: 0 },
+      linearDamping: 0,
+      angularDamping: 0
+    });
+    const frozen = world.addD6(
+      {
+        ...stableState,
+        position: { x: 0, y: 1.5, z: 0 }
+      },
+      { frozenPhysicsMode: "translation-only" }
+    );
+    const incoming = world.addD6({
+      ...stableState,
+      position: { x: -2, y: 1.5, z: 0 },
+      velocity: { x: 5, y: 0, z: 0 }
+    });
+    const initialFrozenX = frozen.position.x;
+    const initialRotation = frozen.quaternion.clone();
+
+    for (let step = 0; step < 60; step += 1) {
+      world.step();
+    }
+
+    expect(incoming.position.x).toBeGreaterThan(-2);
+    expect(frozen.position.x).toBeGreaterThan(initialFrozenX);
+    expect(frozen.angularVelocity.lengthSquared()).toBe(0);
+    expect([
+      frozen.quaternion.x,
+      frozen.quaternion.y,
+      frozen.quaternion.z,
+      frozen.quaternion.w
+    ]).toEqual([
+      initialRotation.x,
+      initialRotation.y,
+      initialRotation.z,
+      initialRotation.w
+    ]);
+
+    world.dispose();
+  });
+
   it("reads the physical top value from a D6 body orientation", () => {
     const world = new DicePhysicsWorld();
     const body = world.addD6(stableState);
