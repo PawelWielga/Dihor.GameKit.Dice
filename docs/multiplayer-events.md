@@ -46,7 +46,6 @@ A client must not call `DiceRoller` for a host-originated event. Values received
 
 ```ts
 import {
-  DICE_ROLL_REPLAY_VERSION,
   diceRollResultFromEvent,
   validateDiceRollEvent
 } from "@dihor/gamekit-dice/events";
@@ -56,7 +55,7 @@ const authoritativeResult = diceRollResultFromEvent(event);
 
 // Update score/game state from authoritativeResult immediately.
 
-if (event.replay?.version === DICE_ROLL_REPLAY_VERSION) {
+if (event.replay) {
   try {
     await player.play(event.replay.plan, {
       appearances: event.dice.map((die) => die.appearance)
@@ -111,11 +110,12 @@ The renderer is optional. A phone, server, test harness or low-power client can 
 Current constants:
 
 - `DICE_ROLL_EVENT_VERSION = 1`
-- `DICE_ROLL_REPLAY_VERSION = 1`
+- `DICE_ROLL_REPLAY_V1_VERSION = 1` for the legacy replay schema
+- `DICE_ROLL_REPLAY_VERSION = 2` for the current replay schema
 
 The top-level event version describes the logical payload contract. The replay version is separate so the physical animation data can evolve without changing the meaning of the authoritative result.
 
-Future replay versions should be added as explicit versioned models rather than silently changing the interpretation of version `1`.
+Replay v1 remains accepted for older payloads and does not support per-die frozen physics. Replay v2 adds the optional `frozenPhysicsMode` field used by freeze/partial-reroll plans. New events created with replay data use v2. A payload that labels frozen-dice semantics as replay v1 is rejected instead of being silently interpreted differently by older clients.
 
 ## Determinism and authority
 
