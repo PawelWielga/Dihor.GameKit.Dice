@@ -17,6 +17,7 @@ import {
   type RollPlanningOptions
 } from "./RollPlanner.js";
 import type {
+  FrozenRollDieState,
   PhysicsQuaternion,
   DirectRollPlan,
   RollInitialState,
@@ -61,6 +62,41 @@ function requirePositiveFinite(name: string, value: number): number {
   return value;
 }
 
+function resolveFrozenDice(
+  frozenDice: readonly FrozenRollDieState[] | undefined,
+  request: DiceRollRequest
+): ReadonlyMap<number, FrozenRollDieState> {
+  const resolved = new Map<number, FrozenRollDieState>();
+
+  for (const frozen of frozenDice ?? []) {
+    if (!Number.isInteger(frozen.dieIndex) || frozen.dieIndex < 0 || frozen.dieIndex >= request.dice.length) {
+      throw new RangeError(
+        `frozenDice dieIndex must reference an existing die; received ${String(frozen.dieIndex)}.`
+      );
+    }
+
+    if (resolved.has(frozen.dieIndex)) {
+      throw new RangeError(`frozenDice contains duplicate dieIndex ${frozen.dieIndex}.`);
+    }
+
+    const definition = request.dice[frozen.dieIndex];
+
+    if (!definition || definition.sides !== frozen.sides) {
+      throw new RangeError(`frozenDice[${frozen.dieIndex}] must match the requested die sides.`);
+    }
+
+    if (frozen.physicsMode !== "fully-frozen" && frozen.physicsMode !== "translation-only") {
+      throw new RangeError(
+        `Unsupported frozen dice physics mode: ${String(frozen.physicsMode)}.`
+      );
+    }
+
+    resolved.set(frozen.dieIndex, frozen);
+  }
+
+  return resolved;
+}
+
 /**
  * Creates a visible-physics plan without running hidden simulation.
  * expectedValue is intentionally set to 0 and ignored by DiceRollPlayer for direct plans.
@@ -94,6 +130,7 @@ export class DirectRollPlanner {
 
     const throwForce = requireThrowForce(options.throwForce);
     const diceScale = requireDiceScale(options.diceScale);
+    const frozenDice = resolveFrozenDice(options.frozenDice, request);
     const baseDiceSize = this.physicsOptions.diceSize ?? 1;
     const world = new DicePhysicsWorld({
       ...this.physicsOptions,
@@ -121,14 +158,24 @@ export class DirectRollPlanner {
         throw new RangeError(`Missing spawn point at index ${index}.`);
       }
 
+      const frozen = frozenDice.get(index);
+
       return {
         sides: definition.sides,
         expectedValue: 0 as const,
-        initialState: this.createInitialState(
-          spawnPoint,
-          physics.diceSize,
-          throwForce
-        )
+        initialState: frozen
+          ? {
+              position: { ...frozen.position },
+              quaternion: { ...frozen.quaternion },
+              velocity: { x: 0, y: 0, z: 0 },
+              angularVelocity: { x: 0, y: 0, z: 0 }
+            }
+          : this.createInitialState(
+              spawnPoint,
+              physics.diceSize,
+              throwForce
+            ),
+        ...(frozen ? { frozenPhysicsMode: frozen.physicsMode } : {})
       };
     });
 
