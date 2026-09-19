@@ -548,6 +548,113 @@ h1 {
   display: none;
 }
 
+.freeze-panel {
+  margin-top: 14px;
+  border: 1px solid #263140;
+  border-radius: 15px;
+  background: #0b1018;
+  padding: 16px;
+}
+
+.freeze-panel[hidden] {
+  display: none;
+}
+
+.freeze-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.freeze-panel__heading h3 {
+  margin: 5px 0 4px;
+  font-size: 1rem;
+}
+
+.freeze-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.freeze-settings {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(160px, 0.7fr) minmax(150px, 0.7fr) minmax(220px, 1.2fr);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.freeze-color-toggle {
+  min-height: 43px;
+}
+
+.freeze-dice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.freeze-die {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #2a3545;
+  border-radius: 12px;
+  background: #0e1520;
+  padding: 12px;
+}
+
+.freeze-die[data-frozen="true"] {
+  border-color: #5578ad;
+  background: #101c2c;
+  box-shadow: inset 0 0 0 1px rgb(77 163 255 / 0.12);
+}
+
+.freeze-die__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.freeze-die__identity {
+  min-width: 0;
+}
+
+.freeze-die__identity strong,
+.freeze-die__identity small {
+  display: block;
+}
+
+.freeze-die__identity small {
+  overflow: hidden;
+  color: #778295;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.freeze-badge {
+  flex: 0 0 auto;
+  border: 1px solid #374355;
+  border-radius: 999px;
+  color: #9da8b8;
+  padding: 4px 7px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.freeze-die[data-frozen="true"] .freeze-badge {
+  border-color: #4d80bd;
+  color: #8fc2ff;
+}
+
 .result-grid {
   display: grid;
   grid-template-columns: minmax(180px, 0.48fr) minmax(0, 1.52fr);
@@ -682,13 +789,24 @@ h1 {
 
   .field-grid--two,
   .face-grid,
-  .result-grid {
+  .result-grid,
+  .freeze-settings {
     grid-template-columns: 1fr;
   }
 
-  .preview-header {
+  .preview-header,
+  .freeze-panel__heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .freeze-panel__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .freeze-panel__actions .button {
+    flex: 1 1 180px;
   }
 
   .stage {
