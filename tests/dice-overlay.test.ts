@@ -83,10 +83,16 @@ class FakePlayer implements DiceOverlayPlayer {
   readonly dispose = vi.fn();
   readonly calls: Array<{ plan: RollPlan; options?: DiceRollPlaybackOptions }> = [];
   mismatch = false;
+  failNext = false;
   directValues: number[] = [];
 
   async play(plan: RollPlan, options?: DiceRollPlaybackOptions): Promise<DiceRollPlaybackResult> {
     this.calls.push({ plan, options });
+
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("playback failed");
+    }
 
     return {
       rollId: plan.rollId,
@@ -739,6 +745,41 @@ describe("DiceOverlay", () => {
       { color: "#112233" },
       undefined
     ]);
+
+    overlay.dispose();
+  });
+
+  it("invalidates frozen state when a partial reroll playback fails", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: new DiceRoller({
+        randomProvider: { next: () => 0 },
+        rollIdProvider: (() => {
+          let index = 0;
+          return () => `reroll-failure-${++index}`;
+        })()
+      }),
+      planner: { plan: createPlan },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }, { sides: 6 }] });
+    await overlay.freeze(first.dice[0]!.id);
+    player.failNext = true;
+
+    await expect(overlay.rerollUnfrozen()).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "playback"
+    } satisfies Partial<DiceOverlayError>);
+    expect(player.clear).toHaveBeenCalledTimes(1);
+
+    await expect(overlay.freeze(first.dice[0]!.id)).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "roll"
+    } satisfies Partial<DiceOverlayError>);
 
     overlay.dispose();
   });
