@@ -105,7 +105,11 @@ describe("dice audio", () => {
 
     const engine = new DiceAudioEngine();
     let prepared = false;
-    const preparation = engine.prepare().then(() => {
+    const preparationPromise = engine.prepare();
+
+    expect(preparationPromise).toBeDefined();
+
+    const preparation = preparationPromise!.then(() => {
       prepared = true;
     });
 
