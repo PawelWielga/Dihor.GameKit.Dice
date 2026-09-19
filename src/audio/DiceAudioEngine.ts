@@ -160,7 +160,8 @@ export function resolveDiceAudioOptions(
     rollSamples: resolveSampleList(
       "samples.roll",
       options.samples?.roll,
-      DEFAULT_ROLL_SAMPLES
+      DEFAULT_ROLL_SAMPLES,
+      true
     )
   };
 }
