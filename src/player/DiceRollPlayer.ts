@@ -217,12 +217,18 @@ export class DiceRollPlayer {
         }
 
         const appearance = options.appearances?.[index];
-        const mesh = await this.createPreparedMesh(
-          preparation,
-          die.sides,
-          plan.physics.diceSize,
-          appearance
-        );
+        const mesh = hasDiceTextureSources(appearance)
+          ? await this.createPreparedMeshAsync(
+              preparation,
+              die.sides,
+              plan.physics.diceSize,
+              appearance
+            )
+          : this.createPreparedMeshSync(
+              die.sides,
+              plan.physics.diceSize,
+              appearance
+            );
 
         meshes.push(mesh);
       }
@@ -332,12 +338,19 @@ export class DiceRollPlayer {
           throw new DiceRollPlaybackError(`Visible die state is missing at index ${index}.`);
         }
 
-        const replacement = await this.createPreparedMesh(
-          preparation,
-          sides,
-          this.visibleDiceSize,
-          appearances[index]
-        );
+        const appearance = appearances[index];
+        const replacement = hasDiceTextureSources(appearance)
+          ? await this.createPreparedMeshAsync(
+              preparation,
+              sides,
+              this.visibleDiceSize,
+              appearance
+            )
+          : this.createPreparedMeshSync(
+              sides,
+              this.visibleDiceSize,
+              appearance
+            );
         replacement.object.position.copy(previous.object.position);
         replacement.object.quaternion.copy(previous.object.quaternion);
         replacements.push(replacement);
@@ -413,24 +426,30 @@ export class DiceRollPlayer {
     this.disposed = true;
   }
 
-  private async createPreparedMesh(
+  private createPreparedMeshSync(
+    sides: DiceSides,
+    size: number,
+    appearance: DiceAppearance | undefined
+  ): DiceMesh {
+    const meshOptions = { size, appearance };
+    return sides === 6
+      ? this.meshFactory.createD6(meshOptions)
+      : this.meshFactory.create(sides, meshOptions);
+  }
+
+  private async createPreparedMeshAsync(
     preparation: PlaybackPreparation,
     sides: DiceSides,
     size: number,
     appearance: DiceAppearance | undefined
   ): Promise<DiceMesh> {
     const meshOptions = { size, appearance };
-    const usesTextureAssets = hasDiceTextureSources(appearance);
-    const mesh = usesTextureAssets
-      ? await this.awaitPreparedMesh(
-          preparation,
-          sides === 6
-            ? this.meshFactory.createD6Async(meshOptions)
-            : this.meshFactory.createAsync(sides, meshOptions)
-        )
-      : sides === 6
-        ? this.meshFactory.createD6(meshOptions)
-        : this.meshFactory.create(sides, meshOptions);
+    const mesh = await this.awaitPreparedMesh(
+      preparation,
+      sides === 6
+        ? this.meshFactory.createD6Async(meshOptions)
+        : this.meshFactory.createAsync(sides, meshOptions)
+    );
 
     if (preparation.cancelled || this.disposed) {
       mesh.dispose();
