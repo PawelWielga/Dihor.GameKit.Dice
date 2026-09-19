@@ -117,6 +117,85 @@ describe("DicePhysicsWorld", () => {
     world.dispose();
   });
 
+  it("does not accept a low-velocity tilted dynamic die as settled", () => {
+    const world = new DicePhysicsWorld({
+      gravity: { x: 0, y: 0, z: 0 }
+    });
+    const body = world.addD6({
+      ...stableState,
+      position: { x: 0, y: 2, z: 0 }
+    });
+    body.quaternion.setFromEuler(Math.PI / 9, 0, 0);
+
+    expect(world.getD6Value(body)).toBe(1);
+    expect(world.areBodiesStable([body])).toBe(false);
+
+    world.dispose();
+  });
+
+  it("settles a tilted die toward the same physical result face", () => {
+    const world = new DicePhysicsWorld({
+      gravity: { x: 0, y: 0, z: 0 },
+      angularDamping: 0.75
+    });
+    const body = world.addD6({
+      ...stableState,
+      position: { x: 0, y: 2, z: 0 }
+    });
+    body.quaternion.setFromEuler(Math.PI / 9, 0, 0);
+    const initialValue = world.getD6Value(body);
+
+    const result = world.simulateUntilStable([body], {
+      consecutiveSteps: 4,
+      maxSteps: 480
+    });
+
+    expect(result.stable).toBe(true);
+    expect(world.getD6Value(body)).toBe(initialValue);
+    expect(world.areBodiesStable([body])).toBe(true);
+
+    world.dispose();
+  });
+
+  it("never rotates tilted frozen dice while settling other bodies", () => {
+    const world = new DicePhysicsWorld({
+      gravity: { x: 0, y: 0, z: 0 }
+    });
+    const frozen = world.addD6(
+      {
+        ...stableState,
+        position: { x: -1, y: 2, z: 0 },
+        quaternion: {
+          x: Math.sin(Math.PI / 18),
+          y: 0,
+          z: 0,
+          w: Math.cos(Math.PI / 18)
+        }
+      },
+      { frozenPhysicsMode: "translation-only" }
+    );
+    const initialRotation = frozen.quaternion.clone();
+
+    for (let step = 0; step < 120; step += 1) {
+      world.step();
+    }
+
+    expect([
+      frozen.quaternion.x,
+      frozen.quaternion.y,
+      frozen.quaternion.z,
+      frozen.quaternion.w
+    ]).toEqual([
+      initialRotation.x,
+      initialRotation.y,
+      initialRotation.z,
+      initialRotation.w
+    ]);
+    expect(world.areBodiesStable([frozen])).toBe(true);
+
+    world.dispose();
+  });
+
   it("keeps fully frozen dice immovable even when initial velocities are supplied", () => {
     const world = new DicePhysicsWorld({ gravity: { x: 0, y: 0, z: 0 } });
     const body = world.addD6(
