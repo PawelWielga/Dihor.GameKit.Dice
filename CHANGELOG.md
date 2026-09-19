@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Added collision-driven browser audio for visible dice rolls, with bundled CC0 Kenney samples, impact-sensitive gain, stereo positioning, pitch variation, overlap limiting and custom sample URL support.
+- Added collision-driven browser audio for visible dice rolls, with bundled CC0 Kenney samples, impact-sensitive gain, stereo positioning, pitch variation, overlap limiting, first-roll preload protection, user-gesture audio unlocking and custom sample URL support.
 
 ## 0.1.0-preview.1 - 2026-09-18
 
