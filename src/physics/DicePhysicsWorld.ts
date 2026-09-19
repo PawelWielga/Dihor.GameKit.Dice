@@ -1,5 +1,7 @@
 import { Body, Box, Plane, Vec3, World } from "cannon-es";
 import {
+  getDiceFace,
+  getDiceTopology,
   getDiceValueFromOrientation,
   type D6FaceValue,
   type DiceSides
@@ -43,6 +45,12 @@ export interface StabilityResult {
   readonly steps: number;
 }
 
+interface DiceBodyState {
+  readonly sides: DiceSides;
+  readonly frozenPhysicsMode?: FrozenDicePhysicsMode;
+  settlingFaceValue?: number;
+}
+
 export const DEFAULT_DICE_PHYSICS_CONFIG: DicePhysicsConfig = {
   gravity: { x: 0, y: -9.82, z: 0 },
   timeStep: 1 / 60,
@@ -62,6 +70,13 @@ export const DEFAULT_STABILITY_CONFIG: StabilityConfig = {
 };
 
 const ARENA_BOUNDARY_EPSILON = 1e-4;
+const SETTLING_ASSIST_MAX_LINEAR_SPEED = 0.3;
+const SETTLING_ASSIST_MAX_ANGULAR_SPEED = 0.4;
+const SETTLING_ASSIST_RESET_LINEAR_SPEED = 1.2;
+const SETTLING_ASSIST_RESET_ANGULAR_SPEED = 1.6;
+const SETTLING_ASSIST_ALIGNMENT_COSINE = Math.cos((5 * Math.PI) / 180);
+const SETTLING_ASSIST_TORQUE = 0.45;
+const SETTLING_ASSIST_ANGULAR_DAMPING = 0.92;
 
 function requireFinite(name: string, value: number): number {
   if (!Number.isFinite(value)) {
@@ -254,6 +269,7 @@ export class DicePhysicsWorld {
 
   private readonly staticBodies: Body[] = [];
   private readonly arenaWallBodies: Body[] = [];
+  private readonly diceBodyStates = new Map<Body, DiceBodyState>();
   private activeArenaBoundary: readonly DiceArenaBoundaryPoint[];
   private disposed = false;
 
@@ -337,6 +353,10 @@ export class DicePhysicsWorld {
     body.angularDamping = this.config.angularDamping;
 
     this.world.addBody(body);
+    this.diceBodyStates.set(body, {
+      sides,
+      ...(frozenPhysicsMode ? { frozenPhysicsMode } : {})
+    });
     return body;
   }
 
@@ -347,6 +367,7 @@ export class DicePhysicsWorld {
 
   step(): void {
     this.assertActive();
+    this.applySettlingAssist();
     this.world.step(this.config.timeStep);
   }
 
@@ -373,7 +394,8 @@ export class DicePhysicsWorld {
     return bodies.every(
       (body) =>
         body.velocity.lengthSquared() <= linearThresholdSquared &&
-        body.angularVelocity.lengthSquared() <= angularThresholdSquared
+        body.angularVelocity.lengthSquared() <= angularThresholdSquared &&
+        this.isBodyFaceAligned(body)
     );
   }
 
@@ -413,6 +435,7 @@ export class DicePhysicsWorld {
 
   removeBody(body: Body): void {
     if (!this.disposed && !this.staticBodies.includes(body)) {
+      this.diceBodyStates.delete(body);
       this.world.removeBody(body);
     }
   }
@@ -428,7 +451,140 @@ export class DicePhysicsWorld {
 
     this.staticBodies.length = 0;
     this.arenaWallBodies.length = 0;
+    this.diceBodyStates.clear();
     this.disposed = true;
+  }
+
+  private applySettlingAssist(): void {
+    const maxLinearSpeedSquared =
+      SETTLING_ASSIST_MAX_LINEAR_SPEED * SETTLING_ASSIST_MAX_LINEAR_SPEED;
+    const maxAngularSpeedSquared =
+      SETTLING_ASSIST_MAX_ANGULAR_SPEED * SETTLING_ASSIST_MAX_ANGULAR_SPEED;
+    const resetLinearSpeedSquared =
+      SETTLING_ASSIST_RESET_LINEAR_SPEED * SETTLING_ASSIST_RESET_LINEAR_SPEED;
+    const resetAngularSpeedSquared =
+      SETTLING_ASSIST_RESET_ANGULAR_SPEED * SETTLING_ASSIST_RESET_ANGULAR_SPEED;
+    const torqueScale =
+      SETTLING_ASSIST_TORQUE * this.config.diceSize * this.config.diceSize;
+
+    for (const [body, state] of this.diceBodyStates) {
+      if (
+        state.frozenPhysicsMode !== undefined ||
+        body.mass <= 0 ||
+        body.fixedRotation
+      ) {
+        state.settlingFaceValue = undefined;
+        continue;
+      }
+
+      const linearSpeedSquared = body.velocity.lengthSquared();
+      const angularSpeedSquared = body.angularVelocity.lengthSquared();
+
+      if (
+        state.settlingFaceValue !== undefined &&
+        (linearSpeedSquared > resetLinearSpeedSquared ||
+          angularSpeedSquared > resetAngularSpeedSquared)
+      ) {
+        state.settlingFaceValue = undefined;
+      }
+
+      if (
+        state.settlingFaceValue === undefined &&
+        (linearSpeedSquared > maxLinearSpeedSquared ||
+          angularSpeedSquared > maxAngularSpeedSquared)
+      ) {
+        continue;
+      }
+
+      const faceValue =
+        state.settlingFaceValue ??
+        getDiceValueFromOrientation(state.sides, body.quaternion);
+      const alignment = this.getFaceAlignment(state.sides, faceValue, body);
+
+      if (alignment >= SETTLING_ASSIST_ALIGNMENT_COSINE) {
+        continue;
+      }
+
+      state.settlingFaceValue = faceValue;
+      const face = getDiceFace(state.sides, faceValue);
+      const direction =
+        getDiceTopology(state.sides).resultDirection === "up" ? 1 : -1;
+      const quaternion = body.quaternion;
+      const normal = face.normal;
+
+      // Rotate the selected local face normal into world space without allocating
+      // temporary cannon-es vectors in the per-step hot path.
+      const tx =
+        2 * (quaternion.y * normal.z - quaternion.z * normal.y);
+      const ty =
+        2 * (quaternion.z * normal.x - quaternion.x * normal.z);
+      const tz =
+        2 * (quaternion.x * normal.y - quaternion.y * normal.x);
+      const worldX =
+        normal.x +
+        quaternion.w * tx +
+        (quaternion.y * tz - quaternion.z * ty);
+      const worldZ =
+        normal.z +
+        quaternion.w * tz +
+        (quaternion.x * ty - quaternion.y * tx);
+
+      // currentNormal × targetNormal. The target is ±world-up depending on
+      // whether this die reads its result from the upper or lower physical face.
+      body.torque.x += -direction * worldZ * torqueScale;
+      body.torque.z += direction * worldX * torqueScale;
+
+      // Extra damping only while the assist is active prevents a late oscillation
+      // around the selected face and keeps the correction visually subtle.
+      body.angularVelocity.x *= SETTLING_ASSIST_ANGULAR_DAMPING;
+      body.angularVelocity.y *= SETTLING_ASSIST_ANGULAR_DAMPING;
+      body.angularVelocity.z *= SETTLING_ASSIST_ANGULAR_DAMPING;
+    }
+  }
+
+  private isBodyFaceAligned(body: Body): boolean {
+    const state = this.diceBodyStates.get(body);
+
+    if (
+      state === undefined ||
+      state.frozenPhysicsMode !== undefined ||
+      body.mass <= 0 ||
+      body.fixedRotation
+    ) {
+      return true;
+    }
+
+    const faceValue =
+      state.settlingFaceValue ??
+      getDiceValueFromOrientation(state.sides, body.quaternion);
+    return (
+      this.getFaceAlignment(state.sides, faceValue, body) >=
+      SETTLING_ASSIST_ALIGNMENT_COSINE
+    );
+  }
+
+  private getFaceAlignment(
+    sides: DiceSides,
+    faceValue: number,
+    body: Body
+  ): number {
+    const face = getDiceFace(sides, faceValue);
+    const quaternion = body.quaternion;
+    const normal = face.normal;
+
+    // Y component of q * normal * q^-1.
+    const rotationRowY = {
+      x: 2 * (quaternion.x * quaternion.y + quaternion.w * quaternion.z),
+      y: 1 - 2 * (quaternion.x * quaternion.x + quaternion.z * quaternion.z),
+      z: 2 * (quaternion.y * quaternion.z - quaternion.w * quaternion.x)
+    };
+    const worldY =
+      rotationRowY.x * normal.x +
+      rotationRowY.y * normal.y +
+      rotationRowY.z * normal.z;
+    const direction =
+      getDiceTopology(sides).resultDirection === "up" ? 1 : -1;
+    return worldY * direction;
   }
 
   private createFloor(): void {
