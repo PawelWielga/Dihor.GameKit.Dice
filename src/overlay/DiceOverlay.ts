@@ -635,9 +635,10 @@ export class DiceOverlay {
         phase = "planning";
         plan = await this.planner.plan(logicalResult, planningOptions);
 
-        if (plan.preSimulated === false && expectedDiceTotal !== 0) {
+        if (plan.preSimulated === false) {
           throw new Error(
-            "expectedDiceTotal requires presimulation. The configured planner fell back to direct physics."
+            "Presimulated rerolls require an authoritative presimulated plan. " +
+            "Use a result-preserving planner fallback or set preSimulation: false for direct physics."
           );
         }
       }
@@ -648,7 +649,7 @@ export class DiceOverlay {
       });
 
       let finalResult: DiceRollResult;
-      if (logicalResult && plan.preSimulated !== false) {
+      if (logicalResult) {
         this.assertPlaybackMatches(logicalResult, playback);
         finalResult = logicalResult;
       } else {
