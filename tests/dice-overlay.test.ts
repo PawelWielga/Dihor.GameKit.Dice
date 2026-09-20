@@ -795,6 +795,44 @@ describe("DiceOverlay", () => {
     overlay.dispose();
   });
 
+  it("rejects direct planner fallback during presimulated partial rerolls", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    let planningCall = 0;
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: createRoller(),
+      planner: {
+        plan(result) {
+          planningCall += 1;
+          return planningCall === 1
+            ? createPlan(result)
+            : createDirectFallbackPlan(result);
+        }
+      },
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
+    });
+
+    const first = await overlay.roll({ dice: [{ sides: 6 }, { sides: 6 }] });
+    await overlay.freeze(first.dice[0]!.id);
+
+    await expect(overlay.rerollUnfrozen()).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "planning"
+    } satisfies Partial<DiceOverlayError>);
+
+    expect(player.calls).toHaveLength(1);
+
+    const preserved = await overlay.unfreeze(first.dice[0]!.id);
+    expect(preserved.dice.map((die) => die.value)).toEqual(
+      first.dice.map((die) => die.value)
+    );
+    expect(preserved.dice[0]?.frozen).toBe(false);
+
+    overlay.dispose();
+  });
+
   it("serializes freeze appearance updates with roll and reroll operations", async () => {
     const documentRef = new FakeDocument();
     const player = new FakePlayer();
