@@ -26,7 +26,7 @@ export interface BackgroundRollPlanningTiming {
 export interface BackgroundRollPlannerOptions {
   /**
    * Behavior when a planning Worker cannot be created or fails before producing a plan.
-   * Defaults to "direct" so interactive browser consumers never unexpectedly block the UI thread.
+   * Defaults to "synchronous" so an authoritative logical result is never replaced by visible physics.
    */
   readonly fallbackStrategy?: BackgroundRollFallbackStrategy;
   /** Used only by the explicit "synchronous" fallback. */
@@ -50,7 +50,7 @@ interface ActivePlanning {
 function resolveFallbackStrategy(
   value: BackgroundRollFallbackStrategy | undefined
 ): BackgroundRollFallbackStrategy {
-  const resolved = value ?? "direct";
+  const resolved = value ?? "synchronous";
 
   if (resolved !== "direct" && resolved !== "synchronous" && resolved !== "error") {
     throw new RangeError(
