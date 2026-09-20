@@ -334,27 +334,14 @@ export class DiceOverlay {
       throw this.wrapError("planning", error);
     }
 
-    let returnedResult = logicalResult;
+    const returnedResult = logicalResult;
     let playback: DiceRollPlaybackResult;
 
     try {
       playback = await surface.player.play(plan, {
         appearances: request.dice.map((die) => die.appearance)
       });
-
-      if (plan.preSimulated === false) {
-        returnedResult = {
-          rollId: playback.rollId,
-          dice: playback.dice,
-          modifier: logicalResult.modifier,
-          total:
-            playback.dice.reduce((sum, die) => sum + die.value, 0) +
-            logicalResult.modifier,
-          ...(request.reason === undefined ? {} : { reason: request.reason })
-        };
-      } else {
-        this.assertPlaybackMatches(logicalResult, playback);
-      }
+      this.assertPlaybackMatches(logicalResult, playback);
     } catch (error) {
       if (this.surface === surface) {
         surface.resultElement && (surface.resultElement.textContent = "Roll failed");
