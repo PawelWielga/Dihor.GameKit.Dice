@@ -289,7 +289,7 @@ the unfrozen dice being rerolled. A normal `roll()` starts a new freeze/reroll s
 
 Visible playback includes collision-driven dice audio by default. The bundled profile uses CC0 Kenney Casino Audio `dieThrow` samples for meaningful impacts and varies gain, stereo position and playback rate from the real cannon-es contacts. Lighter settling contacts are silent by default so the end of a roll does not turn into an artificial shuffle/rattle tail; games that want continuous rolling audio can opt in with `audio.samples.roll`. The player waits for the initial sample preload before visible physics starts, so the first impacts are not lost. `DiceOverlay` attempts to unlock Web Audio before asynchronous planning. When using `DiceRollPlayer` directly and later rolls may be triggered programmatically or by multiplayer events, call `player.unlockAudio()` from an earlier user gesture. Set `audio: false` to disable audio completely, or provide `audio.samples.impact` / `audio.samples.roll` URL arrays to use your own sounds. Browser audio failures remain best-effort and never fail a dice roll.
 
-The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If a Worker cannot be created, `BackgroundRollPlanner` defaults to the non-blocking `"direct"` fallback, so the visible physics result becomes authoritative instead of freezing the UI thread. Set `preSimulation: false` when you know up front that you want direct visible physics.
+The optional per-roll `throwForce` multiplier accepts values from `0.5` to `1.5` and defaults to `1.0`. In `preSimulation: true` mode hidden planning runs in a Web Worker when available. If Worker planning is unavailable or fails before producing a plan, `BackgroundRollPlanner` defaults to the result-preserving `"synchronous"` fallback. This may briefly use the UI thread, but it keeps the already decided logical result authoritative. Set `preSimulation: false` when you know up front that you want direct visible physics.
 
 Advanced consumers can configure the Worker-unavailable policy explicitly:
 
@@ -297,17 +297,17 @@ Advanced consumers can configure the Worker-unavailable policy explicitly:
 import { BackgroundRollPlanner } from "@dihor/gamekit-dice/advanced";
 
 const planner = new BackgroundRollPlanner({
-  fallbackStrategy: "direct" // safe interactive default
+  fallbackStrategy: "synchronous" // default; preserves the authoritative result
 });
 
 // Other choices:
-// "synchronous" - preserves presimulation but may block the UI thread.
-// "error"       - fail clearly if off-thread presimulation is unavailable.
+// "direct" - low-level non-authoritative fallback; visible physics decides the result.
+// "error"  - fail clearly if off-thread presimulation is unavailable.
 ```
 
-For desktop/mobile browsers and TV/WebView targets, prefer `"direct"` or `"error"` so a missing Worker never causes unexpected synchronous planning on the UI thread. Use `"synchronous"` only in environments where blocking is explicitly acceptable, such as controlled tests or non-interactive execution.
+For normal `DiceOverlay` usage, keep the default `"synchronous"` fallback when preserving the logical result matters. If blocking is unacceptable, use `"error"` and handle the failure explicitly, or opt into `preSimulation: false` before the roll so visible physics is intentionally authoritative. An explicit `"direct"` fallback remains available to low-level planner consumers, but `DiceOverlay` does not accept a direct plan inside its presimulated pipeline.
 
-For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`. If planning falls back to direct physics, a forced `expectedDiceTotal` cannot be guaranteed, so `DiceOverlay` reports a planning error instead of silently returning a different forced result.
+For presimulated rolls, `expectedDiceTotal: 0` (or omitting it) means Auto. A positive value forces the sum of the dice before the modifier and must fit the range returned by `getDiceTotalRange(request.dice)`. `DiceOverlay` requires an authoritative presimulated plan for this pipeline and reports a planning error if a custom planner returns a direct plan, rather than silently replacing the logical result with a physical outcome.
 
 Per-roll `diceScale` accepts values from `0.5` to `1.5` and defaults to `1.0`. The scale is written into `RollPlan.physics.diceSize`, so the Three.js mesh and cannon-es collider always use the same effective size. Multiple dice in the roll also scale their default spacing together.
 

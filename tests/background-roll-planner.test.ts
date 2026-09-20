@@ -47,6 +47,26 @@ const result = {
   total: 7
 };
 
+function createAuthoritativePlan(): PresimulatedRollPlan {
+  return {
+    rollId: result.rollId,
+    dice: [{
+      sides: 10,
+      expectedValue: 7,
+      initialState: {
+        position: { x: 0, y: 1, z: 0 },
+        quaternion: { x: 0, y: 0, z: 0, w: 1 },
+        velocity: { x: 0, y: 0, z: 0 },
+        angularVelocity: { x: 0, y: 0, z: 0 }
+      }
+    }],
+    physics: DEFAULT_DICE_PHYSICS_CONFIG,
+    stability: DEFAULT_STABILITY_CONFIG,
+    simulationSteps: 1,
+    preSimulated: true
+  };
+}
+
 describe("BackgroundRollPlanner", () => {
   it("delegates planning to a worker and resolves asynchronously", async () => {
     const worker = new FakeWorker();
@@ -98,8 +118,26 @@ describe("BackgroundRollPlanner", () => {
     planner.dispose();
   });
 
-  it("uses direct physics by default when Worker creation is unavailable", async () => {
+  it("preserves the authoritative result by default when Worker creation is unavailable", async () => {
+    const fallbackPlan = createAuthoritativePlan();
+    const fallbackPlanner = { plan: vi.fn(() => fallbackPlan) };
     const planner = new BackgroundRollPlanner({
+      workerFactory: () => undefined,
+      fallbackPlanner: fallbackPlanner as never
+    });
+
+    const plan = await planner.plan(result);
+
+    expect(plan).toBe(fallbackPlan);
+    expect(plan.preSimulated).toBe(true);
+    expect(plan.dice[0]?.expectedValue).toBe(7);
+    expect(fallbackPlanner.plan).toHaveBeenCalledWith(result, {});
+    planner.dispose();
+  });
+
+  it("still supports an explicit direct fallback for low-level consumers", async () => {
+    const planner = new BackgroundRollPlanner({
+      fallbackStrategy: "direct",
       workerFactory: () => undefined,
       directPlanner: new DirectRollPlanner({
         randomProvider: { next: () => 0.5 }
@@ -109,30 +147,30 @@ describe("BackgroundRollPlanner", () => {
     const plan = await planner.plan(result);
 
     expect(plan.preSimulated).toBe(false);
-    expect(plan.rollId).toBe(result.rollId);
-    expect(plan.dice).toHaveLength(result.dice.length);
-    expect(plan.dice[0]?.sides).toBe(10);
     expect(plan.dice[0]?.expectedValue).toBe(0);
     planner.dispose();
   });
 
-  it("falls back to direct physics when a created Worker fails at runtime", async () => {
+  it("preserves the authoritative result when a created Worker fails at runtime", async () => {
     const worker = new FakeWorker();
+    const fallbackPlan = createAuthoritativePlan();
+    const fallbackPlanner = { plan: vi.fn(() => fallbackPlan) };
     const timings: Array<{ durationMs: number; usedWorker: boolean }> = [];
     worker.postMessage.mockImplementation(() => {
       worker.onerror?.({ message: "" });
     });
     const planner = new BackgroundRollPlanner({
       workerFactory: () => worker,
-      directPlanner: new DirectRollPlanner({
-        randomProvider: { next: () => 0.5 }
-      }),
+      fallbackPlanner: fallbackPlanner as never,
       onTiming: (timing) => timings.push(timing)
     });
 
     const plan = await planner.plan(result);
 
-    expect(plan.preSimulated).toBe(false);
+    expect(plan).toBe(fallbackPlan);
+    expect(plan.preSimulated).toBe(true);
+    expect(plan.dice[0]?.expectedValue).toBe(7);
+    expect(fallbackPlanner.plan).toHaveBeenCalledTimes(1);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     expect(timings).toHaveLength(1);
     expect(timings[0]?.usedWorker).toBe(false);
@@ -193,23 +231,25 @@ describe("BackgroundRollPlanner", () => {
     planner.dispose();
   });
 
-  it("falls back when postMessage throws and remains reusable", async () => {
+  it("preserves authoritative values when postMessage throws and remains reusable", async () => {
     const worker = new FakeWorker();
+    const fallbackPlanner = { plan: vi.fn(() => createAuthoritativePlan()) };
     worker.postMessage.mockImplementation(() => {
       throw new Error("DataCloneError");
     });
     const planner = new BackgroundRollPlanner({
       workerFactory: () => worker,
-      directPlanner: new DirectRollPlanner({
-        randomProvider: { next: () => 0.5 }
-      })
+      fallbackPlanner: fallbackPlanner as never
     });
 
     const firstPlan = await planner.plan(result);
     const secondPlan = await planner.plan(result);
 
-    expect(firstPlan.preSimulated).toBe(false);
-    expect(secondPlan.preSimulated).toBe(false);
+    expect(firstPlan.preSimulated).toBe(true);
+    expect(secondPlan.preSimulated).toBe(true);
+    expect(firstPlan.dice[0]?.expectedValue).toBe(7);
+    expect(secondPlan.dice[0]?.expectedValue).toBe(7);
+    expect(fallbackPlanner.plan).toHaveBeenCalledTimes(2);
     expect(worker.terminate).toHaveBeenCalledTimes(2);
     planner.dispose();
   });
