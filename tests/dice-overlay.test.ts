@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  BackgroundRollPlanner,
   DEFAULT_DICE_PHYSICS_CONFIG,
   DEFAULT_STABILITY_CONFIG,
   DiceOverlay,
@@ -15,7 +16,8 @@ import {
   type DiceRollRequest,
   type DirectRollPlan,
   type PresimulatedRollPlan,
-  type RollPlan
+  type RollPlan,
+  type RollPlanningWorkerLike
 } from "../src/advanced.js";
 
 class FakeDocument {
@@ -102,7 +104,7 @@ class FakePlayer implements DiceOverlayPlayer {
     return {
       rollId: plan.rollId,
       dice: plan.dice.map((die, index) => ({
-        sides: 6 as const,
+        sides: die.sides,
         value: plan.preSimulated === false
           ? (this.directValues[index] ?? 1)
           : this.mismatch && index === 0
@@ -122,8 +124,8 @@ function createPlan(result: ReturnType<DiceRoller["roll"]>): PresimulatedRollPla
   return {
     rollId: result.rollId,
     dice: result.dice.map((die, index) => ({
-      sides: 6 as const,
-      expectedValue: die.value as 1 | 2 | 3 | 4 | 5 | 6,
+      sides: die.sides,
+      expectedValue: die.value,
       initialState: {
         position: { x: index * 2, y: 1, z: 0 },
         quaternion: { x: 0, y: 0, z: 0, w: 1 },
@@ -336,7 +338,7 @@ describe("DiceOverlay", () => {
     overlay.dispose();
   });
 
-  it("uses visible playback values when presimulation falls back to direct physics", async () => {
+  it("rejects non-authoritative direct fallbacks in presimulated mode", async () => {
     const documentRef = new FakeDocument();
     const player = new FakePlayer();
     player.directValues = [4, 2];
@@ -350,20 +352,58 @@ describe("DiceOverlay", () => {
       playerFactory: () => player
     });
 
-    const result = await overlay.roll({
-      dice: [{ sides: 6 }, { sides: 6 }],
-      modifier: 3,
-      reason: "Fallback"
+    await expect(
+      overlay.roll({
+        dice: [{ sides: 6 }, { sides: 6 }],
+        modifier: 3,
+        reason: "Fallback"
+      })
+    ).rejects.toMatchObject({
+      name: "DiceOverlayError",
+      phase: "planning"
+    } satisfies Partial<DiceOverlayError>);
+
+    expect(player.calls).toHaveLength(0);
+    expect(overlay.isOpen).toBe(false);
+  });
+
+  it("keeps an authoritative value after a background Worker runtime failure", async () => {
+    const documentRef = new FakeDocument();
+    const player = new FakePlayer();
+    const fallbackPlanner = { plan: createPlan };
+    const worker: RollPlanningWorkerLike = {
+      onmessage: null,
+      onerror: null,
+      postMessage: vi.fn(() => {
+        worker.onerror?.({ message: "Worker startup failed" });
+      }),
+      terminate: vi.fn()
+    };
+    const planner = new BackgroundRollPlanner({
+      workerFactory: () => worker,
+      fallbackPlanner: fallbackPlanner as never
+    });
+    const overlay = new DiceOverlay({
+      document: documentRef as unknown as Document,
+      roller: new DiceRoller({
+        randomProvider: { next: () => 0.65 },
+        rollIdProvider: () => "authoritative-7"
+      }),
+      planner,
+      rendererFactory: () => new FakeRenderer(),
+      playerFactory: () => player
     });
 
+    const result = await overlay.roll({ dice: [{ sides: 10 }] });
+
     expect(result).toMatchObject({
-      rollId: "overlay-roll",
-      dice: [{ sides: 6, value: 4 }, { sides: 6, value: 2 }],
-      modifier: 3,
-      total: 9,
-      reason: "Fallback"
+      rollId: "authoritative-7",
+      dice: [{ sides: 10, value: 7 }],
+      modifier: 0,
+      total: 7
     });
-    expect(player.calls[0]?.plan.preSimulated).toBe(false);
+    expect(player.calls[0]?.plan.preSimulated).toBe(true);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
     overlay.dispose();
   });
 
