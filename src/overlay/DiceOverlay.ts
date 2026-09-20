@@ -321,9 +321,10 @@ export class DiceOverlay {
         arenaBoundary: surface.renderer.diceScene.getTableBoundary()
       });
 
-      if (plan.preSimulated === false && expectedDiceTotal !== 0) {
+      if (plan.preSimulated === false) {
         throw new Error(
-          "expectedDiceTotal requires presimulation. The configured planner fell back to direct physics."
+          "Presimulated rolls require an authoritative presimulated plan. " +
+          "Use a result-preserving planner fallback or set preSimulation: false for direct physics."
         );
       }
     } catch (error) {
