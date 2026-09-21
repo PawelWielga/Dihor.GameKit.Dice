@@ -6,6 +6,8 @@ Reusable 3D dice rolling library for games and applications, built with TypeScri
 
 The reusable MVP pipeline is implemented: direct physical rolls and worker-backed predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12 and D20 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
 
+For the exact Dice scope required by the PartyBeam/Grimcellar First MVP, including when a new prerelease is actually necessary, see [docs/partybeam-first-mvp-roadmap.md](docs/partybeam-first-mvp-roadmap.md).
+
 ## Goals
 
 Dihor.GameKit.Dice provides a framework-agnostic API for rolling configurable 3D dice in games and applications. The logical result is decided by the core layer first, while the visual layer uses a planned physics simulation to present a natural-looking roll that lands on the expected physical face.
