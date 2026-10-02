@@ -2,6 +2,14 @@
 
 Reusable 3D dice rolling library for games and applications, built with TypeScript, Three.js and cannon-es.
 
+## Relationship to PartyBeam
+
+This GameKit remains a general-purpose library. PartyBeam is one consumer, not the owner of its API.
+
+`PartyBeam.GameSdk` is a separate PartyBeam-specific contract/tooling layer and must not become a dependency of this package. PartyBeam games may consume this GameKit and GameSdk side by side.
+
+Keep only genuinely reusable dice/roll/physics/presentation capabilities here. PartyBeam session lifecycle, Game Contract methods, package/catalog policy and game-specific rules belong elsewhere.
+
 ## Status
 
 The reusable MVP pipeline is implemented: direct physical rolls and worker-backed predetermined physics planning, Three.js rendering, configurable appearance, the framework-agnostic overlay API and the interactive GitHub Pages demo are available. Standard polyhedral dice D4, D6, D8, D10, D12 and D20 are supported, together with opt-in seeded random streams, replayable `RollPlan` inputs and a versioned transport-neutral multiplayer event contract.
