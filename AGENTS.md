@@ -8,6 +8,14 @@ Instructions for coding agents working in `Dihor.GameKit.Dice`.
 
 The logical roll result is authoritative and is determined before the visible animation. The physics layer plans and replays a physical roll that lands on the expected physical face. Three.js renders the scene; cannon-es handles physics.
 
+## PartyBeam boundary
+
+- This repository is independent from PartyBeam and must remain reusable by unrelated games/applications.
+- `PartyBeam.GameSdk` is PartyBeam-specific and must not become a dependency here.
+- PartyBeam games may consume this package directly alongside GameSdk.
+- Do not move PartySession/GameSession, Game Contract, package/catalog or PartyBeam UI concerns into this library.
+- Extract only demonstrably generic capabilities; do not absorb one-game behavior on speculation.
+
 ## Architecture boundaries
 
 Keep these layers separate:
